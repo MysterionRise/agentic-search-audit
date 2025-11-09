@@ -1,0 +1,52 @@
+[
+  {
+    "id": "q1",
+    "text": "air force 1 white",
+    "origin": "predefined"
+  },
+  {
+    "id": "q2",
+    "text": "men's running shoes",
+    "origin": "predefined"
+  },
+  {
+    "id": "q3",
+    "text": "women's trail jacket",
+    "origin": "predefined"
+  },
+  {
+    "id": "q4",
+    "text": "soccer cleats mercurial",
+    "origin": "predefined"
+  },
+  {
+    "id": "q5",
+    "text": "dri-fit shirts",
+    "origin": "predefined"
+  },
+  {
+    "id": "q6",
+    "text": "kids backpacks",
+    "origin": "predefined"
+  },
+  {
+    "id": "q7",
+    "text": "gift card",
+    "origin": "predefined"
+  },
+  {
+    "id": "q8",
+    "text": "order status",
+    "origin": "predefined"
+  },
+  {
+    "id": "q9",
+    "text": "returns",
+    "origin": "predefined"
+  },
+  {
+    "id": "q10",
+    "text": "sustainable materials shoes",
+    "origin": "predefined"
+  }
+]

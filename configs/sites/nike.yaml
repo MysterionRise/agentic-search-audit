@@ -1,0 +1,73 @@
+site:
+  url: "https://www.nike.com"
+  locale: "en-US"
+  search:
+    inputSelectors:
+      - 'input[type="search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[name="searchTerms"]'
+    submitStrategy: "enter"
+  results:
+    itemSelectors:
+      - '[data-testid="product-card"]'
+      - '.product-card'
+      - 'a[href*="/t/"]'
+      - 'article'
+    titleSelectors:
+      - '[data-testid="product-card-title"]'
+      - '.product-card__title'
+      - 'h2'
+      - 'h3'
+      - 'a[title]'
+    urlAttr: 'href'
+    snippetSelectors:
+      - '[data-testid="product-card-subtitle"]'
+      - '.product-card__subtitle'
+      - '.description'
+      - 'p'
+  modals:
+    closeTextMatches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "ok"
+      - "dismiss"
+      - "no thanks"
+    maxAutoClicks: 3
+
+run:
+  topK: 10
+  viewport:
+    width: 1366
+    height: 900
+  waitFor:
+    networkIdleMs: 1200
+    postSubmitMs: 800
+  headless: true
+  throttleRPS: 0.5
+  seed: 42
+
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  maxTokens: 800
+  temperature: 0.2
+  systemPrompt: |
+    You are a careful search quality judge evaluating on-site search results.
+
+    For e-commerce sites like Nike, consider:
+    - Are results relevant to what the user is searching for?
+    - Is there good variety in products, styles, and price points?
+    - Are product titles and descriptions clear?
+    - Are there filters to refine the search?
+
+    Be strict but fair in your evaluation.
+
+report:
+  format:
+    - "md"
+    - "html"
+  outDir: "./runs"

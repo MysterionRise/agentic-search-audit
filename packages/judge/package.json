@@ -1,0 +1,18 @@
+{
+  "name": "@search-audit/judge",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --dts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "openai": "^4.20.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  }
+}

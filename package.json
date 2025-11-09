@@ -1,0 +1,34 @@
+{
+  "name": "agentic-search-audit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered on-site search quality evaluation using Chrome DevTools MCP",
+  "scripts": {
+    "build": "pnpm --filter @search-audit/mcp build && pnpm --filter @search-audit/extractors build && pnpm --filter @search-audit/judge build && pnpm --filter @search-audit/report build && pnpm --filter @search-audit/core build && pnpm --filter @search-audit/cli build",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "search-audit": "pnpm --filter @search-audit/cli start",
+    "smoke": "pnpm --filter @search-audit/cli smoke"
+  },
+  "keywords": [
+    "search-quality",
+    "llm-judge",
+    "chrome-devtools",
+    "mcp",
+    "audit"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "tsup": "^8.0.1",
+    "prettier": "^3.1.0",
+    "eslint": "^8.55.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0"
+  }
+}
