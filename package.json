@@ -6,8 +6,18 @@
   "scripts": {
     "build": "pnpm --filter @search-audit/mcp build && pnpm --filter @search-audit/extractors build && pnpm --filter @search-audit/judge build && pnpm --filter @search-audit/report build && pnpm --filter @search-audit/core build && pnpm --filter @search-audit/cli build",
     "clean": "pnpm -r clean && rm -rf node_modules",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "test:watch": "pnpm -r test:watch",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "typecheck": "pnpm -r typecheck",
+    "ci": "pnpm lint && pnpm typecheck && pnpm build && pnpm test:coverage",
     "search-audit": "pnpm --filter @search-audit/cli start",
-    "smoke": "pnpm --filter @search-audit/cli smoke"
+    "smoke": "pnpm --filter @search-audit/cli smoke",
+    "prepare": "husky install"
   },
   "keywords": [
     "search-quality",
@@ -24,11 +34,16 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.1.0",
+    "@vitest/ui": "^1.1.0",
     "typescript": "^5.3.3",
     "tsup": "^8.0.1",
+    "vitest": "^1.1.0",
     "prettier": "^3.1.0",
     "eslint": "^8.55.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0"
+    "@typescript-eslint/parser": "^6.15.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0"
   }
 }

@@ -1,5 +1,9 @@
 # Agentic Search Audit
 
+[![CI](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/MysterionRise/agentic-search-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/MysterionRise/agentic-search-audit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 AI-powered on-site search quality evaluation using Chrome DevTools MCP and LLM-as-a-judge.
 
 ## Overview
@@ -115,6 +119,53 @@ data/queries/       - Query sets
 runs/               - Output artifacts
 ```
 
+## Testing
+
+The project includes comprehensive unit tests for all packages.
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run tests for a specific package
+pnpm --filter @search-audit/extractors test
+```
+
+### Test Coverage
+
+We maintain >70% code coverage across all packages. Coverage reports are automatically generated and uploaded to Codecov on CI runs.
+
+View coverage locally:
+
+```bash
+pnpm test:coverage
+# Open coverage/index.html in your browser
+```
+
+### Writing Tests
+
+All test files should be colocated with the source files:
+
+```
+src/
+  searchBox.ts
+  searchBox.test.ts  # Tests for searchBox.ts
+```
+
+We use Vitest for testing:
+
+- Unit tests for all core functionality
+- Mocks for external dependencies (MCP client, OpenAI API)
+- Fixtures for test data
+
 ## Configuration
 
 ### Site Configuration (YAML)
@@ -132,11 +183,11 @@ site:
     itemSelectors:
       - '[data-testid="product-card"]'
     titleSelectors:
-      - 'h2'
-      - '.title'
-    urlAttr: 'href'
+      - "h2"
+      - ".title"
+    urlAttr: "href"
     snippetSelectors:
-      - '.description'
+      - ".description"
   modals:
     closeTextMatches:
       - "accept"
@@ -190,6 +241,7 @@ The judge evaluates search results on five dimensions (0-5 scale):
 5. **Overall**: User satisfaction (not an average of other scores)
 
 The judge outputs structured JSON with:
+
 - Scores for each dimension
 - Rationale
 - Issues found
@@ -219,6 +271,7 @@ pnpm search-audit validate --config ./configs/sites/nike.yaml
 ## MCP Setup Details
 
 The chrome-devtools-mcp server provides tools for:
+
 - Navigation (`navigate`)
 - DOM querying (`query_selector_all`)
 - Element interaction (`click`, `type`)
@@ -230,16 +283,19 @@ The chrome-devtools-mcp server provides tools for:
 ### Connection Options
 
 **Default (launches new Chrome):**
+
 ```bash
 npx chrome-devtools-mcp@latest
 ```
 
 **Headless + Isolated:**
+
 ```bash
 npx chrome-devtools-mcp@latest -- --headless=true --isolated=true
 ```
 
 **Connect to existing Chrome:**
+
 ```bash
 # Start Chrome with remote debugging
 chrome --remote-debugging-port=9222
@@ -249,11 +305,102 @@ npx chrome-devtools-mcp@latest -- --browserUrl=http://127.0.0.1:9222
 ```
 
 **WebSocket endpoint:**
+
 ```bash
 npx chrome-devtools-mcp@latest -- --wsEndpoint=ws://...
 ```
 
 See the [chrome-devtools-mcp repository](https://github.com/modelcontextprotocol/servers/tree/main/src/chrome-devtools) for full documentation.
+
+## CI/CD
+
+The project uses GitHub Actions for continuous integration and deployment.
+
+### Workflows
+
+**CI Pipeline** (`.github/workflows/ci.yml`):
+
+- Linting (ESLint + Prettier)
+- Type checking (TypeScript)
+- Unit tests with coverage
+- Build verification
+- Runs on Node.js 18 and 20
+- Coverage reports uploaded to Codecov
+
+**PR Quality Check** (`.github/workflows/pr-check.yml`):
+
+- Automated coverage reporting on PRs
+- PR size warnings
+- Breaking change detection
+
+**Dependency Review** (`.github/workflows/dependency-review.yml`):
+
+- Scans for vulnerable dependencies
+- Blocks incompatible licenses (GPL, AGPL)
+- Fails on moderate+ severity issues
+
+### Pre-commit Hooks
+
+Husky is configured to run quality checks before commits:
+
+**Pre-commit**: Runs lint-staged (ESLint + Prettier) and type checking
+**Pre-push**: Runs tests and build
+**Commit-msg**: Validates commit message format (Conventional Commits)
+
+To set up hooks after cloning:
+
+```bash
+pnpm install  # Automatically runs 'pnpm prepare'
+```
+
+### Commit Message Format
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer]
+```
+
+Types:
+
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation only
+- `style`: Code style/formatting
+- `refactor`: Code refactoring
+- `perf`: Performance improvement
+- `test`: Adding/updating tests
+- `build`: Build system changes
+- `ci`: CI configuration changes
+- `chore`: Other changes
+
+Examples:
+
+```
+feat: add query generation from site content
+fix(extractors): handle empty search results
+docs: update README with CI/CD information
+test(judge): add schema validation tests
+```
+
+### Running CI Locally
+
+Run all CI checks before pushing:
+
+```bash
+pnpm ci
+```
+
+This runs:
+
+1. Linting
+2. Type checking
+3. Build
+4. Tests with coverage
 
 ## Safety & Compliance
 
@@ -270,11 +417,13 @@ See the [chrome-devtools-mcp repository](https://github.com/modelcontextprotocol
 If you get connection errors:
 
 1. Verify MCP server is configured:
+
    ```bash
    claude mcp list
    ```
 
 2. Test MCP server manually:
+
    ```bash
    npx chrome-devtools-mcp@latest
    ```
@@ -289,11 +438,12 @@ If you get connection errors:
 If the tool can't find the search box:
 
 1. Add site-specific selectors to your config:
+
    ```yaml
    site:
      search:
        inputSelectors:
-         - 'input#search-field'
+         - "input#search-field"
          - '[data-qa="search-input"]'
    ```
 
@@ -321,12 +471,14 @@ If the judge fails:
 ## Roadmap
 
 ### P1 (Next)
+
 - Query generation from site content
 - Multi-language support
 - Additional LLM providers (Anthropic, OpenRouter)
 - Advanced heuristics (infinite scroll, filters)
 
 ### P2 (Future)
+
 - NDCG-based metrics
 - Pairwise comparison of runs
 - Web UI for browsing results
@@ -356,6 +508,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Disclaimer
 
 This tool is for authorized search quality evaluation only. Always respect:
+
 - Website terms of service
 - Rate limits and robots.txt
 - User privacy and data protection laws
