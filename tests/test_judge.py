@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from agentic_search_audit.core.types import JudgeScore, LLMConfig, Query, ResultItem
+from agentic_search_audit.core.types import JudgeScore, LLMConfig, ResultItem
 from agentic_search_audit.judge.rubric import (
     JUDGE_SYSTEM_PROMPT,
     format_results_for_judge,

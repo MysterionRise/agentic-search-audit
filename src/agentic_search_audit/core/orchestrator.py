@@ -5,7 +5,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 class SearchAuditOrchestrator:
     """Orchestrates the complete search audit process."""
 
-    def __init__(self, config: AuditConfig, queries: List[Query], run_dir: Path):
+    def __init__(self, config: AuditConfig, queries: list[Query], run_dir: Path):
         """Initialize orchestrator.
 
         Args:
@@ -31,14 +30,14 @@ class SearchAuditOrchestrator:
         self.config = config
         self.queries = queries
         self.run_dir = run_dir
-        self.records: List[AuditRecord] = []
+        self.records: list[AuditRecord] = []
 
         # Initialize components (will be created in async context)
         self.client: MCPBrowserClient | None = None
         self.judge: SearchQualityJudge | None = None
         self.reporter: ReportGenerator | None = None
 
-    async def run(self) -> List[AuditRecord]:
+    async def run(self) -> list[AuditRecord]:
         """Run the complete audit.
 
         Returns:
@@ -217,9 +216,9 @@ class SearchAuditOrchestrator:
 
 async def run_audit(
     config: AuditConfig,
-    queries: List[Query],
+    queries: list[Query],
     output_dir: str | None = None,
-) -> List[AuditRecord]:
+) -> list[AuditRecord]:
     """Run a complete search audit.
 
     Args:

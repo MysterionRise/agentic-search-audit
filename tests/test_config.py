@@ -1,8 +1,5 @@
 """Tests for configuration loading."""
 
-import pytest
-from pathlib import Path
-
 from agentic_search_audit.core.config import load_config, merge_configs
 from agentic_search_audit.core.types import AuditConfig
 

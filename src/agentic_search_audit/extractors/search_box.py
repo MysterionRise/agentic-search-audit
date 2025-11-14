@@ -1,7 +1,6 @@
 """Search box detection and interaction."""
 
 import logging
-from typing import List, Optional
 
 from ..core.types import SearchConfig
 from ..mcp.client import MCPBrowserClient
@@ -22,7 +21,7 @@ class SearchBoxFinder:
         self.client = client
         self.config = config
 
-    async def find_search_box(self) -> Optional[str]:
+    async def find_search_box(self) -> str | None:
         """Find the search input box using configured selectors.
 
         Returns:
@@ -59,9 +58,7 @@ class SearchBoxFinder:
 
         try:
             # Clear any existing text
-            await self.client.evaluate(
-                f'document.querySelector("{search_selector}").value = ""'
-            )
+            await self.client.evaluate(f'document.querySelector("{search_selector}").value = ""')
 
             # Type query
             await self.client.type_text(search_selector, query_text, delay=30)
@@ -71,10 +68,7 @@ class SearchBoxFinder:
                 logger.debug("Submitting search with Enter key")
                 await self.client.press_key("Enter")
 
-            elif (
-                self.config.submit_strategy == "clickSelector"
-                and self.config.submit_selector
-            ):
+            elif self.config.submit_strategy == "clickSelector" and self.config.submit_selector:
                 logger.debug(f"Submitting search by clicking {self.config.submit_selector}")
                 await self.client.click(self.config.submit_selector)
 
@@ -89,7 +83,7 @@ class SearchBoxFinder:
             logger.error(f"Failed to submit search: {e}")
             return False
 
-    async def get_search_suggestions(self) -> List[str]:
+    async def get_search_suggestions(self) -> list[str]:
         """Get search suggestions if available (for future use).
 
         Returns:
@@ -98,7 +92,7 @@ class SearchBoxFinder:
         # Common selectors for search suggestions
         suggestion_selectors = [
             '[role="option"]',
-            '.search-suggestion',
+            ".search-suggestion",
             '[data-testid*="suggestion"]',
             ".autocomplete-item",
         ]

@@ -1,7 +1,7 @@
 """Judge rubric and prompts."""
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 JUDGE_SYSTEM_PROMPT = """You are a search quality evaluator analyzing on-site search results.
 
@@ -86,7 +86,7 @@ Return ONLY the JSON object, no other text.
 """
 
 
-def get_judge_schema() -> Dict[str, Any]:
+def get_judge_schema() -> dict[str, Any]:
     """Get JSON schema for judge output.
 
     Returns:

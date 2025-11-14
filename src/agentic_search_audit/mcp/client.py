@@ -4,7 +4,7 @@ import asyncio
 import base64
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -35,7 +35,7 @@ class MCPBrowserClient:
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
         self._page_initialized = False
 
     async def __aenter__(self) -> "MCPBrowserClient":
@@ -79,7 +79,7 @@ class MCPBrowserClient:
             await self._stdio_context.__aexit__(None, None, None)
         logger.info("Disconnected from chrome-devtools-mcp")
 
-    async def _call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+    async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call an MCP tool.
 
         Args:
@@ -147,7 +147,7 @@ class MCPBrowserClient:
         logger.info(f"Navigated to {current_url}")
         return current_url[0].text if current_url else url
 
-    async def query_selector(self, selector: str) -> Optional[Dict[str, Any]]:
+    async def query_selector(self, selector: str) -> dict[str, Any] | None:
         """Query DOM for a single element.
 
         Args:
@@ -166,7 +166,7 @@ class MCPBrowserClient:
             logger.debug(f"Selector {selector} not found: {e}")
             return None
 
-    async def query_selector_all(self, selector: str) -> List[Dict[str, Any]]:
+    async def query_selector_all(self, selector: str) -> list[dict[str, Any]]:
         """Query DOM for all matching elements.
 
         Args:
@@ -323,7 +323,7 @@ class MCPBrowserClient:
             {"timeout": timeout},
         )
 
-    async def get_element_text(self, selector: str) -> Optional[str]:
+    async def get_element_text(self, selector: str) -> str | None:
         """Get text content of an element.
 
         Args:
@@ -340,9 +340,7 @@ class MCPBrowserClient:
         """
         return await self.evaluate(script)
 
-    async def get_element_attribute(
-        self, selector: str, attribute: str
-    ) -> Optional[str]:
+    async def get_element_attribute(self, selector: str, attribute: str) -> str | None:
         """Get attribute value of an element.
 
         Args:

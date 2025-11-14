@@ -1,8 +1,7 @@
 """Configuration loading and management."""
 
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
@@ -10,7 +9,7 @@ from pydantic import ValidationError
 from .types import AuditConfig
 
 
-def load_yaml(file_path: Path) -> Dict[str, Any]:
+def load_yaml(file_path: Path) -> dict[str, Any]:
     """Load YAML configuration file.
 
     Args:
@@ -26,11 +25,11 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
     if not file_path.exists():
         raise FileNotFoundError(f"Config file not found: {file_path}")
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge two configuration dictionaries.
 
     Args:
@@ -52,9 +51,9 @@ def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, A
 
 
 def load_config(
-    config_path: Optional[Path] = None,
-    site_config_path: Optional[Path] = None,
-    overrides: Optional[Dict[str, Any]] = None,
+    config_path: Path | None = None,
+    site_config_path: Path | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> AuditConfig:
     """Load and merge configuration from files and overrides.
 

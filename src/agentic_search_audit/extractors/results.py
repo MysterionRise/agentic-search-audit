@@ -1,8 +1,7 @@
 """Search results extraction."""
 
 import logging
-from typing import List, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 from ..core.types import ResultItem, ResultsConfig
 from ..mcp.client import MCPBrowserClient
@@ -25,7 +24,7 @@ class ResultsExtractor:
         self.config = config
         self.base_url = base_url
 
-    async def extract_results(self, top_k: int = 10) -> List[ResultItem]:
+    async def extract_results(self, top_k: int = 10) -> list[ResultItem]:
         """Extract top-K search results from the page.
 
         Args:
@@ -45,7 +44,7 @@ class ResultsExtractor:
         logger.info(f"Found {len(items)} result items")
 
         # Extract details for each item
-        results: List[ResultItem] = []
+        results: list[ResultItem] = []
         for rank, item_selector in enumerate(items[:top_k], start=1):
             try:
                 result = await self._extract_result_details(rank, item_selector)
@@ -58,7 +57,7 @@ class ResultsExtractor:
         logger.info(f"Successfully extracted {len(results)} results")
         return results
 
-    async def _find_result_items(self) -> List[str]:
+    async def _find_result_items(self) -> list[str]:
         """Find all result item elements.
 
         Returns:
@@ -89,9 +88,7 @@ class ResultsExtractor:
 
         return []
 
-    async def _extract_result_details(
-        self, rank: int, item_selector: str
-    ) -> Optional[ResultItem]:
+    async def _extract_result_details(self, rank: int, item_selector: str) -> ResultItem | None:
         """Extract details from a single result item.
 
         Args:
@@ -104,9 +101,7 @@ class ResultsExtractor:
         logger.debug(f"Extracting details for result {rank}: {item_selector}")
 
         # Extract title
-        title = await self._extract_text_from_selectors(
-            item_selector, self.config.title_selectors
-        )
+        title = await self._extract_text_from_selectors(item_selector, self.config.title_selectors)
 
         # Extract URL
         url = await self._extract_url(item_selector)
@@ -117,9 +112,7 @@ class ResultsExtractor:
         )
 
         # Extract price (optional)
-        price = await self._extract_text_from_selectors(
-            item_selector, self.config.price_selectors
-        )
+        price = await self._extract_text_from_selectors(item_selector, self.config.price_selectors)
 
         # Extract image (optional)
         image = await self._extract_image_url(item_selector)
@@ -138,8 +131,8 @@ class ResultsExtractor:
         )
 
     async def _extract_text_from_selectors(
-        self, parent_selector: str, selectors: List[str]
-    ) -> Optional[str]:
+        self, parent_selector: str, selectors: list[str]
+    ) -> str | None:
         """Extract text from first matching selector within parent.
 
         Args:
@@ -157,7 +150,7 @@ class ResultsExtractor:
 
         return None
 
-    async def _extract_url(self, item_selector: str) -> Optional[str]:
+    async def _extract_url(self, item_selector: str) -> str | None:
         """Extract URL from result item.
 
         Args:
@@ -180,7 +173,7 @@ class ResultsExtractor:
 
         return None
 
-    async def _extract_image_url(self, item_selector: str) -> Optional[str]:
+    async def _extract_image_url(self, item_selector: str) -> str | None:
         """Extract image URL from result item.
 
         Args:

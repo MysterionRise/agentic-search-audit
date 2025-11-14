@@ -1,11 +1,12 @@
 """Tests for type definitions."""
 
 import pytest
+
 from agentic_search_audit.core.types import (
+    JudgeScore,
     Query,
     QueryOrigin,
     ResultItem,
-    JudgeScore,
 )
 
 

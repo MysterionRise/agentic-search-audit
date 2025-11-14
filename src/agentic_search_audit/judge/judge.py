@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-from typing import List, Optional
 
 from openai import AsyncOpenAI
 
@@ -43,7 +42,7 @@ class SearchQualityJudge:
     async def evaluate(
         self,
         query: Query,
-        results: List[ResultItem],
+        results: list[ResultItem],
         page_url: str,
         html_content: str,
         site_name: str,
@@ -77,16 +76,14 @@ class SearchQualityJudge:
         # Parse and validate response
         judge_score = self._parse_response(response)
 
-        logger.info(
-            f"Evaluation complete. Overall score: {judge_score.overall:.2f}"
-        )
+        logger.info(f"Evaluation complete. Overall score: {judge_score.overall:.2f}")
 
         return judge_score
 
     def _build_user_prompt(
         self,
         query: Query,
-        results: List[ResultItem],
+        results: list[ResultItem],
         page_url: str,
         html_content: str,
         site_name: str,
@@ -142,7 +139,7 @@ class SearchQualityJudge:
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
                 response_format={"type": "json_object"},
-                seed=self.config.seed if hasattr(self.config, 'seed') else None,
+                seed=self.config.seed if hasattr(self.config, "seed") else None,
             )
 
             return response.choices[0].message.content or ""

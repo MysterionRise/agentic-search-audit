@@ -6,7 +6,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import List
 
 from dotenv import load_dotenv
 
@@ -33,7 +32,7 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-def load_queries(queries_path: Path) -> List[Query]:
+def load_queries(queries_path: Path) -> list[Query]:
     """Load queries from JSON file.
 
     Args:
@@ -42,7 +41,7 @@ def load_queries(queries_path: Path) -> List[Query]:
     Returns:
         List of Query objects
     """
-    with open(queries_path, "r", encoding="utf-8") as f:
+    with open(queries_path, encoding="utf-8") as f:
         data = json.load(f)
 
     queries = []

@@ -2,8 +2,6 @@
 
 import asyncio
 import logging
-import re
-from typing import List, Optional
 
 from ..core.types import ModalsConfig
 from ..mcp.client import MCPBrowserClient
@@ -55,7 +53,7 @@ class ModalHandler:
 
         return dismissed_count
 
-    async def _find_close_button(self) -> Optional[str]:
+    async def _find_close_button(self) -> str | None:
         """Find a close button for modals.
 
         Returns:
@@ -112,9 +110,7 @@ class ModalHandler:
                     if data:
                         # Use nth-of-type selector
                         selector = f"{data['selector']}:nth-of-type({data['index'] + 1})"
-                        logger.debug(
-                            f"Found close button: {selector} with text '{data['text']}'"
-                        )
+                        logger.debug(f"Found close button: {selector} with text '{data['text']}'")
                         return selector
             except Exception as e:
                 logger.debug(f"Error evaluating script for {base_selector}: {e}")
