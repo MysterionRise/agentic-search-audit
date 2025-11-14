@@ -149,16 +149,43 @@ Each audit run creates a timestamped directory in `runs/` containing:
 pip install -e ".[dev]"
 
 # Run tests
-pytest
+make test
+
+# Run tests with coverage
+make test-cov
 
 # Format code
-black src/ tests/
+make format
 
 # Lint
-ruff check src/ tests/
+make lint
 
 # Type check
-mypy src/
+make typecheck
+
+# Run all CI checks locally
+make ci
+```
+
+See [TESTING.md](TESTING.md) for detailed testing guide.
+
+### Testing
+
+The project has comprehensive test coverage (46%+):
+- **32 unit tests** covering core types, config, judge, extractors, reports, and CLI
+- **CI/CD** with GitHub Actions testing on Python 3.10, 3.11, 3.12, 3.13
+- **Pre-commit hooks** for code quality
+- **Coverage reports** generated with pytest-cov
+
+```bash
+# Quick test run
+make test
+
+# With coverage report
+make test-cov
+
+# Run only unit tests
+make test-unit
 ```
 
 ## Roadmap

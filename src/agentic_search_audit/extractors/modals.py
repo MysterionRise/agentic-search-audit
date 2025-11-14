@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from typing import List
+from typing import List, Optional
 
 from ..core.types import ModalsConfig
 from ..mcp.client import MCPBrowserClient
