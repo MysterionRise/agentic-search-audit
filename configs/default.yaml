@@ -1,0 +1,73 @@
+# Default configuration for Agentic Search Audit
+
+site:
+  url: "https://www.example.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[name="q"]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"  # or "clickSelector"
+    submit_selector: null
+
+  results:
+    item_selectors:
+      - '[data-test*="product-card"]'
+      - '[data-testid*="product"]'
+      - '.product-card'
+      - 'a[href*="/p/"]'
+    title_selectors:
+      - 'h1'
+      - 'h2'
+      - 'h3'
+      - '.product-title'
+      - 'a[title]'
+    url_attr: 'href'
+    snippet_selectors:
+      - '.product-subtitle'
+      - '.description'
+      - 'p'
+    price_selectors:
+      - '.product-price'
+      - '[data-test*="price"]'
+      - '.price'
+    image_selectors:
+      - 'img'
+      - '[data-testid="product-image"]'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 1200
+  post_submit_ms: 800
+  headless: true
+  throttle_rps: 0.5  # requests per second
+  seed: 42  # for reproducible LLM outputs
+
+llm:
+  provider: "openai"  # "openai" or "anthropic"
+  model: "gpt-4o-mini"
+  max_tokens: 800
+  temperature: 0.2
+  system_prompt: null  # uses default if null
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

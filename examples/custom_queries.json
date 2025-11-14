@@ -1,0 +1,16 @@
+{
+  "queries": [
+    {
+      "id": "q001",
+      "text": "your search query here",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q002",
+      "text": "another search query",
+      "lang": "en",
+      "origin": "predefined"
+    }
+  ]
+}
