@@ -135,3 +135,8 @@ __pycache__
 /exploit.education/images/*.tar.xz
 /exploit.education/images/exploit-education-phoenix-arm64/
 *.bin
+
+# Project specific
+runs/
+*.jsonl
+.DS_Store

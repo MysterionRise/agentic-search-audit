@@ -1,0 +1,78 @@
+# Nike.com specific configuration
+
+site:
+  url: "https://www.nike.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - 'input[type="search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[class*="search"]'
+    submit_strategy: "enter"
+    submit_selector: null
+
+  results:
+    item_selectors:
+      - '[data-testid="product-card"]'
+      - '.product-card'
+      - 'div[class*="product-card"]'
+      - 'a[href*="/t/"]'
+    title_selectors:
+      - '[data-testid="product-card-title"]'
+      - 'h3'
+      - 'h2'
+      - '.product-card__title'
+      - 'div[class*="title"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - '[data-testid="product-card-subtitle"]'
+      - '.product-card__subtitle'
+      - 'div[class*="subtitle"]'
+      - 'p'
+    price_selectors:
+      - '[data-testid="product-price"]'
+      - 'div[class*="price"]'
+      - '.product-price'
+      - 'span[class*="price"]'
+    image_selectors:
+      - '[data-testid="product-card-image"]'
+      - 'img[class*="product"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 2000
+  post_submit_ms: 1500
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  max_tokens: 1000
+  temperature: 0.2
+  system_prompt: null
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

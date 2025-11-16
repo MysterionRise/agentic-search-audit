@@ -1,0 +1,123 @@
+# Example: Custom site configuration template
+# Copy this file to configs/sites/your-site.yaml and customize
+
+site:
+  url: "https://www.your-site.com"
+  locale: "en-US"
+
+  search:
+    # Try these selectors in order to find the search input
+    input_selectors:
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[name="q"]'
+      - 'input[placeholder*="Search" i]'
+      - '#search'
+      - '.search-input'
+
+    # How to submit the search
+    # Options: "enter" (press Enter key) or "clickSelector" (click a button)
+    submit_strategy: "enter"
+
+    # If using "clickSelector", specify the button selector
+    submit_selector: null  # e.g., 'button[type="submit"]'
+
+  results:
+    # Selectors for result item containers
+    item_selectors:
+      - '[data-testid*="product"]'
+      - '.product-card'
+      - '.search-result'
+      - 'article'
+
+    # Selectors for result titles (within each item)
+    title_selectors:
+      - 'h2'
+      - 'h3'
+      - '.product-title'
+      - 'a[title]'
+
+    # Attribute containing the result URL
+    url_attr: 'href'
+
+    # Selectors for result descriptions/snippets
+    snippet_selectors:
+      - '.description'
+      - '.product-subtitle'
+      - 'p'
+
+    # Selectors for prices (optional)
+    price_selectors:
+      - '.price'
+      - '[data-testid*="price"]'
+      - 'span[class*="price"]'
+
+    # Selectors for images (optional)
+    image_selectors:
+      - 'img'
+      - '[data-testid*="image"]'
+
+  modals:
+    # Text patterns for close buttons (case-insensitive)
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+
+    # Maximum number of automatic modal dismissals
+    max_auto_clicks: 3
+
+    # Wait time after closing modal (milliseconds)
+    wait_after_close_ms: 500
+
+run:
+  # Number of top results to extract
+  top_k: 10
+
+  # Browser viewport size
+  viewport_width: 1366
+  viewport_height: 900
+
+  # Network idle timeout (milliseconds)
+  network_idle_ms: 1200
+
+  # Wait after submitting search (milliseconds)
+  post_submit_ms: 800
+
+  # Run browser in headless mode
+  headless: true
+
+  # Rate limit (requests per second)
+  throttle_rps: 0.5
+
+  # Random seed for reproducible LLM outputs
+  seed: 42
+
+llm:
+  # LLM provider: "openai" or "anthropic"
+  provider: "openai"
+
+  # Model identifier
+  model: "gpt-4o-mini"
+
+  # Maximum tokens in response
+  max_tokens: 800
+
+  # Sampling temperature (lower = more deterministic)
+  temperature: 0.2
+
+  # Custom system prompt (null = use default)
+  system_prompt: null
+
+report:
+  # Output formats: "md", "html", "json"
+  formats:
+    - "md"
+    - "html"
+
+  # Output directory
+  out_dir: "./runs"
