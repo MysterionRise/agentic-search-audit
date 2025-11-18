@@ -93,6 +93,14 @@ class SearchConfig(BaseModel):
     submit_selector: str | None = Field(
         default=None, description="Selector for submit button if using clickSelector"
     )
+    use_intelligent_fallback: bool = Field(
+        default=True,
+        description="Use LLM-based intelligent detection if CSS selectors fail",
+    )
+    intelligent_detection_model: str = Field(
+        default="gpt-4o-mini",
+        description="OpenAI model to use for intelligent search box detection",
+    )
 
 
 class ResultsConfig(BaseModel):
