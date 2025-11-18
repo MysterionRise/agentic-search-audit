@@ -7,7 +7,7 @@ from typing import Any
 
 from ..core.types import LLMConfig
 from ..mcp.client import MCPBrowserClient
-from .vision_provider import create_vision_provider, VisionProvider
+from .vision_provider import VisionProvider, create_vision_provider
 
 logger = logging.getLogger(__name__)
 
