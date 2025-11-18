@@ -165,13 +165,15 @@ class MCPBrowserClient:
                 "evaluate_script",
                 {
                     "function": """(selector) => {
-                        const el = document.querySelector(selector);
-                        return el ? {exists: true} : null;
+                        return document.querySelector(selector) !== null;
                     }""",
                     "args": [selector],
                 },
             )
-            return {"exists": True} if result and result[0].text != "null" else None
+            # Check if the result indicates the element exists
+            if result and len(result) > 0 and result[0].text == "true":
+                return {"exists": True}
+            return None
         except Exception as e:
             logger.debug(f"Selector {selector} not found: {e}")
             return None
