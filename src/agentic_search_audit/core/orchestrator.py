@@ -110,7 +110,12 @@ class SearchAuditOrchestrator:
             AuditRecord with results and evaluation
         """
         # Find and submit search
-        search_finder = SearchBoxFinder(self.client, self.config.site.search)
+        search_finder = SearchBoxFinder(
+            self.client,
+            self.config.site.search,
+            use_intelligent_fallback=self.config.site.search.use_intelligent_fallback,
+            llm_model=self.config.site.search.intelligent_detection_model,
+        )
         success = await search_finder.submit_search(query.text)
 
         if not success:

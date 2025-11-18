@@ -4,6 +4,7 @@ import logging
 
 from ..core.types import SearchConfig
 from ..mcp.client import MCPBrowserClient
+from .intelligent_finder import IntelligentSearchBoxFinder
 
 logger = logging.getLogger(__name__)
 
@@ -11,24 +12,39 @@ logger = logging.getLogger(__name__)
 class SearchBoxFinder:
     """Finds and interacts with search input boxes."""
 
-    def __init__(self, client: MCPBrowserClient, config: SearchConfig):
+    def __init__(
+        self,
+        client: MCPBrowserClient,
+        config: SearchConfig,
+        use_intelligent_fallback: bool = True,
+        llm_model: str = "gpt-4o-mini",
+    ):
         """Initialize search box finder.
 
         Args:
             client: MCP browser client
             config: Search configuration
+            use_intelligent_fallback: Use LLM-based detection if CSS selectors fail
+            llm_model: OpenAI model to use for intelligent detection
         """
         self.client = client
         self.config = config
+        self.use_intelligent_fallback = use_intelligent_fallback
+        self.llm_model = llm_model
+        self._intelligent_finder: IntelligentSearchBoxFinder | None = None
 
     async def find_search_box(self) -> str | None:
         """Find the search input box using configured selectors.
+
+        First tries traditional CSS selectors, then falls back to LLM-based
+        intelligent detection if enabled.
 
         Returns:
             CSS selector of found search box, or None if not found
         """
         logger.info("Searching for search input box...")
 
+        # Try traditional CSS selectors first
         for selector in self.config.input_selectors:
             logger.debug(f"Trying selector: {selector}")
 
@@ -39,7 +55,52 @@ class SearchBoxFinder:
                 return selector
 
         logger.warning("No search box found with configured selectors")
+
+        # Fall back to intelligent detection
+        if self.use_intelligent_fallback:
+            logger.info("Falling back to intelligent LLM-based detection...")
+            return await self._intelligent_find()
+
         return None
+
+    async def _intelligent_find(self) -> str | None:
+        """Use LLM to intelligently find the search box.
+
+        Returns:
+            CSS selector of found search box, or None if not found
+        """
+        try:
+            # Initialize intelligent finder if needed
+            if not self._intelligent_finder:
+                self._intelligent_finder = IntelligentSearchBoxFinder(
+                    self.client, llm_model=self.llm_model
+                )
+
+            # Find search box using LLM
+            result = await self._intelligent_finder.find_search_box()
+
+            if not result or not result.get("selectors"):
+                return None
+
+            # Validate and use the suggested selectors
+            for selector in result["selectors"]:
+                if await self._intelligent_finder.validate_selector(selector):
+                    logger.info(f"LLM found valid search box: {selector}")
+
+                    # Update config with discovered strategy
+                    if result.get("submit_strategy"):
+                        self.config.submit_strategy = result["submit_strategy"]
+                    if result.get("submit_selector"):
+                        self.config.submit_selector = result["submit_selector"]
+
+                    return selector
+
+            logger.warning("LLM suggested selectors but none were valid")
+            return None
+
+        except Exception as e:
+            logger.error(f"Intelligent search box detection failed: {e}")
+            return None
 
     async def submit_search(self, query_text: str) -> bool:
         """Find search box, enter query, and submit.
