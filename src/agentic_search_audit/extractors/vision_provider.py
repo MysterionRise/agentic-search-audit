@@ -177,6 +177,92 @@ class VLLMVisionProvider(VisionProvider):
             return None
 
 
+class OpenRouterVisionProvider(VisionProvider):
+    """OpenRouter vision model provider (Qwen-VL, GPT-4V, etc. via unified API)."""
+
+    def __init__(self, config: LLMConfig):
+        """Initialize OpenRouter provider.
+
+        Args:
+            config: LLM configuration
+        """
+        self.config = config
+
+        # Default base URL for OpenRouter
+        base_url = config.base_url or "https://openrouter.ai/api/v1"
+
+        # Get API key from config or environment
+        api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY not set in config or environment")
+
+        # OpenRouter uses OpenAI-compatible API
+        self.client = AsyncOpenAI(
+            base_url=base_url,
+            api_key=api_key,
+            default_headers={
+                "HTTP-Referer": "https://github.com/agentic-search-audit",  # Optional, for tracking
+                "X-Title": "Agentic Search Audit",  # Optional, for tracking
+            }
+        )
+
+        logger.info(f"Initialized OpenRouter provider with base_url: {base_url}, model: {config.model}")
+
+    async def analyze_image(
+        self,
+        screenshot_base64: str,
+        prompt: str,
+        max_tokens: int = 1000,
+        temperature: float = 0.1
+    ) -> dict[str, Any] | None:
+        """Analyze image using OpenRouter vision model."""
+        try:
+            # OpenRouter uses OpenAI-compatible format
+            response = await self.client.chat.completions.create(
+                model=self.config.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{screenshot_base64}",
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                return None
+
+            # Try to parse as JSON
+            # Some models might not support strict JSON mode
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Try to extract JSON from markdown code blocks
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                else:
+                    logger.error(f"Failed to parse JSON from OpenRouter response: {content}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"OpenRouter vision analysis failed: {e}", exc_info=True)
+            return None
+
+
 class AnthropicVisionProvider(VisionProvider):
     """Anthropic vision model provider (Claude 3.5 Sonnet, etc.)."""
 
@@ -217,6 +303,8 @@ def create_vision_provider(config: LLMConfig) -> VisionProvider:
         return OpenAIVisionProvider(config)
     elif config.provider == "vllm":
         return VLLMVisionProvider(config)
+    elif config.provider == "openrouter":
+        return OpenRouterVisionProvider(config)
     elif config.provider == "anthropic":
         return AnthropicVisionProvider(config)
     else:

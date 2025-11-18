@@ -10,7 +10,7 @@ Agentic Search Audit opens a real browser via `chrome-devtools-mcp`, runs on-sit
 
 - 🌐 **Browser Automation**: Uses chrome-devtools-mcp for real Chrome interactions
 - 🤖 **LLM-as-a-Judge**: Structured evaluation with reproducible scores
-- 👁️ **Vision-Based Detection**: Intelligent search box detection using vLLM or OpenAI vision models
+- 👁️ **Vision-Based Detection**: Intelligent search box detection using vLLM, OpenRouter, or OpenAI vision models
 - 📊 **Rich Reports**: Generates Markdown and HTML reports with screenshots
 - 🔧 **Configurable**: YAML-based configuration with site-specific overrides
 - 🎯 **Deterministic**: Seed-based reproducibility for LLM judgements
@@ -67,7 +67,17 @@ cp .env.example .env
    # Config already set to use vLLM in configs/default.yaml
    ```
 
-   **Option B: Use OpenAI (cloud, paid)**
+   **Option B: Use OpenRouter (cloud, cheap, easy)**
+   ```bash
+   # Add to .env:
+   OPENROUTER_API_KEY=sk-or-v1-...
+
+   # Update configs/default.yaml or use configs/openrouter-example.yaml:
+   # provider: "openrouter"
+   # model: "qwen/qwen-vl-plus"
+   ```
+
+   **Option C: Use OpenAI (cloud, paid)**
    ```bash
    # Add to .env:
    OPENAI_API_KEY=your-api-key-here
@@ -77,7 +87,7 @@ cp .env.example .env
    # model: "gpt-4o-mini"
    ```
 
-   See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed vLLM configuration.
+   See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed configuration of all providers.
 
 ### Run Your First Audit
 
@@ -129,10 +139,13 @@ See `configs/default.yaml` for all available options. Key settings:
 The intelligent search box detection supports multiple vision providers:
 
 - **vLLM**: Local vision models (LLaVA, Qwen-VL, etc.) - Free, private, GPU required
-- **OpenAI**: GPT-4o, GPT-4o-mini - Paid, cloud-based, no GPU needed
+- **OpenRouter**: Cloud API gateway (Qwen-VL, Claude, GPT-4V, etc.) - Cheap, easy, no GPU needed
+- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based, no GPU needed
 - **Anthropic**: Claude 3.5 Sonnet (coming soon)
 
-See [VLLM_SETUP.md](VLLM_SETUP.md) for setup instructions.
+**Recommended for most users**: OpenRouter with Qwen-VL-Plus (best value, excellent quality)
+
+See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions for all providers.
 
 ## Architecture
 

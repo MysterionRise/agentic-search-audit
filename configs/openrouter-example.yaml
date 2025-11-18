@@ -1,4 +1,5 @@
-# Default configuration for Agentic Search Audit
+# Example configuration using OpenRouter for vision models
+# OpenRouter provides access to multiple vision models via a unified API
 
 site:
   url: "https://www.example.com"
@@ -10,7 +11,7 @@ site:
       - 'input[aria-label*="Search" i]'
       - 'input[name="q"]'
       - 'input[placeholder*="Search" i]'
-    submit_strategy: "enter"  # or "clickSelector"
+    submit_strategy: "enter"
     submit_selector: null
 
   results:
@@ -56,30 +57,29 @@ run:
   network_idle_ms: 1200
   post_submit_ms: 800
   headless: true
-  throttle_rps: 0.5  # requests per second
-  seed: 42  # for reproducible LLM outputs
+  throttle_rps: 0.5
+  seed: 42
 
 llm:
-  provider: "vllm"  # "openai", "anthropic", "vllm", or "openrouter"
-  model: "llava-hf/llava-v1.6-mistral-7b-hf"  # Vision model name for vLLM server
+  provider: "openrouter"
+
+  # Recommended vision models on OpenRouter:
+  # - "qwen/qwen-vl-plus" - Excellent vision understanding, multilingual
+  # - "qwen/qwen-vl-max" - Best quality, more expensive
+  # - "openai/gpt-4-vision-preview" - OpenAI's GPT-4V via OpenRouter
+  # - "anthropic/claude-3.5-sonnet" - Claude 3.5 with vision
+  # - "google/gemini-pro-vision" - Google's vision model
+
+  model: "qwen/qwen-vl-plus"
   max_tokens: 1000
   temperature: 0.2
-  system_prompt: null  # uses default if null
+  system_prompt: null
 
-  # vLLM-specific settings (only needed when provider is "vllm")
-  base_url: "http://localhost:8000/v1"  # vLLM server endpoint
-  api_key: null  # Optional API key (uses VLLM_API_KEY env var if null)
+  # OpenRouter API endpoint (default, can be omitted)
+  base_url: "https://openrouter.ai/api/v1"
 
-  # For OpenAI provider, use:
-  # provider: "openai"
-  # model: "gpt-4o-mini"
-  # api_key: null  # uses OPENAI_API_KEY env var
-
-  # For OpenRouter provider (cloud-based vision models), use:
-  # provider: "openrouter"
-  # model: "qwen/qwen-vl-plus"  # or "qwen/qwen-vl-max", "anthropic/claude-3.5-sonnet", etc.
-  # base_url: "https://openrouter.ai/api/v1"  # default, can be omitted
-  # api_key: null  # uses OPENROUTER_API_KEY env var
+  # API key (or use OPENROUTER_API_KEY environment variable)
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
 
 report:
   formats:

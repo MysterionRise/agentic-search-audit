@@ -1,21 +1,22 @@
-# vLLM Vision Model Setup Guide
+# Vision Model Provider Setup Guide
 
-This guide explains how to set up and use vLLM with vision-capable models for intelligent search box detection in Agentic Search Audit.
+This guide explains how to set up and use different vision model providers for intelligent search box detection in Agentic Search Audit.
 
 ## Overview
 
-The intelligent search box detection feature can now use **vLLM** (vision-capable language models) instead of or alongside OpenAI's vision models. This enables:
+The intelligent search box detection feature supports multiple vision model providers:
 
-- **Local deployment** of vision models (no API costs)
-- **More powerful vision models** like LLaVA, Qwen-VL, etc.
-- **Custom fine-tuned models** for your specific use case
-- **Privacy**: No data sent to external APIs
+- **vLLM** - Local or self-hosted vision models (no API costs, full privacy)
+- **OpenRouter** - Cloud-based unified API for multiple vision models (Qwen-VL, Claude, GPT-4V, etc.)
+- **OpenAI** - Direct OpenAI API (GPT-4o, GPT-4o-mini with vision)
+- **Anthropic** - Claude 3.5 Sonnet (coming soon)
 
 ## Supported Providers
 
 1. **vLLM** - Local or self-hosted vision models (LLaVA, Qwen-VL, etc.)
-2. **OpenAI** - GPT-4o, GPT-4o-mini with vision
-3. **Anthropic** - Claude 3.5 Sonnet (coming soon)
+2. **OpenRouter** - Cloud API gateway for multiple vision models
+3. **OpenAI** - GPT-4o, GPT-4o-mini with vision
+4. **Anthropic** - Claude 3.5 Sonnet (coming soon)
 
 ## Quick Start with vLLM
 
@@ -82,7 +83,77 @@ llm:
 search-audit --site nike --config configs/sites/nike.yaml
 ```
 
-## Recommended Vision Models
+---
+
+## Quick Start with OpenRouter
+
+OpenRouter provides a unified API gateway for accessing multiple vision models from different providers through a single endpoint. No GPU required!
+
+### Prerequisites
+
+- OpenRouter account (sign up at https://openrouter.ai/)
+- OpenRouter API key
+
+### 1. Get OpenRouter API Key
+
+1. Sign up at https://openrouter.ai/
+2. Go to https://openrouter.ai/keys
+3. Create a new API key
+4. Copy your key (starts with `sk-or-...`)
+
+### 2. Configure Environment
+
+Add your API key to `.env`:
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+### 3. Configure Agentic Search Audit
+
+Update your `configs/default.yaml` or use `configs/openrouter-example.yaml`:
+
+```yaml
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen-vl-plus"  # Recommended for vision tasks
+  max_tokens: 1000
+  temperature: 0.2
+  base_url: "https://openrouter.ai/api/v1"  # Default, can be omitted
+  api_key: null  # Uses OPENROUTER_API_KEY env var
+```
+
+### 4. Run Your Audit
+
+```bash
+# The audit will now use OpenRouter's cloud API
+search-audit --site nike --config configs/openrouter-example.yaml
+```
+
+### Available Vision Models on OpenRouter
+
+| Model | Provider | Quality | Speed | Cost (per 1M tokens) | Best For |
+|-------|----------|---------|-------|---------------------|----------|
+| `qwen/qwen-vl-plus` | Alibaba | Excellent | Fast | $8 | **Recommended - Best value** |
+| `qwen/qwen-vl-max` | Alibaba | Superior | Medium | $20 | Highest quality |
+| `anthropic/claude-3.5-sonnet` | Anthropic | Excellent | Fast | $3 | General vision tasks |
+| `openai/gpt-4-vision-preview` | OpenAI | Excellent | Medium | $10 | Complex analysis |
+| `google/gemini-pro-vision` | Google | Good | Fast | $2.50 | Budget option |
+
+**Note**: Pricing is approximate and may change. Check https://openrouter.ai/models for current pricing.
+
+### Why Use OpenRouter?
+
+- ✅ **No GPU needed** - Cloud-based, works on any machine
+- ✅ **Multiple models** - Easy to switch between providers
+- ✅ **Pay-as-you-go** - Only pay for what you use
+- ✅ **Unified API** - Single integration for all providers
+- ✅ **No rate limits** - (depends on your plan)
+- ✅ **Fallback support** - Automatic fallback to other models if primary fails
+
+---
+
+## Recommended Vision Models (vLLM)
 
 ### LLaVA Models (Best for General Use)
 
@@ -149,7 +220,10 @@ Set these in your `.env` file:
 # For vLLM
 VLLM_API_KEY=your-api-key  # Optional, if server requires auth
 
-# For OpenAI fallback
+# For OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# For OpenAI direct API
 OPENAI_API_KEY=sk-...
 
 # For Anthropic (future)
@@ -246,6 +320,7 @@ LLMConfig (provider, model, base_url)
 VisionProviderFactory
     ├─→ OpenAIVisionProvider (if provider="openai")
     ├─→ VLLMVisionProvider (if provider="vllm")
+    ├─→ OpenRouterVisionProvider (if provider="openrouter")
     └─→ AnthropicVisionProvider (if provider="anthropic")
     ↓
 IntelligentSearchBoxFinder
@@ -260,8 +335,16 @@ CSS Selectors + Confidence
 | Provider | Cost (per 1K images) | Privacy | Latency | Quality |
 |----------|---------------------|---------|---------|---------|
 | vLLM (local) | $0 (GPU cost) | ✅ Full | Low | Good-Excellent |
+| OpenRouter (Qwen-VL-Plus) | ~$0.08 | ⚠️ API | Low | Excellent |
+| OpenRouter (Qwen-VL-Max) | ~$0.20 | ⚠️ API | Medium | Superior |
 | OpenAI GPT-4o-mini | ~$0.15 | ⚠️ API | Medium | Excellent |
 | OpenAI GPT-4o | ~$1.50 | ⚠️ API | Medium | Superior |
+
+**Recommendation by Use Case:**
+- **Best for privacy & zero cost**: vLLM (requires GPU)
+- **Best value cloud option**: OpenRouter with Qwen-VL-Plus (8x cheaper than GPT-4o)
+- **Best quality cloud option**: OpenRouter with Qwen-VL-Max or GPT-4o
+- **Easiest setup**: OpenRouter or OpenAI (no GPU needed)
 
 ## FAQ
 
