@@ -81,7 +81,7 @@ class ResultsExtractor:
                 if count > 0:
                     logger.info(f"Found {count} items with selector: {selector}")
                     # Return list of nth-child selectors
-                    return [f"{selector}:nth-of-type({i+1})" for i in range(count)]
+                    return [f"{selector}:nth-of-type({i + 1})" for i in range(count)]
             except Exception as e:
                 logger.debug(f"Selector {selector} failed: {e}")
                 continue

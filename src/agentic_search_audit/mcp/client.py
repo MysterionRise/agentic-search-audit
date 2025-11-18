@@ -164,10 +164,10 @@ class MCPBrowserClient:
             result = await self._call_tool(
                 "evaluate_script",
                 {
-                    "function": f"""(selector) => {{
+                    "function": """(selector) => {
                         const el = document.querySelector(selector);
-                        return el ? {{exists: true}} : null;
-                    }}""",
+                        return el ? {exists: true} : null;
+                    }""",
                     "args": [selector],
                 },
             )
@@ -189,10 +189,10 @@ class MCPBrowserClient:
             result = await self._call_tool(
                 "evaluate_script",
                 {
-                    "function": f"""(selector) => {{
+                    "function": """(selector) => {
                         const elements = document.querySelectorAll(selector);
-                        return Array.from(elements).map((el, i) => ({{index: i}}));
-                    }}""",
+                        return Array.from(elements).map((el, i) => ({index: i}));
+                    }""",
                     "args": [selector],
                 },
             )

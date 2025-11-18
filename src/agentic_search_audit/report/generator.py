@@ -286,7 +286,7 @@ class ReportGenerator:
     <div class="header">
         <h1>Search Quality Audit Report</h1>
         <p><strong>Site:</strong> {self.config.site.url}</p>
-        <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p><strong>Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p><strong>Total Queries:</strong> {len(records)}</p>
     </div>
 """
