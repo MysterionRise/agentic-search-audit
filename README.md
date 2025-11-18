@@ -10,10 +10,12 @@ Agentic Search Audit opens a real browser via `chrome-devtools-mcp`, runs on-sit
 
 - 🌐 **Browser Automation**: Uses chrome-devtools-mcp for real Chrome interactions
 - 🤖 **LLM-as-a-Judge**: Structured evaluation with reproducible scores
+- 👁️ **Vision-Based Detection**: Intelligent search box detection using vLLM, OpenRouter, or OpenAI vision models
 - 📊 **Rich Reports**: Generates Markdown and HTML reports with screenshots
 - 🔧 **Configurable**: YAML-based configuration with site-specific overrides
 - 🎯 **Deterministic**: Seed-based reproducibility for LLM judgements
 - 🔍 **Smart Extraction**: Heuristics-based DOM parsing with fallbacks
+- 🏠 **Local or Cloud**: Use local vLLM models or cloud APIs (OpenAI, Anthropic)
 
 ## Quick Start
 
@@ -54,10 +56,38 @@ claude mcp add chrome-devtools npx chrome-devtools-mcp@latest
 cp .env.example .env
 ```
 
-2. Add your OpenAI API key to `.env`:
-```
-OPENAI_API_KEY=your-api-key-here
-```
+2. **Choose your vision provider:**
+
+   **Option A: Use vLLM (local, free, private)**
+   ```bash
+   # Start vLLM server (see VLLM_SETUP.md for details)
+   vllm serve llava-hf/llava-v1.6-mistral-7b-hf --port 8000
+
+   # No API key needed for local vLLM!
+   # Config already set to use vLLM in configs/default.yaml
+   ```
+
+   **Option B: Use OpenRouter (cloud, cheap, easy)**
+   ```bash
+   # Add to .env:
+   OPENROUTER_API_KEY=sk-or-v1-...
+
+   # Update configs/default.yaml or use configs/openrouter-example.yaml:
+   # provider: "openrouter"
+   # model: "qwen/qwen-vl-plus"
+   ```
+
+   **Option C: Use OpenAI (cloud, paid)**
+   ```bash
+   # Add to .env:
+   OPENAI_API_KEY=your-api-key-here
+
+   # Update configs/default.yaml:
+   # provider: "openai"
+   # model: "gpt-4o-mini"
+   ```
+
+   See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed configuration of all providers.
 
 ### Run Your First Audit
 
@@ -101,8 +131,21 @@ See `configs/default.yaml` for all available options. Key settings:
 - **search**: Selectors and strategies for search box and results
 - **modals**: Cookie/consent handling
 - **run**: Top-K results, viewport, headless mode, rate limiting
-- **llm**: Provider, model, temperature, seed
+- **llm**: Provider (vllm/openai/anthropic), model, temperature, seed, base_url
 - **report**: Output formats and directory
+
+### Vision Provider Configuration
+
+The intelligent search box detection supports multiple vision providers:
+
+- **vLLM**: Local vision models (LLaVA, Qwen-VL, etc.) - Free, private, GPU required
+- **OpenRouter**: Cloud API gateway (Qwen-VL, Claude, GPT-4V, etc.) - Cheap, easy, no GPU needed
+- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based, no GPU needed
+- **Anthropic**: Claude 3.5 Sonnet (coming soon)
+
+**Recommended for most users**: OpenRouter with Qwen-VL-Plus (best value, excellent quality)
+
+See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions for all providers.
 
 ## Architecture
 

@@ -1,15 +1,13 @@
 """Intelligent search box detection using LLM and vision."""
 
 import base64
-import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
-from openai import AsyncOpenAI
-
+from ..core.types import LLMConfig
 from ..mcp.client import MCPBrowserClient
+from .vision_provider import VisionProvider, create_vision_provider
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +45,18 @@ HTML snippet:
 class IntelligentSearchBoxFinder:
     """Uses LLM with vision to intelligently find search boxes."""
 
-    def __init__(self, client: MCPBrowserClient, llm_model: str = "gpt-4o-mini"):
+    def __init__(self, client: MCPBrowserClient, llm_config: LLMConfig):
         """Initialize intelligent finder.
 
         Args:
             client: MCP browser client
-            llm_model: OpenAI model with vision capability
+            llm_config: LLM configuration including provider and model
         """
         self.client = client
-        self.llm_model = llm_model
+        self.llm_config = llm_config
 
-        # Initialize OpenAI client
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        self.openai_client = AsyncOpenAI(api_key=api_key)
+        # Initialize vision provider based on config
+        self.vision_provider: VisionProvider = create_vision_provider(llm_config)
 
     async def find_search_box(self) -> dict[str, Any] | None:
         """Use LLM to find the search box on the current page.
@@ -120,35 +115,14 @@ class IntelligentSearchBoxFinder:
             # Build prompt
             prompt = SEARCH_BOX_FINDER_PROMPT.format(html_snippet=html_snippet)
 
-            # Call OpenAI with vision
-            response = await self.openai_client.chat.completions.create(
-                model=self.llm_model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{screenshot_base64}",
-                                    "detail": "high",
-                                },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.1,
-                response_format={"type": "json_object"},
+            # Use vision provider to analyze
+            result = await self.vision_provider.analyze_image(
+                screenshot_base64=screenshot_base64,
+                prompt=prompt,
+                max_tokens=self.llm_config.max_tokens,
+                temperature=self.llm_config.temperature,
             )
 
-            # Parse response
-            content = response.choices[0].message.content
-            if not content:
-                return None
-
-            result = json.loads(content)
             return result
 
         except Exception as e:

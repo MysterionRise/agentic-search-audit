@@ -2,7 +2,7 @@
 
 import logging
 
-from ..core.types import SearchConfig
+from ..core.types import LLMConfig, SearchConfig
 from ..mcp.client import MCPBrowserClient
 from .intelligent_finder import IntelligentSearchBoxFinder
 
@@ -16,21 +16,21 @@ class SearchBoxFinder:
         self,
         client: MCPBrowserClient,
         config: SearchConfig,
+        llm_config: LLMConfig,
         use_intelligent_fallback: bool = True,
-        llm_model: str = "gpt-4o-mini",
     ):
         """Initialize search box finder.
 
         Args:
             client: MCP browser client
             config: Search configuration
+            llm_config: LLM configuration for vision-based detection
             use_intelligent_fallback: Use LLM-based detection if CSS selectors fail
-            llm_model: OpenAI model to use for intelligent detection
         """
         self.client = client
         self.config = config
+        self.llm_config = llm_config
         self.use_intelligent_fallback = use_intelligent_fallback
-        self.llm_model = llm_model
         self._intelligent_finder: IntelligentSearchBoxFinder | None = None
 
     async def find_search_box(self) -> str | None:
@@ -73,7 +73,7 @@ class SearchBoxFinder:
             # Initialize intelligent finder if needed
             if not self._intelligent_finder:
                 self._intelligent_finder = IntelligentSearchBoxFinder(
-                    self.client, llm_model=self.llm_model
+                    self.client, llm_config=self.llm_config
                 )
 
             # Find search box using LLM
