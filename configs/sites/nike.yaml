@@ -67,11 +67,13 @@ run:
   seed: 42
 
 llm:
-  provider: "openai"
-  model: "gpt-4o-mini"
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
   max_tokens: 1000
   temperature: 0.2
   system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
 
 report:
   formats:
