@@ -104,7 +104,9 @@ class IntelligentSearchBoxFinder:
             logger.error(f"Intelligent search box detection failed: {e}", exc_info=True)
             return None
 
-    async def _analyze_page(self, screenshot_base64: str, html_snippet: str) -> dict[str, Any] | None:
+    async def _analyze_page(
+        self, screenshot_base64: str, html_snippet: str
+    ) -> dict[str, Any] | None:
         """Analyze page with LLM vision.
 
         Args:
