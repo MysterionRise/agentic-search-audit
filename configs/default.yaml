@@ -60,11 +60,20 @@ run:
   seed: 42  # for reproducible LLM outputs
 
 llm:
-  provider: "openai"  # "openai" or "anthropic"
-  model: "gpt-4o-mini"
-  max_tokens: 800
+  provider: "vllm"  # "openai", "anthropic", or "vllm"
+  model: "llava-hf/llava-v1.6-mistral-7b-hf"  # Vision model name for vLLM server
+  max_tokens: 1000
   temperature: 0.2
   system_prompt: null  # uses default if null
+
+  # vLLM-specific settings (only needed when provider is "vllm")
+  base_url: "http://localhost:8000/v1"  # vLLM server endpoint
+  api_key: null  # Optional API key (uses VLLM_API_KEY env var if null)
+
+  # For OpenAI provider, use:
+  # provider: "openai"
+  # model: "gpt-4o-mini"
+  # api_key: null  # uses OPENAI_API_KEY env var
 
 report:
   formats:

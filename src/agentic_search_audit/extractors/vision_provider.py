@@ -1,0 +1,223 @@
+"""Vision model provider abstraction."""
+
+import json
+import logging
+import os
+from abc import ABC, abstractmethod
+from typing import Any
+
+from openai import AsyncOpenAI
+
+from ..core.types import LLMConfig
+
+logger = logging.getLogger(__name__)
+
+
+class VisionProvider(ABC):
+    """Abstract base class for vision model providers."""
+
+    @abstractmethod
+    async def analyze_image(
+        self,
+        screenshot_base64: str,
+        prompt: str,
+        max_tokens: int = 1000,
+        temperature: float = 0.1
+    ) -> dict[str, Any] | None:
+        """Analyze an image with a vision model.
+
+        Args:
+            screenshot_base64: Base64-encoded image
+            prompt: Text prompt for analysis
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+
+        Returns:
+            Parsed JSON response or None on error
+        """
+        pass
+
+
+class OpenAIVisionProvider(VisionProvider):
+    """OpenAI vision model provider (gpt-4o, gpt-4o-mini, etc.)."""
+
+    def __init__(self, config: LLMConfig):
+        """Initialize OpenAI provider.
+
+        Args:
+            config: LLM configuration
+        """
+        self.config = config
+        api_key = config.api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not set in config or environment")
+
+        self.client = AsyncOpenAI(api_key=api_key)
+
+    async def analyze_image(
+        self,
+        screenshot_base64: str,
+        prompt: str,
+        max_tokens: int = 1000,
+        temperature: float = 0.1
+    ) -> dict[str, Any] | None:
+        """Analyze image using OpenAI vision model."""
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.config.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{screenshot_base64}",
+                                    "detail": "high",
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                return None
+
+            return json.loads(content)
+
+        except Exception as e:
+            logger.error(f"OpenAI vision analysis failed: {e}")
+            return None
+
+
+class VLLMVisionProvider(VisionProvider):
+    """vLLM vision model provider (LLaVA, Qwen-VL, etc. via OpenAI-compatible API)."""
+
+    def __init__(self, config: LLMConfig):
+        """Initialize vLLM provider.
+
+        Args:
+            config: LLM configuration with base_url specified
+        """
+        self.config = config
+
+        if not config.base_url:
+            raise ValueError("base_url must be specified in config for vLLM provider")
+
+        # vLLM supports OpenAI-compatible API
+        api_key = config.api_key or os.getenv("VLLM_API_KEY", "EMPTY")
+
+        self.client = AsyncOpenAI(
+            base_url=config.base_url,
+            api_key=api_key
+        )
+
+        logger.info(f"Initialized vLLM provider with base_url: {config.base_url}, model: {config.model}")
+
+    async def analyze_image(
+        self,
+        screenshot_base64: str,
+        prompt: str,
+        max_tokens: int = 1000,
+        temperature: float = 0.1
+    ) -> dict[str, Any] | None:
+        """Analyze image using vLLM vision model."""
+        try:
+            # vLLM uses OpenAI-compatible format
+            response = await self.client.chat.completions.create(
+                model=self.config.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{screenshot_base64}",
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                # Note: vLLM might not support response_format for all models
+                # We'll try to parse JSON from the response
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                return None
+
+            # Try to parse as JSON
+            # Some vLLM models might not support strict JSON mode
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Try to extract JSON from markdown code blocks
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                else:
+                    logger.error(f"Failed to parse JSON from vLLM response: {content}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"vLLM vision analysis failed: {e}", exc_info=True)
+            return None
+
+
+class AnthropicVisionProvider(VisionProvider):
+    """Anthropic vision model provider (Claude 3.5 Sonnet, etc.)."""
+
+    def __init__(self, config: LLMConfig):
+        """Initialize Anthropic provider.
+
+        Args:
+            config: LLM configuration
+        """
+        self.config = config
+        # TODO: Implement Anthropic vision API
+        raise NotImplementedError("Anthropic vision provider not yet implemented")
+
+    async def analyze_image(
+        self,
+        screenshot_base64: str,
+        prompt: str,
+        max_tokens: int = 1000,
+        temperature: float = 0.1
+    ) -> dict[str, Any] | None:
+        """Analyze image using Anthropic vision model."""
+        raise NotImplementedError("Anthropic vision provider not yet implemented")
+
+
+def create_vision_provider(config: LLMConfig) -> VisionProvider:
+    """Factory function to create vision provider based on config.
+
+    Args:
+        config: LLM configuration
+
+    Returns:
+        Appropriate vision provider instance
+
+    Raises:
+        ValueError: If provider is not supported
+    """
+    if config.provider == "openai":
+        return OpenAIVisionProvider(config)
+    elif config.provider == "vllm":
+        return VLLMVisionProvider(config)
+    elif config.provider == "anthropic":
+        return AnthropicVisionProvider(config)
+    else:
+        raise ValueError(f"Unsupported vision provider: {config.provider}")

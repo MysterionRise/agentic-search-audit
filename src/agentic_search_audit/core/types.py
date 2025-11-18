@@ -97,10 +97,6 @@ class SearchConfig(BaseModel):
         default=True,
         description="Use LLM-based intelligent detection if CSS selectors fail",
     )
-    intelligent_detection_model: str = Field(
-        default="gpt-4o-mini",
-        description="OpenAI model to use for intelligent search box detection",
-    )
 
 
 class ResultsConfig(BaseModel):
@@ -160,11 +156,21 @@ class RunConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
-    provider: Literal["openai", "anthropic"] = Field(default="openai", description="LLM provider")
+    provider: Literal["openai", "anthropic", "vllm"] = Field(default="openai", description="LLM provider")
     model: str = Field(default="gpt-4o-mini", description="Model identifier")
     max_tokens: int = Field(default=800, description="Max tokens in response")
     temperature: float = Field(default=0.2, description="Sampling temperature")
     system_prompt: str | None = Field(default=None, description="Custom system prompt override")
+
+    # vLLM-specific configuration
+    base_url: str | None = Field(
+        default=None,
+        description="Base URL for vLLM server (e.g., 'http://localhost:8000/v1')"
+    )
+    api_key: str | None = Field(
+        default=None,
+        description="API key for the provider (if not using environment variable)"
+    )
 
 
 class ReportConfig(BaseModel):
