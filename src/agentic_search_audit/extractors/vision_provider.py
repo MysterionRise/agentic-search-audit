@@ -18,11 +18,7 @@ class VisionProvider(ABC):
 
     @abstractmethod
     async def analyze_image(
-        self,
-        screenshot_base64: str,
-        prompt: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.1
+        self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze an image with a vision model.
 
@@ -55,11 +51,7 @@ class OpenAIVisionProvider(VisionProvider):
         self.client = AsyncOpenAI(api_key=api_key)
 
     async def analyze_image(
-        self,
-        screenshot_base64: str,
-        prompt: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.1
+        self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenAI vision model."""
         try:
@@ -113,19 +105,14 @@ class VLLMVisionProvider(VisionProvider):
         # vLLM supports OpenAI-compatible API
         api_key = config.api_key or os.getenv("VLLM_API_KEY", "EMPTY")
 
-        self.client = AsyncOpenAI(
-            base_url=config.base_url,
-            api_key=api_key
+        self.client = AsyncOpenAI(base_url=config.base_url, api_key=api_key)
+
+        logger.info(
+            f"Initialized vLLM provider with base_url: {config.base_url}, model: {config.model}"
         )
 
-        logger.info(f"Initialized vLLM provider with base_url: {config.base_url}, model: {config.model}")
-
     async def analyze_image(
-        self,
-        screenshot_base64: str,
-        prompt: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.1
+        self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using vLLM vision model."""
         try:
@@ -203,17 +190,15 @@ class OpenRouterVisionProvider(VisionProvider):
             default_headers={
                 "HTTP-Referer": "https://github.com/agentic-search-audit",  # Optional, for tracking
                 "X-Title": "Agentic Search Audit",  # Optional, for tracking
-            }
+            },
         )
 
-        logger.info(f"Initialized OpenRouter provider with base_url: {base_url}, model: {config.model}")
+        logger.info(
+            f"Initialized OpenRouter provider with base_url: {base_url}, model: {config.model}"
+        )
 
     async def analyze_image(
-        self,
-        screenshot_base64: str,
-        prompt: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.1
+        self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenRouter vision model."""
         try:
@@ -277,11 +262,7 @@ class AnthropicVisionProvider(VisionProvider):
         raise NotImplementedError("Anthropic vision provider not yet implemented")
 
     async def analyze_image(
-        self,
-        screenshot_base64: str,
-        prompt: str,
-        max_tokens: int = 1000,
-        temperature: float = 0.1
+        self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using Anthropic vision model."""
         raise NotImplementedError("Anthropic vision provider not yet implemented")
