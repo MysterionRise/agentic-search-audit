@@ -38,7 +38,9 @@ class SearchQualityJudge:
             # OpenRouter uses OpenAI-compatible API
             api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
             if not api_key:
-                raise ValueError("OPENROUTER_API_KEY environment variable not set and no api_key in config")
+                raise ValueError(
+                    "OPENROUTER_API_KEY environment variable not set and no api_key in config"
+                )
             base_url = config.base_url or "https://openrouter.ai/api/v1"
             self.client = AsyncOpenAI(
                 api_key=api_key,
