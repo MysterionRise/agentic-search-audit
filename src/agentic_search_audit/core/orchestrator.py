@@ -113,6 +113,9 @@ class SearchAuditOrchestrator:
         modal_handler = ModalHandler(self.client, self.config.site.modals)
         await modal_handler.dismiss_modals()
 
+        # Wait a bit for modal animations to complete
+        await asyncio.sleep(0.5)
+
         # Find and submit search
         search_finder = SearchBoxFinder(
             self.client,

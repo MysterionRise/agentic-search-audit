@@ -133,7 +133,23 @@ class ModalsConfig(BaseModel):
     """Modal/popup handling configuration."""
 
     close_text_matches: list[str] = Field(
-        default=["accept", "agree", "continue", "got it", "close", "dismiss"],
+        default=[
+            "accept",
+            "accept all",
+            "accept cookies",
+            "allow",
+            "allow all",
+            "agree",
+            "continue",
+            "got it",
+            "ok",
+            "okay",
+            "close",
+            "dismiss",
+            "i agree",
+            "i accept",
+            "consent",
+        ],
         description="Text patterns for close buttons",
     )
     max_auto_clicks: int = Field(default=3, description="Max automatic modal dismissals")

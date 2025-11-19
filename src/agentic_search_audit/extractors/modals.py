@@ -59,6 +59,45 @@ class ModalHandler:
         Returns:
             CSS selector for close button, or None
         """
+        # First try common cookie consent framework selectors directly
+        direct_selectors = [
+            # OneTrust
+            '#onetrust-accept-btn-handler',
+            'button[id*="accept"]',
+            # Cookiebot
+            '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+            '.CybotCookiebotDialogBodyButton',
+            # Cookie Consent
+            '.cc-btn.cc-dismiss',
+            '.cc-allow',
+            # Generic cookie selectors
+            '[data-testid*="cookie"][data-testid*="accept"]',
+            '[class*="cookie"][class*="accept"]',
+            '[id*="cookie"][id*="accept"]',
+            'button[class*="consent"][class*="accept"]',
+        ]
+
+        for selector in direct_selectors:
+            try:
+                element = await self.client.query_selector(selector)
+                if element:
+                    # Verify it's visible
+                    script = f"""
+                    (function() {{
+                        const el = document.querySelector('{selector}');
+                        if (!el) return false;
+                        const rect = el.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0;
+                    }})()
+                    """
+                    is_visible = await self.client.evaluate(script)
+                    if is_visible:
+                        logger.debug(f"Found cookie button with direct selector: {selector}")
+                        return selector
+            except Exception as e:
+                logger.debug(f"Error checking selector {selector}: {e}")
+                continue
+
         # Build regex pattern from close text matches
         pattern = "|".join(self.config.close_text_matches)
 
@@ -88,10 +127,12 @@ class ModalHandler:
                         // Check if element is visible
                         const rect = el.getBoundingClientRect();
                         if (rect.width > 0 && rect.height > 0) {{
-                            // Return a unique selector
+                            // Generate a unique ID if it doesn't have one
+                            if (!el.id) {{
+                                el.id = 'modal-close-' + Date.now() + '-' + i;
+                            }}
                             return {{
-                                selector: '{base_selector}',
-                                index: i,
+                                id: el.id,
                                 text: text.trim()
                             }};
                         }}
@@ -107,9 +148,9 @@ class ModalHandler:
                     import json
 
                     data = json.loads(result)
-                    if data:
-                        # Use nth-of-type selector
-                        selector = f"{data['selector']}:nth-of-type({data['index'] + 1})"
+                    if data and data.get('id'):
+                        # Use ID selector for reliability
+                        selector = f"#{data['id']}"
                         logger.debug(f"Found close button: {selector} with text '{data['text']}'")
                         return selector
             except Exception as e:
