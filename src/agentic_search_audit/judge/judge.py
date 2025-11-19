@@ -34,6 +34,18 @@ class SearchQualityJudge:
             if not api_key:
                 raise ValueError("OPENAI_API_KEY environment variable not set")
             self.client = AsyncOpenAI(api_key=api_key)
+        elif config.provider == "openrouter":
+            # OpenRouter uses OpenAI-compatible API
+            api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "OPENROUTER_API_KEY environment variable not set and no api_key in config"
+                )
+            base_url = config.base_url or "https://openrouter.ai/api/v1"
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+            )
         else:
             raise ValueError(f"Unsupported LLM provider: {config.provider}")
 
@@ -129,7 +141,7 @@ class SearchQualityJudge:
         """
         logger.debug("Calling LLM for evaluation...")
 
-        if self.config.provider == "openai":
+        if self.config.provider in ["openai", "openrouter"]:
             response = await self.client.chat.completions.create(
                 model=self.config.model,
                 messages=[
