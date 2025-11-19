@@ -109,6 +109,10 @@ class SearchAuditOrchestrator:
         Returns:
             AuditRecord with results and evaluation
         """
+        # Dismiss any modals that might be blocking the search box
+        modal_handler = ModalHandler(self.client, self.config.site.modals)
+        await modal_handler.dismiss_modals()
+
         # Find and submit search
         search_finder = SearchBoxFinder(
             self.client,
