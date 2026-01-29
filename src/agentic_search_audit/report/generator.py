@@ -162,8 +162,7 @@ class ReportGenerator:
         avg_nav = sum(r.judge.navigability for r in records) / len(records) if records else 0
 
         with open(report_path, "w", encoding="utf-8") as f:
-            f.write(
-                """<!DOCTYPE html>
+            f.write("""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -277,24 +276,20 @@ class ReportGenerator:
     </style>
 </head>
 <body>
-"""
-            )
+""")
 
             # Header
-            f.write(
-                f"""
+            f.write(f"""
     <div class="header">
         <h1>Search Quality Audit Report</h1>
         <p><strong>Site:</strong> {self.config.site.url}</p>
         <p><strong>Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p><strong>Total Queries:</strong> {len(records)}</p>
     </div>
-"""
-            )
+""")
 
             # Summary
-            f.write(
-                f"""
+            f.write(f"""
     <div class="summary">
         <h2>Summary</h2>
         <table>
@@ -324,16 +319,14 @@ class ReportGenerator:
             </tr>
         </table>
     </div>
-"""
-            )
+""")
 
             # Query details
             for i, record in enumerate(records, 1):
                 score_class = self._get_score_class(record.judge.overall)
                 screenshot_rel = Path(record.page.screenshot_path).relative_to(self.run_dir)
 
-                f.write(
-                    f"""
+                f.write(f"""
     <div class="query-card">
         <h2 class="query-title">{i}. {record.query.text}</h2>
 
@@ -361,8 +354,7 @@ class ReportGenerator:
         </div>
 
         <p><strong>Rationale:</strong> {record.judge.rationale}</p>
-"""
-                )
+""")
 
                 if record.judge.issues:
                     f.write('        <div class="issues">\n')
@@ -383,8 +375,7 @@ class ReportGenerator:
                     f.write("        </div>\n")
 
                 # Results table
-                f.write(
-                    """
+                f.write("""
         <h3>Top Results</h3>
         <table class="results-table">
             <thead>
@@ -396,46 +387,37 @@ class ReportGenerator:
                 </tr>
             </thead>
             <tbody>
-"""
-                )
+""")
 
                 for item in record.items[:10]:
                     title = (item.title or "N/A")[:80]
                     price = item.price or "N/A"
                     url = (item.url or "N/A")[:80]
-                    f.write(
-                        f"""
+                    f.write(f"""
                 <tr>
                     <td>{item.rank}</td>
                     <td>{title}</td>
                     <td>{price}</td>
                     <td><a href="{url}" target="_blank">{url[:50]}...</a></td>
                 </tr>
-"""
-                    )
+""")
 
-                f.write(
-                    """
+                f.write("""
             </tbody>
         </table>
-"""
-                )
+""")
 
                 # Screenshot
-                f.write(
-                    f"""
+                f.write(f"""
         <h3>Screenshot</h3>
         <img src="{screenshot_rel}" alt="Screenshot" class="screenshot">
     </div>
-"""
-                )
+""")
 
-            f.write(
-                """
+            f.write("""
 </body>
 </html>
-"""
-            )
+""")
 
         logger.info(f"HTML report saved to {report_path}")
 
