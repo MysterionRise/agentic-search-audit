@@ -1,7 +1,7 @@
 """Tests for compliance module."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.robotparser import RobotFileParser
 
 import pytest
 
@@ -79,78 +79,64 @@ Allow: /
     @pytest.mark.asyncio
     async def test_can_fetch_allows_when_no_robots_txt(self, policy):
         """Test that can_fetch allows access when robots.txt is missing."""
-        mock_response = AsyncMock()
-        mock_response.status = 404
+        # Mock _fetch_robots to return None (no robots.txt)
+        policy._fetch_robots = AsyncMock(return_value=None)
 
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_context = AsyncMock()
-            mock_context.__aenter__.return_value = mock_response
-            mock_session.return_value.__aenter__.return_value.get.return_value = mock_context
-
-            result = await policy.can_fetch("https://example.com/page")
-            assert result is True
+        result = await policy.can_fetch("https://example.com/page")
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_can_fetch_with_permissive_robots(self, policy, permissive_robots_txt):
         """Test can_fetch with permissive robots.txt."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=permissive_robots_txt)
+        # Create a permissive parser
+        parser = RobotFileParser()
+        parser.parse(permissive_robots_txt.splitlines())
 
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_context = AsyncMock()
-            mock_context.__aenter__.return_value = mock_response
-            mock_session.return_value.__aenter__.return_value.get.return_value = mock_context
+        policy._fetch_robots = AsyncMock(return_value=parser)
 
-            result = await policy.can_fetch("https://example.com/page")
-            assert result is True
+        result = await policy.can_fetch("https://example.com/page")
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_can_fetch_with_restrictive_robots(self, policy, restrictive_robots_txt):
         """Test can_fetch with restrictive robots.txt."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=restrictive_robots_txt)
+        # Create a restrictive parser
+        parser = RobotFileParser()
+        parser.parse(restrictive_robots_txt.splitlines())
 
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_context = AsyncMock()
-            mock_context.__aenter__.return_value = mock_response
-            mock_session.return_value.__aenter__.return_value.get.return_value = mock_context
+        policy._fetch_robots = AsyncMock(return_value=parser)
 
-            result = await policy.can_fetch("https://example.com/page")
-            assert result is False
+        result = await policy.can_fetch("https://example.com/page")
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_can_fetch_caches_robots_txt(self, policy, permissive_robots_txt):
         """Test that robots.txt is cached per domain."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=permissive_robots_txt)
+        # Create a parser
+        parser = RobotFileParser()
+        parser.parse(permissive_robots_txt.splitlines())
 
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_context = AsyncMock()
-            mock_context.__aenter__.return_value = mock_response
-            mock_session.return_value.__aenter__.return_value.get.return_value = mock_context
+        mock_fetch = AsyncMock(return_value=parser)
+        policy._fetch_robots = mock_fetch
 
-            # First call should fetch
-            await policy.can_fetch("https://example.com/page1")
-            # Second call should use cache
-            await policy.can_fetch("https://example.com/page2")
+        # First call should fetch
+        await policy.can_fetch("https://example.com/page1")
+        # Second call should use cache
+        await policy.can_fetch("https://example.com/page2")
 
-            # Should only have fetched once
-            assert "https://example.com" in policy._cache
+        # Should only have fetched once
+        assert mock_fetch.call_count == 1
+        assert "https://example.com" in policy._cache
 
     @pytest.mark.asyncio
     async def test_can_fetch_handles_timeout(self, policy):
         """Test that can_fetch handles timeouts gracefully."""
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_session.return_value.__aenter__.return_value.get.side_effect = (
-                asyncio.TimeoutError()
-            )
+        # Mock _fetch_robots to return None (as it would on timeout)
+        policy._fetch_robots = AsyncMock(return_value=None)
 
-            result = await policy.can_fetch("https://slow-site.com/page")
-            # Should allow access when robots.txt times out
-            assert result is True
+        result = await policy.can_fetch("https://slow-site.com/page")
+        # Should allow access when robots.txt times out
+        assert result is True
 
     def test_clear_cache(self, policy):
         """Test cache clearing."""
@@ -166,6 +152,28 @@ Allow: /
         domains = policy.get_cached_domains()
         assert "https://example.com" in domains
         assert "https://test.com" in domains
+
+    @pytest.mark.asyncio
+    async def test_can_fetch_different_domains_separate_cache(self, policy, permissive_robots_txt):
+        """Test that different domains have separate cache entries."""
+        parser = RobotFileParser()
+        parser.parse(permissive_robots_txt.splitlines())
+
+        mock_fetch = AsyncMock(return_value=parser)
+        policy._fetch_robots = mock_fetch
+
+        await policy.can_fetch("https://example.com/page")
+        await policy.can_fetch("https://other.com/page")
+
+        # Should fetch for each domain
+        assert mock_fetch.call_count == 2
+        assert "https://example.com" in policy._cache
+        assert "https://other.com" in policy._cache
+
+    def test_get_crawl_delay_returns_none_when_not_cached(self, policy):
+        """Test get_crawl_delay returns None when domain not cached."""
+        result = policy.get_crawl_delay("https://example.com")
+        assert result is None
 
 
 class TestComplianceChecker:

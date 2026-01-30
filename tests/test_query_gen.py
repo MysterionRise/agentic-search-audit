@@ -5,6 +5,7 @@ import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_search_audit.core.types import LLMConfig, QueryOrigin
 from agentic_search_audit.generators.query_gen import (
@@ -121,7 +122,7 @@ class TestQueryGenerator:
 
     def test_init_openai(self, openai_config):
         """Test initialization with OpenAI config."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             assert generator.config == openai_config
 
@@ -135,7 +136,7 @@ class TestQueryGenerator:
 
     def test_extract_relevant_html(self, openai_config, sample_html):
         """Test HTML extraction and cleaning."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             cleaned = generator._extract_relevant_html(sample_html)
 
@@ -146,7 +147,7 @@ class TestQueryGenerator:
 
     def test_extract_relevant_html_truncation(self, openai_config):
         """Test HTML truncation to max chars."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             long_html = "x" * 20000
             cleaned = generator._extract_relevant_html(long_html, max_chars=1000)
@@ -155,7 +156,7 @@ class TestQueryGenerator:
 
     def test_parse_json_response_direct(self, openai_config, sample_llm_response):
         """Test parsing direct JSON response."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             result = generator._parse_json_response(json.dumps(sample_llm_response))
 
@@ -165,7 +166,7 @@ class TestQueryGenerator:
 
     def test_parse_json_response_markdown(self, openai_config, sample_llm_response):
         """Test parsing JSON from markdown code block."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             content = f"Here is the result:\n```json\n{json.dumps(sample_llm_response)}\n```"
             result = generator._parse_json_response(content)
@@ -175,7 +176,7 @@ class TestQueryGenerator:
 
     def test_parse_response_to_queries(self, openai_config, sample_llm_response):
         """Test parsing response into Query objects."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             queries = generator._parse_response(sample_llm_response, max_queries=10)
 
@@ -186,7 +187,7 @@ class TestQueryGenerator:
 
     def test_parse_response_respects_max_queries(self, openai_config, sample_llm_response):
         """Test that max_queries limit is respected."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             queries = generator._parse_response(sample_llm_response, max_queries=3)
 
@@ -199,11 +200,12 @@ class TestQueryGenerator:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(sample_llm_response)
 
-        with patch("openai.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client):
             generator = QueryGenerator(openai_config)
             queries = await generator.generate_from_html(sample_html)
 
@@ -217,11 +219,12 @@ class TestQueryGenerator:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = None
 
-        with patch("openai.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client):
             generator = QueryGenerator(openai_config)
             queries = await generator.generate_from_html(sample_html)
 
@@ -229,7 +232,7 @@ class TestQueryGenerator:
 
     def test_save_queries(self, openai_config, sample_llm_response):
         """Test saving queries to JSON file."""
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(openai_config)
             queries = generator._parse_response(sample_llm_response, max_queries=10)
 
@@ -266,7 +269,7 @@ class TestQueryGeneratorProviders:
             base_url="http://localhost:8000/v1",
         )
 
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(config)
             assert generator.client is not None
 
@@ -274,7 +277,7 @@ class TestQueryGeneratorProviders:
         """Test OpenRouter provider initialization."""
         config = LLMConfig(provider="openrouter", model="test-model", api_key="test-key")
 
-        with patch("openai.AsyncOpenAI"):
+        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI"):
             generator = QueryGenerator(config)
             assert generator.client is not None
 
@@ -282,14 +285,15 @@ class TestQueryGeneratorProviders:
         """Test Anthropic provider initialization."""
         config = LLMConfig(provider="anthropic", model="claude-3-sonnet", api_key="test-key")
 
-        with patch("anthropic.AsyncAnthropic"):
+        with patch("anthropic.AsyncAnthropic") as mock_anthropic:
+            mock_client = MagicMock()
+            mock_anthropic.return_value = mock_client
             generator = QueryGenerator(config)
             assert generator.anthropic_client is not None
             assert generator.client is None
 
-    def test_init_unsupported_provider(self):
-        """Test unsupported provider raises error."""
-        config = LLMConfig(provider="unsupported", model="test")  # type: ignore
-
-        with pytest.raises(ValueError, match="Unsupported provider"):
-            QueryGenerator(config)
+    def test_init_unsupported_provider_pydantic(self):
+        """Test unsupported provider is caught by Pydantic validation."""
+        # Pydantic's literal validation catches invalid provider values
+        with pytest.raises(ValidationError):
+            LLMConfig(provider="unsupported", model="test")

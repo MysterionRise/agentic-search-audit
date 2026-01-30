@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_search_audit.core.types import LLMConfig
 
@@ -22,10 +23,11 @@ class TestOpenAIVisionProvider:
 
     def test_init_with_api_key(self, config):
         """Test initialization with API key."""
-        from agentic_search_audit.extractors.vision_provider import OpenAIVisionProvider
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI"):
+            from agentic_search_audit.extractors.vision_provider import OpenAIVisionProvider
 
-        provider = OpenAIVisionProvider(config)
-        assert provider.config == config
+            provider = OpenAIVisionProvider(config)
+            assert provider.config == config
 
     def test_init_without_api_key_raises(self):
         """Test initialization without API key raises error."""
@@ -51,11 +53,12 @@ class TestOpenAIVisionProvider:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(expected_response)
 
-        with patch("openai.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client):
             provider = OpenAIVisionProvider(config)
             result = await provider.analyze_image(
                 screenshot_base64="base64data",
@@ -73,11 +76,12 @@ class TestOpenAIVisionProvider:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = None
 
-        with patch("openai.AsyncOpenAI") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client):
             provider = OpenAIVisionProvider(config)
             result = await provider.analyze_image(
                 screenshot_base64="base64data",
@@ -101,12 +105,15 @@ class TestAnthropicVisionProvider:
 
     def test_init_with_api_key(self, config):
         """Test initialization with API key."""
-        with patch("anthropic.AsyncAnthropic") as mock_client_class:
+        with patch("anthropic.AsyncAnthropic") as mock_anthropic:
+            mock_client = MagicMock()
+            mock_anthropic.return_value = mock_client
+
             from agentic_search_audit.extractors.vision_provider import AnthropicVisionProvider
 
             provider = AnthropicVisionProvider(config)
             assert provider.config == config
-            mock_client_class.assert_called_once_with(api_key="test-key")
+            mock_anthropic.assert_called_once_with(api_key="test-key")
 
     def test_init_without_api_key_raises(self):
         """Test initialization without API key raises error."""
@@ -134,11 +141,11 @@ class TestAnthropicVisionProvider:
         mock_response = MagicMock()
         mock_response.content = [mock_text_block]
 
-        with patch("anthropic.AsyncAnthropic") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.messages.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
             from agentic_search_audit.extractors.vision_provider import AnthropicVisionProvider
 
             provider = AnthropicVisionProvider(config)
@@ -164,11 +171,11 @@ class TestAnthropicVisionProvider:
         mock_response = MagicMock()
         mock_response.content = [mock_text_block]
 
-        with patch("anthropic.AsyncAnthropic") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.messages.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
             from agentic_search_audit.extractors.vision_provider import AnthropicVisionProvider
 
             provider = AnthropicVisionProvider(config)
@@ -185,11 +192,11 @@ class TestAnthropicVisionProvider:
         mock_response = MagicMock()
         mock_response.content = []
 
-        with patch("anthropic.AsyncAnthropic") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.messages.create.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
             from agentic_search_audit.extractors.vision_provider import AnthropicVisionProvider
 
             provider = AnthropicVisionProvider(config)
@@ -203,11 +210,11 @@ class TestAnthropicVisionProvider:
     @pytest.mark.asyncio
     async def test_analyze_image_api_error(self, config):
         """Test handling of API errors."""
-        with patch("anthropic.AsyncAnthropic") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.messages.create.side_effect = Exception("API error")
-            mock_client_class.return_value = mock_client
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create = AsyncMock(side_effect=Exception("API error"))
 
+        with patch("anthropic.AsyncAnthropic", return_value=mock_client):
             from agentic_search_audit.extractors.vision_provider import AnthropicVisionProvider
 
             provider = AnthropicVisionProvider(config)
@@ -224,15 +231,16 @@ class TestCreateVisionProvider:
 
     def test_create_openai_provider(self):
         """Test creating OpenAI provider."""
-        from agentic_search_audit.extractors.vision_provider import (
-            OpenAIVisionProvider,
-            create_vision_provider,
-        )
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI"):
+            from agentic_search_audit.extractors.vision_provider import (
+                OpenAIVisionProvider,
+                create_vision_provider,
+            )
 
-        config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
-        provider = create_vision_provider(config)
+            config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+            provider = create_vision_provider(config)
 
-        assert isinstance(provider, OpenAIVisionProvider)
+            assert isinstance(provider, OpenAIVisionProvider)
 
     def test_create_anthropic_provider(self):
         """Test creating Anthropic provider."""
@@ -251,41 +259,40 @@ class TestCreateVisionProvider:
 
     def test_create_vllm_provider(self):
         """Test creating vLLM provider."""
-        from agentic_search_audit.extractors.vision_provider import (
-            VLLMVisionProvider,
-            create_vision_provider,
-        )
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI"):
+            from agentic_search_audit.extractors.vision_provider import (
+                VLLMVisionProvider,
+                create_vision_provider,
+            )
 
-        config = LLMConfig(
-            provider="vllm",
-            model="llava-hf/llava-v1.6-mistral-7b-hf",
-            base_url="http://localhost:8000/v1",
-        )
-        provider = create_vision_provider(config)
-
-        assert isinstance(provider, VLLMVisionProvider)
-
-    def test_create_openrouter_provider(self):
-        """Test creating OpenRouter provider."""
-        from agentic_search_audit.extractors.vision_provider import (
-            OpenRouterVisionProvider,
-            create_vision_provider,
-        )
-
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
             config = LLMConfig(
-                provider="openrouter",
-                model="qwen/qwen-vl-plus",
+                provider="vllm",
+                model="llava-hf/llava-v1.6-mistral-7b-hf",
+                base_url="http://localhost:8000/v1",
             )
             provider = create_vision_provider(config)
 
-            assert isinstance(provider, OpenRouterVisionProvider)
+            assert isinstance(provider, VLLMVisionProvider)
 
-    def test_create_unsupported_provider_raises(self):
-        """Test that unsupported provider raises error."""
-        from agentic_search_audit.extractors.vision_provider import create_vision_provider
+    def test_create_openrouter_provider(self):
+        """Test creating OpenRouter provider."""
+        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI"):
+            from agentic_search_audit.extractors.vision_provider import (
+                OpenRouterVisionProvider,
+                create_vision_provider,
+            )
 
-        config = LLMConfig(provider="unsupported", model="test")  # type: ignore
+            with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+                config = LLMConfig(
+                    provider="openrouter",
+                    model="qwen/qwen-vl-plus",
+                )
+                provider = create_vision_provider(config)
 
-        with pytest.raises(ValueError, match="Unsupported vision provider"):
-            create_vision_provider(config)
+                assert isinstance(provider, OpenRouterVisionProvider)
+
+    def test_create_unsupported_provider_pydantic(self):
+        """Test that unsupported provider is caught by Pydantic validation."""
+        # Pydantic's literal validation catches invalid provider values
+        with pytest.raises(ValidationError):
+            LLMConfig(provider="unsupported", model="test")
