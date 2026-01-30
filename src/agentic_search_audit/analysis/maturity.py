@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
 
-from ..core.types import AuditRecord, JudgeScore
+from ..core.types import AuditRecord
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +297,9 @@ class MaturityEvaluator:
                     feature_mentions[feature] += 1
 
         # If many queries recommend adding features, score lower
-        missing_features = sum(1 for count in feature_mentions.values() if count > len(records) * 0.3)
+        missing_features = sum(
+            1 for count in feature_mentions.values() if count > len(records) * 0.3
+        )
 
         score = avg_overall
         if missing_features >= 3:
@@ -344,9 +346,13 @@ class MaturityEvaluator:
         strengths = []
         for dim_name, dim_score in dimensions.items():
             if dim_score.score >= 4.0:
-                strengths.append(f"{dim_score.name}: Excellent performance (score: {dim_score.score:.1f})")
+                strengths.append(
+                    f"{dim_score.name}: Excellent performance (score: {dim_score.score:.1f})"
+                )
             elif dim_score.score >= 3.5:
-                strengths.append(f"{dim_score.name}: Good performance (score: {dim_score.score:.1f})")
+                strengths.append(
+                    f"{dim_score.name}: Good performance (score: {dim_score.score:.1f})"
+                )
 
         return strengths if strengths else ["No significant strengths identified"]
 
@@ -355,9 +361,13 @@ class MaturityEvaluator:
         weaknesses = []
         for dim_name, dim_score in dimensions.items():
             if dim_score.score < 2.0:
-                weaknesses.append(f"{dim_score.name}: Critical issues (score: {dim_score.score:.1f})")
+                weaknesses.append(
+                    f"{dim_score.name}: Critical issues (score: {dim_score.score:.1f})"
+                )
             elif dim_score.score < 2.5:
-                weaknesses.append(f"{dim_score.name}: Needs improvement (score: {dim_score.score:.1f})")
+                weaknesses.append(
+                    f"{dim_score.name}: Needs improvement (score: {dim_score.score:.1f})"
+                )
 
         return weaknesses if weaknesses else ["No critical weaknesses identified"]
 

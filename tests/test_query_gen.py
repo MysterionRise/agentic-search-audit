@@ -205,7 +205,9 @@ class TestQueryGenerator:
         mock_client.chat.completions = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client):
+        with patch(
+            "agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client
+        ):
             generator = QueryGenerator(openai_config)
             queries = await generator.generate_from_html(sample_html)
 
@@ -224,7 +226,9 @@ class TestQueryGenerator:
         mock_client.chat.completions = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client):
+        with patch(
+            "agentic_search_audit.generators.query_gen.AsyncOpenAI", return_value=mock_client
+        ):
             generator = QueryGenerator(openai_config)
             queries = await generator.generate_from_html(sample_html)
 

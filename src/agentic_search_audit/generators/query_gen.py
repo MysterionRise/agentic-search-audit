@@ -193,11 +193,7 @@ class QueryGenerator:
 
         if include_intents:
             intent_values = {i.value for i in include_intents}
-            queries = [
-                q
-                for q in queries
-                if any(intent in q.id for intent in intent_values)
-            ]
+            queries = [q for q in queries if any(intent in q.id for intent in intent_values)]
 
         return queries
 

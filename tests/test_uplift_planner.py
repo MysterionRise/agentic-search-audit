@@ -137,7 +137,9 @@ class TestUpliftPlanner:
             record = AuditRecord(
                 site="https://example.com",
                 query=Query(id=f"q{i}", text=f"test query {i}"),
-                items=[] if i < 2 else [ResultItem(rank=1, title="Product")],  # High zero-result rate
+                items=(
+                    [] if i < 2 else [ResultItem(rank=1, title="Product")]
+                ),  # High zero-result rate
                 page=PageArtifacts(
                     url="https://example.com",
                     final_url="https://example.com/search",

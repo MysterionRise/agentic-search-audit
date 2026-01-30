@@ -6,7 +6,6 @@ without requiring browser automation.
 
 import re
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -233,9 +232,7 @@ class TestResultsExtractorWithSnapshots:
         assert first_result.title is not None
 
     @pytest.mark.asyncio
-    async def test_extract_preserves_ranking_order(
-        self, books_toscrape_html, books_results_config
-    ):
+    async def test_extract_preserves_ranking_order(self, books_toscrape_html, books_results_config):
         """Test that results maintain correct ranking order."""
         mock_client = MockMCPClient(books_toscrape_html)
 
@@ -290,7 +287,8 @@ class TestSearchBoxFinderWithSnapshots:
         """Test finding search box in fashion store snapshot."""
         mock_client = MockMCPClient(fashion_store_html)
 
-        finder = SearchBoxFinder(
+        # Verify SearchBoxFinder can be instantiated with the mock client
+        _finder = SearchBoxFinder(
             client=mock_client,
             config=fashion_search_config,
             llm_config=mock_llm_config,
@@ -323,9 +321,7 @@ class TestResultsExtractorWithFashionStore:
         )
 
     @pytest.mark.asyncio
-    async def test_extract_trending_products(
-        self, fashion_store_html, fashion_results_config
-    ):
+    async def test_extract_trending_products(self, fashion_store_html, fashion_results_config):
         """Test extracting trending products from fashion store."""
         mock_client = MockMCPClient(fashion_store_html)
 

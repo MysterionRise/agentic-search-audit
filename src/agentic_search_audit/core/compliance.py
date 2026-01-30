@@ -119,9 +119,7 @@ class RobotsPolicy:
                         logger.debug(f"No robots.txt found at {robots_url}")
                         return None
                     else:
-                        logger.warning(
-                            f"Unexpected status {response.status} fetching {robots_url}"
-                        )
+                        logger.warning(f"Unexpected status {response.status} fetching {robots_url}")
                         return None
 
         except asyncio.TimeoutError:

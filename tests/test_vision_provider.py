@@ -58,7 +58,9 @@ class TestOpenAIVisionProvider:
         mock_client.chat.completions = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client):
+        with patch(
+            "agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client
+        ):
             provider = OpenAIVisionProvider(config)
             result = await provider.analyze_image(
                 screenshot_base64="base64data",
@@ -81,7 +83,9 @@ class TestOpenAIVisionProvider:
         mock_client.chat.completions = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client):
+        with patch(
+            "agentic_search_audit.extractors.vision_provider.AsyncOpenAI", return_value=mock_client
+        ):
             provider = OpenAIVisionProvider(config)
             result = await provider.analyze_image(
                 screenshot_base64="base64data",

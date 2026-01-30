@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 
 from ..core.types import AuditRecord
-from .maturity import MaturityEvaluator, MaturityLevel, MaturityReport
+from .maturity import MaturityEvaluator, MaturityReport
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,8 @@ class UpliftPlanner:
         # UX issues
         {
             "id": "ux_001",
-            "condition": lambda r, m: m.dimensions.get("result_presentation", DummyDim()).score < 3.0,
+            "condition": lambda r, m: m.dimensions.get("result_presentation", DummyDim()).score
+            < 3.0,
             "title": "Improve Search Results Display",
             "description": "Search results presentation needs enhancement. Ensure results show "
             "images, prices, ratings, and key product attributes clearly.",
@@ -447,13 +448,16 @@ class UpliftPlanner:
                     "name": "Phase 1: Quick Wins",
                     "duration": "0-4 weeks",
                     "recommendations": [r.id for r in phase1_recs],
-                    "expected_uplift": sum(r.expected_uplift_pct * r.confidence for r in phase1_recs),
+                    "expected_uplift": sum(
+                        r.expected_uplift_pct * r.confidence for r in phase1_recs
+                    ),
                 }
             )
 
         # Phase 2: Core improvements (1-3 months)
         phase2_recs = [
-            r for r in recommendations
+            r
+            for r in recommendations
             if r.effort == Effort.MODERATE and r.priority in [Priority.CRITICAL, Priority.HIGH]
         ]
         if phase2_recs:
@@ -462,7 +466,9 @@ class UpliftPlanner:
                     "name": "Phase 2: Core Improvements",
                     "duration": "1-3 months",
                     "recommendations": [r.id for r in phase2_recs],
-                    "expected_uplift": sum(r.expected_uplift_pct * r.confidence for r in phase2_recs),
+                    "expected_uplift": sum(
+                        r.expected_uplift_pct * r.confidence for r in phase2_recs
+                    ),
                 }
             )
 
@@ -474,13 +480,16 @@ class UpliftPlanner:
                     "name": "Phase 3: Strategic Initiatives",
                     "duration": "3-6 months",
                     "recommendations": [r.id for r in phase3_recs],
-                    "expected_uplift": sum(r.expected_uplift_pct * r.confidence for r in phase3_recs),
+                    "expected_uplift": sum(
+                        r.expected_uplift_pct * r.confidence for r in phase3_recs
+                    ),
                 }
             )
 
         # Phase 4: Optimization (ongoing)
         phase4_recs = [
-            r for r in recommendations
+            r
+            for r in recommendations
             if r.effort == Effort.MODERATE and r.priority in [Priority.MEDIUM, Priority.LOW]
         ]
         if phase4_recs:
@@ -489,7 +498,9 @@ class UpliftPlanner:
                     "name": "Phase 4: Continuous Optimization",
                     "duration": "Ongoing",
                     "recommendations": [r.id for r in phase4_recs],
-                    "expected_uplift": sum(r.expected_uplift_pct * r.confidence for r in phase4_recs),
+                    "expected_uplift": sum(
+                        r.expected_uplift_pct * r.confidence for r in phase4_recs
+                    ),
                 }
             )
 
