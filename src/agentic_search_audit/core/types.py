@@ -183,6 +183,20 @@ class ReportConfig(BaseModel):
     out_dir: str = Field(default="./runs", description="Output directory for runs")
 
 
+class ComplianceConfig(BaseModel):
+    """Compliance and ethical crawling configuration."""
+
+    respect_robots_txt: bool = Field(
+        default=True, description="Whether to respect robots.txt directives"
+    )
+    user_agent: str = Field(
+        default="AgenticSearchAudit/1.0", description="User agent for robots.txt checks"
+    )
+    robots_timeout: float = Field(
+        default=10.0, description="Timeout for fetching robots.txt in seconds"
+    )
+
+
 class SiteConfig(BaseModel):
     """Site-specific configuration."""
 
@@ -200,3 +214,4 @@ class AuditConfig(BaseModel):
     run: RunConfig = Field(default_factory=RunConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
+    compliance: ComplianceConfig = Field(default_factory=ComplianceConfig)

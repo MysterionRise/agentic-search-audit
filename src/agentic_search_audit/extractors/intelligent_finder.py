@@ -2,6 +2,7 @@
 
 import base64
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -66,9 +67,14 @@ class IntelligentSearchBoxFinder:
         """
         logger.info("Using intelligent search box detection...")
 
+        screenshot_path: Path | None = None
         try:
-            # Get screenshot
-            screenshot_path = Path("/tmp/search_detection.png")
+            # Get screenshot using secure temp file
+            with tempfile.NamedTemporaryFile(
+                suffix=".png", prefix="search_detection_", delete=False
+            ) as tmp_file:
+                screenshot_path = Path(tmp_file.name)
+
             await self.client.screenshot(screenshot_path, full_page=False)
 
             # Get HTML
@@ -98,6 +104,11 @@ class IntelligentSearchBoxFinder:
         except Exception as e:
             logger.error(f"Intelligent search box detection failed: {e}", exc_info=True)
             return None
+
+        finally:
+            # Clean up temp file
+            if screenshot_path is not None and screenshot_path.exists():
+                screenshot_path.unlink()
 
     async def _analyze_page(
         self, screenshot_base64: str, html_snippet: str

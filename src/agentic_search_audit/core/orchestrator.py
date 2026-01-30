@@ -10,6 +10,7 @@ from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
 from ..mcp import MCPBrowserClient
 from ..report import ReportGenerator
+from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
 from .types import AuditConfig, AuditRecord, PageArtifacts, Query
 
@@ -36,6 +37,7 @@ class SearchAuditOrchestrator:
         self.client: MCPBrowserClient | None = None
         self.judge: SearchQualityJudge | None = None
         self.reporter: ReportGenerator | None = None
+        self.compliance_checker: ComplianceChecker | None = None
 
     async def run(self) -> list[AuditRecord]:
         """Run the complete audit.
@@ -54,6 +56,24 @@ class SearchAuditOrchestrator:
         )
         self.judge = SearchQualityJudge(self.config.llm)
         self.reporter = ReportGenerator(self.config, self.run_dir)
+
+        # Initialize compliance checker
+        robots_policy = RobotsPolicy(
+            user_agent=self.config.compliance.user_agent,
+            respect_robots=self.config.compliance.respect_robots_txt,
+            timeout=self.config.compliance.robots_timeout,
+        )
+        self.compliance_checker = ComplianceChecker(robots_policy=robots_policy)
+
+        # Check robots.txt compliance before starting
+        site_url = str(self.config.site.url)
+        compliance_result = await self.compliance_checker.check_url(site_url)
+        if not compliance_result["allowed"]:
+            logger.error(f"Audit blocked by compliance policy: {compliance_result['warnings']}")
+            raise PermissionError(
+                f"Cannot audit {site_url}: blocked by robots.txt. "
+                "Use --ignore-robots to override (not recommended)."
+            )
 
         # Connect to browser
         async with self.client:

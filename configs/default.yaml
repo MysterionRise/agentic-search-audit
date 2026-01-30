@@ -86,3 +86,8 @@ report:
     - "md"
     - "html"
   out_dir: "./runs"
+
+compliance:
+  respect_robots_txt: true  # Set to false to ignore robots.txt (not recommended)
+  user_agent: "AgenticSearchAudit/1.0"
+  robots_timeout: 10.0  # Timeout for fetching robots.txt in seconds

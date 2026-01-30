@@ -249,7 +249,7 @@ class OpenRouterVisionProvider(VisionProvider):
 
 
 class AnthropicVisionProvider(VisionProvider):
-    """Anthropic vision model provider (Claude 3.5 Sonnet, etc.)."""
+    """Anthropic vision model provider (Claude 3.5 Sonnet, Claude 3 Opus, etc.)."""
 
     def __init__(self, config: LLMConfig):
         """Initialize Anthropic provider.
@@ -258,14 +258,92 @@ class AnthropicVisionProvider(VisionProvider):
             config: LLM configuration
         """
         self.config = config
-        # TODO: Implement Anthropic vision API
-        raise NotImplementedError("Anthropic vision provider not yet implemented")
+
+        # Import anthropic here to avoid requiring it when not using this provider
+        try:
+            import anthropic
+        except ImportError:
+            raise ImportError(
+                "anthropic package is required for Anthropic vision provider. "
+                "Install with: pip install anthropic"
+            )
+
+        api_key = config.api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set in config or environment")
+
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
+
+        logger.info(f"Initialized Anthropic provider with model: {config.model}")
 
     async def analyze_image(
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
-        """Analyze image using Anthropic vision model."""
-        raise NotImplementedError("Anthropic vision provider not yet implemented")
+        """Analyze image using Anthropic vision model (Claude 3+).
+
+        Args:
+            screenshot_base64: Base64-encoded PNG image
+            prompt: Text prompt for analysis
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+
+        Returns:
+            Parsed JSON response or None on error
+        """
+        try:
+            response = await self.client.messages.create(
+                model=self.config.model,
+                max_tokens=max_tokens,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": screenshot_base64,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt,
+                            },
+                        ],
+                    }
+                ],
+            )
+
+            # Extract text content from response
+            content = ""
+            for block in response.content:
+                if block.type == "text":
+                    content = block.text
+                    break
+
+            if not content:
+                logger.warning("Anthropic response contained no text content")
+                return None
+
+            # Try to parse as JSON
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Try to extract JSON from markdown code blocks
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                else:
+                    logger.error(f"Failed to parse JSON from Anthropic response: {content}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Anthropic vision analysis failed: {e}", exc_info=True)
+            return None
 
 
 def create_vision_provider(config: LLMConfig) -> VisionProvider:

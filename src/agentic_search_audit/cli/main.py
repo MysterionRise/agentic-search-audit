@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from ..core.config import load_config
 from ..core.orchestrator import run_audit
 from ..core.types import Query, QueryOrigin
+from ..generators.query_gen import QueryGenerator
 
 # Load environment variables
 load_dotenv()
@@ -166,6 +167,24 @@ Examples:
         help="Logging level (default: INFO)",
     )
 
+    parser.add_argument(
+        "--ignore-robots",
+        action="store_true",
+        help="Ignore robots.txt restrictions (not recommended for production use)",
+    )
+
+    parser.add_argument(
+        "--auto-generate",
+        action="store_true",
+        help="Auto-generate queries from homepage using LLM (requires --url)",
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate queries but don't run audit (useful with --auto-generate)",
+    )
+
     return parser.parse_args()
 
 
@@ -214,6 +233,10 @@ async def main_async() -> int:
                 overrides["run"] = {}
             overrides["run"]["seed"] = args.seed
 
+        if args.ignore_robots:
+            overrides["compliance"] = {"respect_robots_txt": False}
+            logger.warning("robots.txt compliance disabled by --ignore-robots flag")
+
         # Load config
         config = load_config(
             config_path=config_path,
@@ -221,26 +244,74 @@ async def main_async() -> int:
             overrides=overrides,
         )
 
-        # Determine queries path
-        queries_path = args.queries
-        if not queries_path:
-            if args.site:
-                queries_path = Path("data") / "queries" / f"{args.site}.json"
-            else:
-                logger.error("--queries is required when --site is not specified")
+        # Handle query generation or loading
+        queries: list[Query] = []
+
+        if args.auto_generate:
+            if not args.url:
+                logger.error("--auto-generate requires --url to be specified")
                 return 1
 
-        if not queries_path.exists():
-            logger.error(f"Queries file not found: {queries_path}")
-            return 1
+            logger.info("Auto-generating queries from homepage...")
 
-        # Load queries
-        queries = load_queries(queries_path)
-        if not queries:
-            logger.error("No queries found in file")
-            return 1
+            # Fetch homepage HTML
+            import aiohttp
 
-        logger.info(f"Loaded {len(queries)} queries")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(str(config.site.url)) as response:
+                    if response.status != 200:
+                        logger.error(f"Failed to fetch homepage: HTTP {response.status}")
+                        return 1
+                    homepage_html = await response.text()
+
+            # Generate queries
+            generator = QueryGenerator(config.llm)
+            queries = await generator.generate_from_html(homepage_html)
+
+            if not queries:
+                logger.error("Failed to generate queries")
+                return 1
+
+            logger.info(f"Generated {len(queries)} queries")
+
+            # Save generated queries
+            output_dir = args.output or Path(config.report.out_dir)
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            queries_output = output_dir / "generated_queries.json"
+            generator.save_queries(queries, str(queries_output))
+            logger.info(f"Saved generated queries to {queries_output}")
+
+            # If dry-run, just print queries and exit
+            if args.dry_run:
+                logger.info("Dry run mode - queries generated but audit not run")
+                print("\nGenerated Queries:")
+                print("-" * 40)
+                for q in queries:
+                    print(f"  [{q.id}] {q.text}")
+                return 0
+
+        else:
+            # Determine queries path
+            queries_path = args.queries
+            if not queries_path:
+                if args.site:
+                    queries_path = Path("data") / "queries" / f"{args.site}.json"
+                else:
+                    logger.error("--queries is required when --site is not specified")
+                    return 1
+
+            if not queries_path.exists():
+                logger.error(f"Queries file not found: {queries_path}")
+                return 1
+
+            # Load queries
+            queries = load_queries(queries_path)
+            if not queries:
+                logger.error("No queries found in file")
+                return 1
+
+            logger.info(f"Loaded {len(queries)} queries")
 
         # Run audit
         records = await run_audit(

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Results - Books to Scrape</title>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Books to Scrape</h1>
+            <form class="search-form" action="/search" method="get">
+                <input type="search" name="q" placeholder="Search books..." value="python programming">
+                <button type="submit">Search</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Search Results for "python programming"</h2>
+        <p class="result-count">5 results found</p>
+
+        <section class="search-results">
+            <article class="product-card" data-product-id="001">
+                <a href="/catalogue/python-crash-course_1/index.html">
+                    <img src="/media/cache/python-crash-course.jpg" alt="Python Crash Course">
+                    <h3 class="product-title">Python Crash Course</h3>
+                </a>
+                <p class="product-description">A hands-on, project-based introduction to programming.</p>
+                <p class="product-price">$29.99</p>
+                <p class="product-rating" data-rating="5">★★★★★</p>
+                <span class="availability in-stock">In Stock</span>
+            </article>
+
+            <article class="product-card" data-product-id="002">
+                <a href="/catalogue/learning-python_2/index.html">
+                    <img src="/media/cache/learning-python.jpg" alt="Learning Python">
+                    <h3 class="product-title">Learning Python</h3>
+                </a>
+                <p class="product-description">Get a comprehensive, in-depth introduction to the core Python language.</p>
+                <p class="product-price">$54.99</p>
+                <p class="product-rating" data-rating="4">★★★★☆</p>
+                <span class="availability in-stock">In Stock</span>
+            </article>
+
+            <article class="product-card" data-product-id="003">
+                <a href="/catalogue/automate-boring-stuff_3/index.html">
+                    <img src="/media/cache/automate-boring-stuff.jpg" alt="Automate the Boring Stuff with Python">
+                    <h3 class="product-title">Automate the Boring Stuff with Python</h3>
+                </a>
+                <p class="product-description">Practical programming for total beginners.</p>
+                <p class="product-price">$24.99</p>
+                <p class="product-rating" data-rating="5">★★★★★</p>
+                <span class="availability in-stock">In Stock</span>
+            </article>
+
+            <article class="product-card" data-product-id="004">
+                <a href="/catalogue/fluent-python_4/index.html">
+                    <img src="/media/cache/fluent-python.jpg" alt="Fluent Python">
+                    <h3 class="product-title">Fluent Python</h3>
+                </a>
+                <p class="product-description">Clear, concise, and effective programming.</p>
+                <p class="product-price">$49.99</p>
+                <p class="product-rating" data-rating="5">★★★★★</p>
+                <span class="availability low-stock">Only 3 left</span>
+            </article>
+
+            <article class="product-card" data-product-id="005">
+                <a href="/catalogue/python-data-science_5/index.html">
+                    <img src="/media/cache/python-data-science.jpg" alt="Python for Data Science">
+                    <h3 class="product-title">Python for Data Science Handbook</h3>
+                </a>
+                <p class="product-description">Essential tools for working with data.</p>
+                <p class="product-price">$44.99</p>
+                <p class="product-rating" data-rating="4">★★★★☆</p>
+                <span class="availability in-stock">In Stock</span>
+            </article>
+        </section>
+
+        <nav class="pagination">
+            <a href="/search?q=python+programming&page=1" class="current">1</a>
+            <a href="/search?q=python+programming&page=2">2</a>
+            <a href="/search?q=python+programming&page=2" class="next">Next</a>
+        </nav>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Books to Scrape. All rights reserved.</p>
+    </footer>
+</body>
+</html>

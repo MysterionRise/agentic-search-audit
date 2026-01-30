@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  search-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic-search-audit:latest
+    container_name: search-audit
+
+    # Environment variables
+    environment:
+      # LLM API keys (set these in your environment or .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+
+      # Chrome flags for containerized environment
+      - CHROME_FLAGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
+
+      # Output directory
+      - AUDIT_OUTPUT_DIR=/app/runs
+
+    # Mount volumes for persistence
+    volumes:
+      # Persist audit results
+      - ./runs:/app/runs
+
+      # Mount configs (read-only)
+      - ./configs:/app/configs:ro
+
+      # Mount queries (read-only)
+      - ./data/queries:/app/data/queries:ro
+
+    # Shared memory size for Chrome
+    shm_size: '2gb'
+
+    # Security options
+    security_opt:
+      - seccomp:unconfined
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+    # Network settings
+    networks:
+      - audit-network
+
+  # Optional: vLLM server for local vision model
+  vllm-server:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    profiles:
+      - vllm  # Only start with --profile vllm
+
+    environment:
+      - MODEL_NAME=llava-hf/llava-v1.6-mistral-7b-hf
+
+    volumes:
+      - vllm-cache:/root/.cache
+
+    ports:
+      - "8000:8000"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    networks:
+      - audit-network
+
+    command: >
+      --model llava-hf/llava-v1.6-mistral-7b-hf
+      --host 0.0.0.0
+      --port 8000
+
+networks:
+  audit-network:
+    driver: bridge
+
+volumes:
+  vllm-cache:
+    driver: local
