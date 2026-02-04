@@ -1,5 +1,9 @@
 # Agentic Search Audit
 
+[![CI](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml)
+[![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Open-source tool for evaluating on-site search quality using browser automation and LLM-as-a-judge.
 
 ## Overview

@@ -6,17 +6,18 @@ Create Date: 2026-02-04 01:35:26.139727
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "10b7cb21af22"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -190,9 +191,7 @@ def upgrade() -> None:
     )
 
     # Create index for usage records
-    op.create_index(
-        "ix_usage_user_period", "usage_records", ["user_id", "period_start"]
-    )
+    op.create_index("ix_usage_user_period", "usage_records", ["user_id", "period_start"])
 
 
 def downgrade() -> None:

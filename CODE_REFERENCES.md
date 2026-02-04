@@ -468,8 +468,8 @@ success = await search_finder.submit_search(query.text)
 
 ```
 1. SearchBoxFinder tries CSS selectors
-   └─ Uses MCP client.query_selector() 
-   
+   └─ Uses MCP client.query_selector()
+
 2. If fails, calls _intelligent_find()
    └─ Creates IntelligentSearchBoxFinder
       ├─ Takes screenshot via client.screenshot()
@@ -479,15 +479,14 @@ success = await search_finder.submit_search(query.text)
          ├─ image_url (base64 PNG)
          ├─ text prompt with HTML snippet
          └─ response_format=json_object
-         
+
 3. Receives JSON with:
    - selectors[] (ordered by reliability)
    - submit_strategy (enter|clickSelector)
    - submit_selector (button selector)
    - confidence (high|medium|low)
    - reasoning
-   
+
 4. Validates each selector via query_selector()
 5. Returns first valid selector
 ```
-

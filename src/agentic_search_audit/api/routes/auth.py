@@ -43,7 +43,8 @@ def create_access_token(
         "type": "access",
     }
 
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    token: str = jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    return token
 
 
 def verify_token(token: str, settings: APISettings) -> dict[str, Any]:
@@ -75,14 +76,16 @@ def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
     import bcrypt
 
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    hashed: str = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return hashed
 
 
 def verify_password(password: str, hashed: str) -> bool:
     """Verify a password against its hash."""
     import bcrypt
 
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    result: bool = bcrypt.checkpw(password.encode(), hashed.encode())
+    return result
 
 
 def generate_api_key() -> tuple[str, str]:

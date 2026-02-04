@@ -8,7 +8,8 @@ from pathlib import Path
 os.chdir(Path(__file__).parent)
 
 # Load .env like the CLI does
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
+
 load_dotenv()
 
 # Check if key is loaded

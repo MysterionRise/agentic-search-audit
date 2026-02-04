@@ -36,12 +36,14 @@ class UserRepository:
     async def get_by_id(self, user_id: UUID) -> User | None:
         """Get user by ID."""
         result = await self.session.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
+        row: User | None = result.scalar_one_or_none()
+        return row
 
     async def get_by_email(self, email: str) -> User | None:
         """Get user by email."""
         result = await self.session.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
+        row: User | None = result.scalar_one_or_none()
+        return row
 
     async def update(self, user_id: UUID, **kwargs: Any) -> User | None:
         """Update user attributes."""
@@ -72,7 +74,8 @@ class OrganizationRepository:
     async def get_by_id(self, org_id: UUID) -> Organization | None:
         """Get organization by ID."""
         result = await self.session.execute(select(Organization).where(Organization.id == org_id))
-        return result.scalar_one_or_none()
+        row: Organization | None = result.scalar_one_or_none()
+        return row
 
     async def is_member(self, org_id: UUID, user_id: UUID) -> bool:
         """Check if user is member of organization."""
@@ -135,7 +138,8 @@ class APIKeyRepository:
     async def get_by_prefix(self, prefix: str) -> APIKey | None:
         """Get API key by prefix."""
         result = await self.session.execute(select(APIKey).where(APIKey.prefix == prefix))
-        return result.scalar_one_or_none()
+        row: APIKey | None = result.scalar_one_or_none()
+        return row
 
     async def update_last_used(self, key_id: UUID) -> None:
         """Update last used timestamp."""
@@ -190,7 +194,8 @@ class AuditRepository:
     async def get_by_id(self, audit_id: UUID) -> Audit | None:
         """Get audit by ID."""
         result = await self.session.execute(select(Audit).where(Audit.id == audit_id))
-        return result.scalar_one_or_none()
+        row: Audit | None = result.scalar_one_or_none()
+        return row
 
     async def list_by_user(
         self,
@@ -308,7 +313,8 @@ class AuditRepository:
                 AuditReport.format == format,
             )
         )
-        return result.scalar_one_or_none()
+        row: AuditReport | None = result.scalar_one_or_none()
+        return row
 
     async def delete(self, audit_id: UUID) -> None:
         """Delete an audit and all related data."""

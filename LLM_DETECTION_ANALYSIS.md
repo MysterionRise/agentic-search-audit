@@ -253,7 +253,7 @@ Via `llm` section in YAML or AuditConfig
 ### Commit 5ba5284: "Fix search box detection in query_selector"
 **Problem:** JavaScript object serialization was unreliable through MCP protocol
 
-**Solution:** 
+**Solution:**
 - Changed JS to return boolean instead of object
 - `document.querySelector(selector) !== null` → boolean
 - Python parser compares: `result[0].text == "true"`
@@ -294,4 +294,3 @@ httpx / AsyncOpenAI   [HTTP client for LLM]
 - HTML truncation (5000 chars) may miss important structure
 - No caching of vision analysis results
 - Temperature=0.2 may be too strict for some detection scenarios
-
