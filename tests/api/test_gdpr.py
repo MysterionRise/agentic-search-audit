@@ -23,9 +23,7 @@ class TestDataExport:
 
     def test_export_data_query_params(self, client):
         """Test export with query parameters."""
-        response = client.get(
-            "/gdpr/export?include_audits=true&include_reports=false"
-        )
+        response = client.get("/gdpr/export?include_audits=true&include_reports=false")
         # 401 confirms route exists and accepts params
         assert response.status_code == 401
 

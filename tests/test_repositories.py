@@ -338,9 +338,7 @@ class TestAuditRepository:
 
         mock_session.execute.side_effect = [count_result, audit_result]
 
-        audits, total = await repo.list_by_user(
-            uuid4(), page=1, page_size=20, status="completed"
-        )
+        audits, total = await repo.list_by_user(uuid4(), page=1, page_size=20, status="completed")
 
         assert total == 1
 

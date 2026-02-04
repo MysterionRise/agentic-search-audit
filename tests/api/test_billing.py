@@ -212,4 +212,3 @@ class TestEndpointRouting:
         """Test /billing/portal route exists."""
         response = client.post("/billing/portal?return_url=https://example.com")
         assert response.status_code == 401
-
