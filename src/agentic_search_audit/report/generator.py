@@ -1,5 +1,6 @@
 """Report generation for audit results."""
 
+import html
 import json
 import logging
 from datetime import datetime
@@ -12,6 +13,20 @@ from ..analysis.uplift_planner import UpliftPlan, UpliftPlanner
 from ..core.types import AuditConfig, AuditRecord
 
 logger = logging.getLogger(__name__)
+
+
+def escape_html(text: str | None) -> str:
+    """Escape HTML special characters to prevent XSS.
+
+    Args:
+        text: Text to escape (can be None)
+
+    Returns:
+        HTML-escaped text, or empty string if None
+    """
+    if text is None:
+        return ""
+    return html.escape(str(text), quote=True)
 
 
 class ReportGenerator:
@@ -516,7 +531,7 @@ class ReportGenerator:
             f.write(f"""
     <div class="header">
         <h1>Search Quality Audit Report</h1>
-        <p><strong>Site:</strong> {self.config.site.url}</p>
+        <p><strong>Site:</strong> {escape_html(str(self.config.site.url))}</p>
         <p><strong>Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p><strong>Total Queries:</strong> {len(records)}</p>
     </div>
@@ -570,7 +585,7 @@ class ReportGenerator:
 
                 f.write(f"""
     <div class="query-card">
-        <h2 class="query-title">{i}. {record.query.text}</h2>
+        <h2 class="query-title">{i}. {escape_html(record.query.text)}</h2>
 
         <div class="scores">
             <div class="score-item {score_class}">
@@ -595,7 +610,7 @@ class ReportGenerator:
             </div>
         </div>
 
-        <p><strong>Rationale:</strong> {record.judge.rationale}</p>
+        <p><strong>Rationale:</strong> {escape_html(record.judge.rationale)}</p>
 """)
 
                 if record.judge.issues:
@@ -603,7 +618,7 @@ class ReportGenerator:
                     f.write("            <strong>Issues:</strong>\n")
                     f.write("            <ul>\n")
                     for issue in record.judge.issues:
-                        f.write(f"                <li>{issue}</li>\n")
+                        f.write(f"                <li>{escape_html(issue)}</li>\n")
                     f.write("            </ul>\n")
                     f.write("        </div>\n")
 
@@ -612,7 +627,7 @@ class ReportGenerator:
                     f.write("            <strong>Suggested Improvements:</strong>\n")
                     f.write("            <ul>\n")
                     for improvement in record.judge.improvements:
-                        f.write(f"                <li>{improvement}</li>\n")
+                        f.write(f"                <li>{escape_html(improvement)}</li>\n")
                     f.write("            </ul>\n")
                     f.write("        </div>\n")
 
@@ -632,15 +647,17 @@ class ReportGenerator:
 """)
 
                 for item in record.items[:10]:
-                    title = (item.title or "N/A")[:80]
-                    price = item.price or "N/A"
-                    url = (item.url or "N/A")[:80]
+                    title = escape_html((item.title or "N/A")[:80])
+                    price = escape_html(item.price or "N/A")
+                    url = (item.url or "")[:80]
+                    url_escaped = escape_html(url)
+                    url_display = escape_html(url[:50]) + "..." if url else "N/A"
                     f.write(f"""
                 <tr>
                     <td>{item.rank}</td>
                     <td>{title}</td>
                     <td>{price}</td>
-                    <td><a href="{url}" target="_blank">{url[:50]}...</a></td>
+                    <td><a href="{url_escaped}" target="_blank" rel="noopener noreferrer">{url_display}</a></td>
                 </tr>
 """)
 
@@ -671,10 +688,10 @@ class ReportGenerator:
     <div class="maturity-section">
         <h2>Maturity Assessment</h2>
         <p><span class="maturity-badge {level_class}">
-            Level {maturity_report.overall_level.value}: {maturity_report.overall_level.name}
+            Level {maturity_report.overall_level.value}: {escape_html(maturity_report.overall_level.name)}
         </span></p>
         <p><strong>Overall Score:</strong> {maturity_report.overall_score:.2f}/5.00</p>
-        <p>{maturity_report.executive_summary}</p>
+        <p>{escape_html(maturity_report.executive_summary)}</p>
 
         <h3>Dimension Scores</h3>
         <div class="dimension-grid">
@@ -684,9 +701,9 @@ class ReportGenerator:
             score_class = self._get_score_class(dim_score.score)
             f.write(f"""
             <div class="dimension-item {score_class}">
-                <div class="dimension-name">{dim_score.name}</div>
+                <div class="dimension-name">{escape_html(dim_score.name)}</div>
                 <div class="dimension-score">{dim_score.score:.1f}</div>
-                <div style="font-size: 0.8em; color: #666;">{dim_score.level.name}</div>
+                <div style="font-size: 0.8em; color: #666;">{escape_html(dim_score.level.name)}</div>
             </div>
 """)
 
@@ -696,13 +713,13 @@ class ReportGenerator:
         if maturity_report.strengths:
             f.write("        <h3>Strengths</h3>\n        <ul>\n")
             for strength in maturity_report.strengths:
-                f.write(f"            <li style='color: #28a745;'>{strength}</li>\n")
+                f.write(f"            <li style='color: #28a745;'>{escape_html(strength)}</li>\n")
             f.write("        </ul>\n")
 
         if maturity_report.weaknesses:
             f.write("        <h3>Areas for Improvement</h3>\n        <ul>\n")
             for weakness in maturity_report.weaknesses:
-                f.write(f"            <li style='color: #dc3545;'>{weakness}</li>\n")
+                f.write(f"            <li style='color: #dc3545;'>{escape_html(weakness)}</li>\n")
             f.write("        </ul>\n")
 
         f.write("    </div>\n")
@@ -716,7 +733,7 @@ class ReportGenerator:
         <div class="uplift-summary">
             <div class="uplift-number">{uplift_plan.total_potential_uplift:.1f}%</div>
             <div>Total Potential Conversion Uplift</div>
-            <p style="margin-top: 15px; font-size: 0.9em;">{uplift_plan.summary}</p>
+            <p style="margin-top: 15px; font-size: 0.9em;">{escape_html(uplift_plan.summary)}</p>
         </div>
 """)
 
@@ -724,27 +741,30 @@ class ReportGenerator:
         if uplift_plan.quick_wins:
             f.write("        <h3>Quick Wins (0-4 weeks)</h3>\n")
             for rec in uplift_plan.quick_wins:
+                priority_value = escape_html(rec.priority.value)
                 f.write(f"""
-        <div class="recommendation-card priority-{rec.priority.value}">
-            <span class="priority-badge priority-{rec.priority.value}">{rec.priority.value}</span>
-            <strong>{rec.title}</strong>
+        <div class="recommendation-card priority-{priority_value}">
+            <span class="priority-badge priority-{priority_value}">{priority_value}</span>
+            <strong>{escape_html(rec.title)}</strong>
             <span style="float: right; color: #28a745;">+{rec.expected_uplift_pct:.1f}%</span>
-            <p style="margin: 10px 0 0 0; color: #666;">{rec.description}</p>
+            <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
         </div>
 """)
 
         # Top Recommendations
         f.write("        <h3>All Recommendations</h3>\n")
         for rec in uplift_plan.recommendations[:10]:
+            priority_value = escape_html(rec.priority.value)
+            effort_value = escape_html(rec.effort.value)
             f.write(f"""
-        <div class="recommendation-card priority-{rec.priority.value}">
-            <span class="priority-badge priority-{rec.priority.value}">{rec.priority.value}</span>
-            <strong>{rec.title}</strong>
+        <div class="recommendation-card priority-{priority_value}">
+            <span class="priority-badge priority-{priority_value}">{priority_value}</span>
+            <strong>{escape_html(rec.title)}</strong>
             <span style="float: right;">
                 <span style="color: #28a745;">+{rec.expected_uplift_pct:.1f}%</span>
-                | Effort: {rec.effort.value}
+                | Effort: {effort_value}
             </span>
-            <p style="margin: 10px 0 0 0; color: #666;">{rec.description}</p>
+            <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
         </div>
 """)
 
@@ -754,12 +774,16 @@ class ReportGenerator:
                 "        <h3>Implementation Roadmap</h3>\n        <div class='phase-timeline'>\n"
             )
             for phase in uplift_plan.phases:
+                phase_name = escape_html(phase.get("name", ""))
+                phase_duration = escape_html(phase.get("duration", ""))
+                phase_uplift = phase.get("expected_uplift", 0)
+                phase_recs = phase.get("recommendations", [])
                 f.write(f"""
             <div class="phase-item">
-                <strong>{phase['name']}</strong> ({phase['duration']})
+                <strong>{phase_name}</strong> ({phase_duration})
                 <br>
-                <span style="color: #28a745;">Expected uplift: +{phase['expected_uplift']:.1f}%</span>
-                | {len(phase['recommendations'])} recommendations
+                <span style="color: #28a745;">Expected uplift: +{phase_uplift:.1f}%</span>
+                | {len(phase_recs)} recommendations
             </div>
 """)
             f.write("        </div>\n")

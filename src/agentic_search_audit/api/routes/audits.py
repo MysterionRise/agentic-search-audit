@@ -21,6 +21,10 @@ from ..schemas import (
 
 router = APIRouter()
 
+# Default monthly audit limit for users
+# TODO: This should be fetched from the user's subscription plan
+DEFAULT_MONTHLY_AUDIT_LIMIT = 100
+
 
 @router.post("", response_model=AuditCreateResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_audit(
@@ -47,8 +51,9 @@ async def create_audit(
         usage_repo = UsageRepository(session)
         current_usage = await usage_repo.get_current_period(user_id)
 
-        # Default limit - should be customized per plan
-        if current_usage.audit_count >= 100:
+        # Check against plan limit (using default for now)
+        # TODO: Get actual limit from user's subscription plan
+        if current_usage.audit_count >= DEFAULT_MONTHLY_AUDIT_LIMIT:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Monthly audit limit exceeded",
@@ -205,7 +210,9 @@ async def get_audit(
             error_message=audit.error_message,
             queries=query_objects,
             config=audit.config_override or {},
-            results=None,  # TODO: Convert results when available
+            # Results are fetched separately via /audits/{id}/results endpoint
+            # to avoid loading large result sets for every detail request
+            results=None,
         )
 
     raise HTTPException(

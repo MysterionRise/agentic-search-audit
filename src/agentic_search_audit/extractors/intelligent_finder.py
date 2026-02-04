@@ -12,6 +12,10 @@ from .vision_provider import VisionProvider, create_vision_provider
 
 logger = logging.getLogger(__name__)
 
+# Maximum characters of HTML to include in the search box detection prompt
+# This should cover the header/navigation area where search boxes are typically located
+HTML_SNIPPET_MAX_CHARS = 5000
+
 
 SEARCH_BOX_FINDER_PROMPT = """You are a web automation expert. Analyze this webpage screenshot and HTML to find the search input box.
 
@@ -80,8 +84,8 @@ class IntelligentSearchBoxFinder:
             # Get HTML
             html_content = await self.client.get_html()
 
-            # Prepare HTML snippet (first 5000 chars to include header/nav area)
-            html_snippet = html_content[:5000]
+            # Prepare HTML snippet to include header/nav area where search boxes are located
+            html_snippet = html_content[:HTML_SNIPPET_MAX_CHARS]
 
             # Read screenshot as base64
             with open(screenshot_path, "rb") as f:

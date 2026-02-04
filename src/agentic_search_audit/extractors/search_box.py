@@ -1,12 +1,63 @@
 """Search box detection and interaction."""
 
 import logging
+import re
 
 from ..core.types import LLMConfig, SearchConfig
 from ..mcp.client import MCPBrowserClient
 from .intelligent_finder import IntelligentSearchBoxFinder
 
 logger = logging.getLogger(__name__)
+
+# Pattern to validate CSS selectors - only allow safe characters
+# This prevents JavaScript injection via malicious selectors
+CSS_SELECTOR_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\[\]="\'\.#:,\s\*\(\)>+~^$|]+$')
+
+
+def sanitize_css_selector(selector: str) -> str:
+    """Sanitize a CSS selector to prevent JavaScript injection.
+
+    Args:
+        selector: CSS selector to sanitize
+
+    Returns:
+        Sanitized selector
+
+    Raises:
+        ValueError: If selector contains potentially dangerous characters
+    """
+    if not selector or not isinstance(selector, str):
+        raise ValueError("Invalid selector: must be a non-empty string")
+
+    # Remove any null bytes or control characters
+    selector = selector.replace("\x00", "").strip()
+
+    # Check against whitelist pattern
+    if not CSS_SELECTOR_PATTERN.match(selector):
+        raise ValueError(f"Invalid CSS selector: contains disallowed characters: {selector!r}")
+
+    # Additional checks for potential injection patterns
+    dangerous_patterns = [
+        "javascript:",
+        "data:",
+        "<script",
+        "</script",
+        "onerror",
+        "onload",
+        "onclick",
+        "onmouse",
+        "onfocus",
+        "onblur",
+        "eval(",
+        "expression(",
+    ]
+
+    selector_lower = selector.lower()
+    for pattern in dangerous_patterns:
+        if pattern in selector_lower:
+            raise ValueError(f"Invalid CSS selector: contains dangerous pattern: {pattern}")
+
+    return selector
 
 
 class SearchBoxFinder:
@@ -118,11 +169,22 @@ class SearchBoxFinder:
             return False
 
         try:
+            # Sanitize selector to prevent JavaScript injection
+            try:
+                safe_selector = sanitize_css_selector(search_selector)
+            except ValueError as e:
+                logger.error(f"Invalid search selector: {e}")
+                return False
+
+            # Escape selector for use in JavaScript string
+            # Replace backslashes first, then quotes
+            escaped_selector = safe_selector.replace("\\", "\\\\").replace('"', '\\"')
+
             # Clear any existing text
-            await self.client.evaluate(f'document.querySelector("{search_selector}").value = ""')
+            await self.client.evaluate(f'document.querySelector("{escaped_selector}").value = ""')
 
             # Type query
-            await self.client.type_text(search_selector, query_text, delay=30)
+            await self.client.type_text(safe_selector, query_text, delay=30)
 
             # Submit based on strategy
             if self.config.submit_strategy == "enter":

@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -16,6 +17,92 @@ from ..generators.query_gen import QueryGenerator
 
 # Load environment variables
 load_dotenv()
+
+# Allowed URL schemes to prevent SSRF attacks
+ALLOWED_URL_SCHEMES = {"http", "https"}
+
+
+def validate_url(url: str) -> str:
+    """Validate URL to prevent SSRF attacks.
+
+    Args:
+        url: URL to validate
+
+    Returns:
+        Validated URL
+
+    Raises:
+        ValueError: If URL scheme is not allowed or URL is malformed
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Check for valid scheme
+        if not parsed.scheme:
+            raise ValueError(f"URL must include a scheme (http:// or https://): {url}")
+
+        if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+            raise ValueError(
+                f"URL scheme '{parsed.scheme}' is not allowed. "
+                f"Only {', '.join(ALLOWED_URL_SCHEMES)} are permitted."
+            )
+
+        # Check for valid host
+        if not parsed.netloc:
+            raise ValueError(f"URL must include a host: {url}")
+
+        # Block localhost/internal IPs in production-like scenarios
+        # Note: For legitimate internal audits, this can be bypassed with a flag
+        hostname = parsed.hostname or ""
+        blocked_hosts = {
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "::1",
+        }
+
+        # Check for internal IP ranges (basic check)
+        if hostname in blocked_hosts:
+            raise ValueError(
+                f"Cannot audit internal/localhost URLs for security reasons: {url}. "
+                "Use --allow-internal flag if this is intentional."
+            )
+
+        # Check for internal IP ranges
+        if hostname.startswith(
+            (
+                "10.",
+                "192.168.",
+                "172.16.",
+                "172.17.",
+                "172.18.",
+                "172.19.",
+                "172.20.",
+                "172.21.",
+                "172.22.",
+                "172.23.",
+                "172.24.",
+                "172.25.",
+                "172.26.",
+                "172.27.",
+                "172.28.",
+                "172.29.",
+                "172.30.",
+                "172.31.",
+                "169.254.",
+            )
+        ):
+            raise ValueError(
+                f"Cannot audit internal network URLs for security reasons: {url}. "
+                "Use --allow-internal flag if this is intentional."
+            )
+
+        return url
+
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Invalid URL '{url}': {e}") from e
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -185,6 +272,12 @@ Examples:
         help="Generate queries but don't run audit (useful with --auto-generate)",
     )
 
+    parser.add_argument(
+        "--allow-internal",
+        action="store_true",
+        help="Allow auditing internal/localhost URLs (security risk - use with caution)",
+    )
+
     return parser.parse_args()
 
 
@@ -216,6 +309,23 @@ async def main_async() -> int:
         overrides = {}
 
         if args.url:
+            # Validate URL to prevent SSRF
+            try:
+                if not args.allow_internal:
+                    validate_url(args.url)
+                else:
+                    # Still validate scheme even with --allow-internal
+                    parsed = urlparse(args.url)
+                    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+                        logger.error(
+                            f"URL scheme '{parsed.scheme}' is not allowed. "
+                            f"Only {', '.join(ALLOWED_URL_SCHEMES)} are permitted."
+                        )
+                        return 1
+            except ValueError as e:
+                logger.error(str(e))
+                return 1
+
             overrides["site"] = {"url": args.url}
 
         if args.no_headless:
@@ -254,11 +364,20 @@ async def main_async() -> int:
 
             logger.info("Auto-generating queries from homepage...")
 
+            # Validate URL before fetching (double-check even if already validated above)
+            site_url = str(config.site.url)
+            if not args.allow_internal:
+                try:
+                    validate_url(site_url)
+                except ValueError as e:
+                    logger.error(str(e))
+                    return 1
+
             # Fetch homepage HTML
             import aiohttp
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(str(config.site.url)) as response:
+                async with session.get(site_url) as response:
                     if response.status != 200:
                         logger.error(f"Failed to fetch homepage: HTTP {response.status}")
                         return 1

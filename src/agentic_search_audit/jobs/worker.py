@@ -6,9 +6,85 @@ import logging
 import signal
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
+
+# Allowed schemes for webhook URLs
+WEBHOOK_ALLOWED_SCHEMES = {"http", "https"}
+
+# Blocked hostnames for webhook URLs (SSRF prevention)
+WEBHOOK_BLOCKED_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "[::1]",
+}
+
+# Blocked IP prefixes (internal networks)
+WEBHOOK_BLOCKED_PREFIXES = (
+    "10.",
+    "192.168.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "169.254.",
+)
+
+
+def validate_webhook_url(url: str) -> bool:
+    """Validate webhook URL to prevent SSRF attacks.
+
+    Args:
+        url: Webhook URL to validate
+
+    Returns:
+        True if URL is safe to call, False otherwise
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Check scheme
+        if parsed.scheme.lower() not in WEBHOOK_ALLOWED_SCHEMES:
+            logger.warning(f"Webhook URL blocked: invalid scheme '{parsed.scheme}'")
+            return False
+
+        # Check host
+        hostname = (parsed.hostname or "").lower()
+
+        if hostname in WEBHOOK_BLOCKED_HOSTS:
+            logger.warning("Webhook URL blocked: localhost/loopback address")
+            return False
+
+        if hostname.startswith(WEBHOOK_BLOCKED_PREFIXES):
+            logger.warning("Webhook URL blocked: internal network address")
+            return False
+
+        # Check for IPv6 loopback
+        if hostname.startswith("[") and "::1" in hostname:
+            logger.warning("Webhook URL blocked: IPv6 loopback")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Webhook URL validation error: {e}")
+        return False
 
 
 class AuditWorker:
@@ -322,8 +398,19 @@ class AuditWorker:
         average_score: float | None = None,
         error: str | None = None,
     ) -> None:
-        """Send webhook notification."""
+        """Send webhook notification.
+
+        Validates the webhook URL before sending to prevent SSRF attacks.
+        """
         import aiohttp
+
+        # Validate webhook URL to prevent SSRF
+        if not validate_webhook_url(url):
+            logger.error(
+                f"Webhook URL validation failed for audit {audit_id}. "
+                "URL points to blocked destination (localhost/internal network)."
+            )
+            return
 
         payload = {
             "audit_id": str(audit_id),
@@ -341,9 +428,13 @@ class AuditWorker:
                     url,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=10),
+                    # Disable redirects to prevent SSRF via redirect
+                    allow_redirects=False,
                 ) as response:
                     if response.status >= 400:
                         logger.warning(f"Webhook failed: {response.status}")
+                    elif response.status in (301, 302, 303, 307, 308):
+                        logger.warning(f"Webhook redirect blocked for security: {response.status}")
         except Exception as e:
             logger.warning(f"Webhook error: {e}")
 

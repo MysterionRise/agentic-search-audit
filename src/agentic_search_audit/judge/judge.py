@@ -1,5 +1,6 @@
 """LLM judge implementation."""
 
+import asyncio
 import json
 import logging
 import os
@@ -15,6 +16,13 @@ from .rubric import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Default timeout for LLM API calls (in seconds)
+DEFAULT_LLM_TIMEOUT_SECONDS = 60
+
+# Maximum characters of HTML content to include in judge prompt
+# Longer content would exceed token limits and increase costs
+HTML_SNIPPET_MAX_CHARS = 2000
 
 
 class SearchQualityJudge:
@@ -113,7 +121,7 @@ class SearchQualityJudge:
             Formatted prompt
         """
         # Truncate HTML to avoid token limits
-        html_snippet = html_content[:2000] if html_content else "N/A"
+        html_snippet = html_content[:HTML_SNIPPET_MAX_CHARS] if html_content else "N/A"
 
         # Format results
         results_json = format_results_for_judge(results)
@@ -138,21 +146,38 @@ class SearchQualityJudge:
 
         Returns:
             LLM response text
+
+        Raises:
+            TimeoutError: If the LLM API call exceeds the timeout
+            ValueError: If the provider is not supported
         """
         logger.debug("Calling LLM for evaluation...")
 
+        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_LLM_TIMEOUT_SECONDS
+
         if self.config.provider in ["openai", "openrouter"]:
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[
-                    {"role": "system", "content": self.config.system_prompt or JUDGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                response_format={"type": "json_object"},
-                seed=self.config.seed if hasattr(self.config, "seed") else None,
-            )
+            try:
+                async with asyncio.timeout(timeout_seconds):
+                    response = await self.client.chat.completions.create(
+                        model=self.config.model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": self.config.system_prompt or JUDGE_SYSTEM_PROMPT,
+                            },
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=self.config.temperature,
+                        max_tokens=self.config.max_tokens,
+                        response_format={"type": "json_object"},
+                        seed=self.config.seed if hasattr(self.config, "seed") else None,
+                    )
+            except asyncio.TimeoutError:
+                logger.error(f"LLM API call timed out after {timeout_seconds}s")
+                raise TimeoutError(
+                    f"LLM evaluation timed out after {timeout_seconds} seconds. "
+                    "The API may be overloaded or experiencing issues."
+                )
 
             return response.choices[0].message.content or ""
 

@@ -1,5 +1,6 @@
 """Vision model provider abstraction."""
 
+import asyncio
 import json
 import logging
 import os
@@ -11,6 +12,83 @@ from openai import AsyncOpenAI
 from ..core.types import LLMConfig
 
 logger = logging.getLogger(__name__)
+
+# Default timeout for vision API calls (in seconds)
+# Vision calls may take longer due to image processing
+DEFAULT_VISION_TIMEOUT_SECONDS = 90
+
+
+class VisionProviderError(Exception):
+    """Base exception for vision provider errors."""
+
+    pass
+
+
+class VisionParsingError(VisionProviderError):
+    """Raised when JSON parsing of vision response fails."""
+
+    def __init__(self, message: str, raw_content: str | None = None):
+        super().__init__(message)
+        self.raw_content = raw_content
+
+
+class VisionTimeoutError(VisionProviderError):
+    """Raised when vision API call times out."""
+
+    pass
+
+
+def _parse_json_response(content: str, provider_name: str) -> dict[str, Any]:
+    """Parse JSON from LLM response with multiple fallback strategies.
+
+    Args:
+        content: Raw response content from LLM
+        provider_name: Name of the provider (for logging)
+
+    Returns:
+        Parsed JSON as dictionary
+
+    Raises:
+        VisionParsingError: If JSON parsing fails after all attempts
+    """
+    if not content:
+        raise VisionParsingError(f"{provider_name} returned empty content", raw_content=content)
+
+    # Strategy 1: Direct JSON parse
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Extract from ```json code block
+    if "```json" in content:
+        try:
+            json_str = content.split("```json")[1].split("```")[0].strip()
+            return json.loads(json_str)
+        except (IndexError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to parse JSON from ```json block: {e}")
+
+    # Strategy 3: Extract from generic ``` code block
+    if "```" in content:
+        try:
+            json_str = content.split("```")[1].split("```")[0].strip()
+            return json.loads(json_str)
+        except (IndexError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to parse JSON from ``` block: {e}")
+
+    # All strategies failed - log detailed error
+    # Truncate content for logging to avoid huge log entries
+    truncated_content = content[:500] + "..." if len(content) > 500 else content
+    logger.error(
+        f"Failed to parse JSON from {provider_name} response after all strategies. "
+        f"Content preview: {truncated_content}"
+    )
+
+    raise VisionParsingError(
+        f"Could not parse JSON from {provider_name} response. "
+        "Response may not be valid JSON or may be in an unexpected format.",
+        raw_content=content,
+    )
 
 
 class VisionProvider(ABC):
@@ -54,28 +132,31 @@ class OpenAIVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenAI vision model."""
+        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+
         try:
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{screenshot_base64}",
-                                    "detail": "high",
+            async with asyncio.timeout(timeout_seconds):
+                response = await self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{screenshot_base64}",
+                                        "detail": "high",
+                                    },
                                 },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                response_format={"type": "json_object"},
-            )
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format={"type": "json_object"},
+                )
 
             content = response.choices[0].message.content
             if not content:
@@ -84,6 +165,9 @@ class OpenAIVisionProvider(VisionProvider):
             result: dict[str, Any] = json.loads(content)
             return result
 
+        except asyncio.TimeoutError:
+            logger.error(f"OpenAI vision API call timed out after {timeout_seconds}s")
+            return None
         except Exception as e:
             logger.error(f"OpenAI vision analysis failed: {e}")
             return None
@@ -104,7 +188,17 @@ class VLLMVisionProvider(VisionProvider):
             raise ValueError("base_url must be specified in config for vLLM provider")
 
         # vLLM supports OpenAI-compatible API
-        api_key = config.api_key or os.getenv("VLLM_API_KEY", "EMPTY")
+        # Some vLLM deployments don't require API keys, so we allow empty string
+        # But we log a warning to make configuration explicit
+        api_key = config.api_key or os.getenv("VLLM_API_KEY")
+
+        if not api_key:
+            logger.warning(
+                "No API key configured for vLLM provider. "
+                "Set VLLM_API_KEY environment variable or api_key in config if your vLLM deployment requires authentication."
+            )
+            # Use placeholder for OpenAI client (vLLM often doesn't require a real key)
+            api_key = "not-required"
 
         self.client = AsyncOpenAI(base_url=config.base_url, api_key=api_key)
 
@@ -116,53 +210,49 @@ class VLLMVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using vLLM vision model."""
+        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+
         try:
             # vLLM uses OpenAI-compatible format
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{screenshot_base64}",
+            async with asyncio.timeout(timeout_seconds):
+                response = await self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{screenshot_base64}",
+                                    },
                                 },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                # Note: vLLM might not support response_format for all models
-                # We'll try to parse JSON from the response
-            )
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    # Note: vLLM might not support response_format for all models
+                    # We'll try to parse JSON from the response
+                )
 
             content = response.choices[0].message.content
             if not content:
+                logger.warning("vLLM returned empty response content")
                 return None
 
-            # Try to parse as JSON
-            # Some vLLM models might not support strict JSON mode
+            # Parse JSON using common helper (handles multiple formats)
             try:
-                result: dict[str, Any] = json.loads(content)
-                return result
-            except json.JSONDecodeError:
-                # Try to extract JSON from markdown code blocks
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                else:
-                    logger.error(f"Failed to parse JSON from vLLM response: {content}")
-                    return None
+                return _parse_json_response(content, "vLLM")
+            except VisionParsingError as e:
+                # Log the error but return None to allow graceful degradation
+                logger.error(str(e))
+                return None
 
+        except asyncio.TimeoutError:
+            logger.error(f"vLLM vision API call timed out after {timeout_seconds}s")
+            return None
         except Exception as e:
             logger.error(f"vLLM vision analysis failed: {e}", exc_info=True)
             return None
@@ -205,51 +295,47 @@ class OpenRouterVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenRouter vision model."""
+        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+
         try:
             # OpenRouter uses OpenAI-compatible format
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{screenshot_base64}",
+            async with asyncio.timeout(timeout_seconds):
+                response = await self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{screenshot_base64}",
+                                    },
                                 },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
 
             content = response.choices[0].message.content
             if not content:
+                logger.warning("OpenRouter returned empty response content")
                 return None
 
-            # Try to parse as JSON
-            # Some models might not support strict JSON mode
+            # Parse JSON using common helper (handles multiple formats)
             try:
-                result: dict[str, Any] = json.loads(content)
-                return result
-            except json.JSONDecodeError:
-                # Try to extract JSON from markdown code blocks
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                else:
-                    logger.error(f"Failed to parse JSON from OpenRouter response: {content}")
-                    return None
+                return _parse_json_response(content, "OpenRouter")
+            except VisionParsingError as e:
+                # Log the error but return None to allow graceful degradation
+                logger.error(str(e))
+                return None
 
+        except asyncio.TimeoutError:
+            logger.error(f"OpenRouter vision API call timed out after {timeout_seconds}s")
+            return None
         except Exception as e:
             logger.error(f"OpenRouter vision analysis failed: {e}", exc_info=True)
             return None
@@ -297,30 +383,33 @@ class AnthropicVisionProvider(VisionProvider):
         Returns:
             Parsed JSON response or None on error
         """
+        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+
         try:
-            response = await self.client.messages.create(
-                model=self.config.model,
-                max_tokens=max_tokens,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/png",
-                                    "data": screenshot_base64,
+            async with asyncio.timeout(timeout_seconds):
+                response = await self.client.messages.create(
+                    model=self.config.model,
+                    max_tokens=max_tokens,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": screenshot_base64,
+                                    },
                                 },
-                            },
-                            {
-                                "type": "text",
-                                "text": prompt,
-                            },
-                        ],
-                    }
-                ],
-            )
+                                {
+                                    "type": "text",
+                                    "text": prompt,
+                                },
+                            ],
+                        }
+                    ],
+                )
 
             # Extract text content from response
             content = ""
@@ -333,24 +422,17 @@ class AnthropicVisionProvider(VisionProvider):
                 logger.warning("Anthropic response contained no text content")
                 return None
 
-            # Try to parse as JSON
+            # Parse JSON using common helper (handles multiple formats)
             try:
-                result: dict[str, Any] = json.loads(content)
-                return result
-            except json.JSONDecodeError:
-                # Try to extract JSON from markdown code blocks
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                    result = json.loads(json_str)
-                    return result  # type: ignore[return-value]
-                else:
-                    logger.error(f"Failed to parse JSON from Anthropic response: {content}")
-                    return None
+                return _parse_json_response(content, "Anthropic")
+            except VisionParsingError as e:
+                # Log the error but return None to allow graceful degradation
+                logger.error(str(e))
+                return None
 
+        except asyncio.TimeoutError:
+            logger.error(f"Anthropic vision API call timed out after {timeout_seconds}s")
+            return None
         except Exception as e:
             logger.error(f"Anthropic vision analysis failed: {e}", exc_info=True)
             return None

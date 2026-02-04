@@ -134,9 +134,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return is_allowed, remaining, reset_at
 
         except Exception as e:
-            logger.warning(f"Rate limit check failed: {e}")
-            # Allow request on Redis failure
-            return True, max_requests, int(time.time()) + window_seconds
+            logger.error(f"Rate limit check failed (fail-closed for security): {e}")
+            # SECURITY: Fail-closed on Redis failure to prevent abuse
+            # This prevents attackers from bypassing rate limits by causing Redis errors
+            return False, 0, int(time.time()) + 60  # Retry after 60 seconds
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

@@ -1,10 +1,14 @@
 """API configuration settings."""
 
+import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Marker for insecure default - used to detect if secret_key was not set
+_INSECURE_DEFAULT_MARKER = "INSECURE_DEFAULT_CHANGE_ME"
 
 
 class APISettings(BaseSettings):
@@ -30,12 +34,38 @@ class APISettings(BaseSettings):
 
     # Security
     secret_key: str = Field(
-        default="change-me-in-production-this-is-not-secure",
-        description="Secret key for JWT signing",
+        default=_INSECURE_DEFAULT_MARKER,
+        description="Secret key for JWT signing. MUST be set in production.",
     )
     jwt_algorithm: str = Field(default="HS256")
     jwt_expiration_hours: int = Field(default=24)
     api_key_header: str = Field(default="X-API-Key")
+
+    @model_validator(mode="after")
+    def validate_secret_key_in_production(self) -> "APISettings":
+        """Ensure secret_key is properly set in production environments."""
+        if self.environment == "production":
+            if self.secret_key == _INSECURE_DEFAULT_MARKER:
+                raise ValueError(
+                    "AUDIT_SECRET_KEY environment variable must be set in production. "
+                    "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+            # Warn if key seems too short or weak
+            if len(self.secret_key) < 32:
+                raise ValueError(
+                    "AUDIT_SECRET_KEY is too short. Use at least 32 characters for production."
+                )
+        elif self.secret_key == _INSECURE_DEFAULT_MARKER:
+            # In development, generate a random key if not set (but warn)
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Using auto-generated secret key for development. "
+                "Set AUDIT_SECRET_KEY for consistent sessions across restarts."
+            )
+            # Generate a random key for this session
+            object.__setattr__(self, "secret_key", secrets.token_urlsafe(32))
+        return self
 
     # Database
     database_url: str = Field(

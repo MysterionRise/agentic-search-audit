@@ -2,12 +2,63 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
+from urllib.parse import urlparse
 from uuid import UUID
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import AfterValidator, BaseModel, Field, HttpUrl
 
 from ..core.types import JudgeScore, Query, ResultItem
+
+# Blocked hostnames for webhook URLs (SSRF prevention)
+_WEBHOOK_BLOCKED_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "[::1]",
+}
+
+# Blocked IP prefixes (internal networks)
+_WEBHOOK_BLOCKED_PREFIXES = (
+    "10.",
+    "192.168.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "169.254.",
+)
+
+
+def validate_webhook_url(url: HttpUrl) -> HttpUrl:
+    """Validate webhook URL to prevent SSRF attacks."""
+    parsed = urlparse(str(url))
+    hostname = (parsed.hostname or "").lower()
+
+    if hostname in _WEBHOOK_BLOCKED_HOSTS:
+        raise ValueError("Webhook URL cannot point to localhost or loopback address")
+
+    if hostname.startswith(_WEBHOOK_BLOCKED_PREFIXES):
+        raise ValueError("Webhook URL cannot point to internal network addresses")
+
+    return url
+
+
+# Type alias for validated webhook URL
+SafeWebhookUrl = Annotated[HttpUrl, AfterValidator(validate_webhook_url)]
 
 
 class AuditStatus(str, Enum):
@@ -38,9 +89,9 @@ class AuditCreateRequest(BaseModel):
     )
     headless: bool = Field(default=True, description="Run browser in headless mode")
     top_k: int = Field(default=10, ge=1, le=50, description="Number of results to extract")
-    webhook_url: HttpUrl | None = Field(
+    webhook_url: SafeWebhookUrl | None = Field(
         default=None,
-        description="Webhook URL for completion notification",
+        description="Webhook URL for completion notification. Cannot point to localhost or internal networks.",
     )
 
 
