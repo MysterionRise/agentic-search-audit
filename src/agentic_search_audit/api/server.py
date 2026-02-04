@@ -10,7 +10,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Agentic Search Audit API Server")
     parser.add_argument(
         "--host",
-        default=os.getenv("AUDIT_HOST", "0.0.0.0"),
+        default=os.getenv("AUDIT_HOST", "0.0.0.0"),  # nosec B104 - intentional for container
         help="Host to bind to",
     )
     parser.add_argument(

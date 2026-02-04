@@ -24,7 +24,7 @@ class APISettings(BaseSettings):
     environment: Literal["development", "staging", "production"] = Field(default="development")
 
     # Server settings
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # nosec B104 - intentional for container deployment
     port: int = Field(default=8000)
     workers: int = Field(default=1)
 
