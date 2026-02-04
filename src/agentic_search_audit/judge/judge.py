@@ -157,8 +157,8 @@ class SearchQualityJudge:
 
         if self.config.provider in ["openai", "openrouter"]:
             try:
-                async with asyncio.timeout(timeout_seconds):
-                    response = await self.client.chat.completions.create(
+                response = await asyncio.wait_for(
+                    self.client.chat.completions.create(
                         model=self.config.model,
                         messages=[
                             {
@@ -171,7 +171,9 @@ class SearchQualityJudge:
                         max_tokens=self.config.max_tokens,
                         response_format={"type": "json_object"},
                         seed=self.config.seed if hasattr(self.config, "seed") else None,
-                    )
+                    ),
+                    timeout=timeout_seconds,
+                )
             except asyncio.TimeoutError:
                 logger.error(f"LLM API call timed out after {timeout_seconds}s")
                 raise TimeoutError(

@@ -56,7 +56,8 @@ def _parse_json_response(content: str, provider_name: str) -> dict[str, Any]:
 
     # Strategy 1: Direct JSON parse
     try:
-        return json.loads(content)
+        result: dict[str, Any] = json.loads(content)
+        return result
     except json.JSONDecodeError:
         pass
 
@@ -64,7 +65,8 @@ def _parse_json_response(content: str, provider_name: str) -> dict[str, Any]:
     if "```json" in content:
         try:
             json_str = content.split("```json")[1].split("```")[0].strip()
-            return json.loads(json_str)
+            result = json.loads(json_str)
+            return result
         except (IndexError, json.JSONDecodeError) as e:
             logger.debug(f"Failed to parse JSON from ```json block: {e}")
 
@@ -72,7 +74,8 @@ def _parse_json_response(content: str, provider_name: str) -> dict[str, Any]:
     if "```" in content:
         try:
             json_str = content.split("```")[1].split("```")[0].strip()
-            return json.loads(json_str)
+            result = json.loads(json_str)
+            return result
         except (IndexError, json.JSONDecodeError) as e:
             logger.debug(f"Failed to parse JSON from ``` block: {e}")
 
@@ -135,8 +138,8 @@ class OpenAIVisionProvider(VisionProvider):
         timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
-            async with asyncio.timeout(timeout_seconds):
-                response = await self.client.chat.completions.create(
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
                     model=self.config.model,
                     messages=[
                         {
@@ -156,7 +159,9 @@ class OpenAIVisionProvider(VisionProvider):
                     max_tokens=max_tokens,
                     temperature=temperature,
                     response_format={"type": "json_object"},
-                )
+                ),
+                timeout=timeout_seconds,
+            )
 
             content = response.choices[0].message.content
             if not content:
@@ -214,8 +219,8 @@ class VLLMVisionProvider(VisionProvider):
 
         try:
             # vLLM uses OpenAI-compatible format
-            async with asyncio.timeout(timeout_seconds):
-                response = await self.client.chat.completions.create(
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
                     model=self.config.model,
                     messages=[
                         {
@@ -235,7 +240,9 @@ class VLLMVisionProvider(VisionProvider):
                     temperature=temperature,
                     # Note: vLLM might not support response_format for all models
                     # We'll try to parse JSON from the response
-                )
+                ),
+                timeout=timeout_seconds,
+            )
 
             content = response.choices[0].message.content
             if not content:
@@ -299,8 +306,8 @@ class OpenRouterVisionProvider(VisionProvider):
 
         try:
             # OpenRouter uses OpenAI-compatible format
-            async with asyncio.timeout(timeout_seconds):
-                response = await self.client.chat.completions.create(
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
                     model=self.config.model,
                     messages=[
                         {
@@ -318,7 +325,9 @@ class OpenRouterVisionProvider(VisionProvider):
                     ],
                     max_tokens=max_tokens,
                     temperature=temperature,
-                )
+                ),
+                timeout=timeout_seconds,
+            )
 
             content = response.choices[0].message.content
             if not content:
@@ -386,8 +395,8 @@ class AnthropicVisionProvider(VisionProvider):
         timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
-            async with asyncio.timeout(timeout_seconds):
-                response = await self.client.messages.create(
+            response = await asyncio.wait_for(
+                self.client.messages.create(
                     model=self.config.model,
                     max_tokens=max_tokens,
                     messages=[
@@ -409,7 +418,9 @@ class AnthropicVisionProvider(VisionProvider):
                             ],
                         }
                     ],
-                )
+                ),
+                timeout=timeout_seconds,
+            )
 
             # Extract text content from response
             content = ""
