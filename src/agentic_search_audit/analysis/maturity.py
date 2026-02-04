@@ -57,9 +57,9 @@ class MaturityEvaluator:
         "advanced_features": 0.20,
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize maturity evaluator."""
-        self._thresholds = {
+        self._thresholds: dict[MaturityLevel, float] = {
             MaturityLevel.L1_BASIC: 0.0,
             MaturityLevel.L2_FUNCTIONAL: 1.5,
             MaturityLevel.L3_ENHANCED: 2.5,
@@ -172,7 +172,7 @@ class MaturityEvaluator:
         base_score = sum(r.judge.relevance for r in records) / len(records)
 
         # Deduct for query understanding issues
-        penalty = 0
+        penalty: float = 0.0
         if typo_issues > len(records) * 0.2:
             penalty += 0.5
             findings.append(f"Typo tolerance issues detected in {typo_issues} queries")

@@ -1,0 +1,51 @@
+# Dockerfile for API Server
+# Build: docker build -f Dockerfile.api -t agentic-search-audit-api .
+
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Create non-root user
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid 1000 --create-home appuser
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for layer caching
+COPY requirements.txt requirements-dev.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir uvicorn[standard] fastapi sqlalchemy[asyncio] asyncpg redis pyjwt bcrypt python-multipart prometheus-client sentry-sdk[fastapi]
+
+# Copy application code
+COPY src/ ./src/
+COPY pyproject.toml ./
+
+# Install the package
+RUN pip install --no-cache-dir -e .
+
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health/live || exit 1
+
+# Default command
+CMD ["python", "-m", "agentic_search_audit.api.server", "--host", "0.0.0.0", "--port", "8000"]

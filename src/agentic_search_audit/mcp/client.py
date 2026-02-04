@@ -400,7 +400,8 @@ class MCPBrowserClient:
             return el ? el.textContent.trim() : null;
         }})()
         """
-        return await self.evaluate(script)
+        result = await self.evaluate(script)
+        return str(result) if result is not None else None
 
     async def get_element_attribute(self, selector: str, attribute: str) -> str | None:
         """Get attribute value of an element.
@@ -418,4 +419,5 @@ class MCPBrowserClient:
             return el ? el.getAttribute('{attribute}') : null;
         }})()
         """
-        return await self.evaluate(script)
+        result = await self.evaluate(script)
+        return str(result) if result is not None else None

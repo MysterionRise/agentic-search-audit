@@ -118,7 +118,7 @@ class ResultsExtractor:
         image = await self._extract_image_url(item_selector)
 
         # Additional attributes
-        attributes = {}
+        attributes: dict[str, str] = {}
 
         return ResultItem(
             rank=rank,

@@ -26,7 +26,8 @@ def load_yaml(file_path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {file_path}")
 
     with open(file_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        result: dict[str, Any] = yaml.safe_load(f)
+        return result
 
 
 def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

@@ -332,7 +332,7 @@ class UpliftPlanner:
         },
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize uplift planner."""
         self.maturity_evaluator = MaturityEvaluator()
 

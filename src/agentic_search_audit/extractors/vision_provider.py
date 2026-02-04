@@ -81,7 +81,8 @@ class OpenAIVisionProvider(VisionProvider):
             if not content:
                 return None
 
-            return json.loads(content)
+            result: dict[str, Any] = json.loads(content)
+            return result
 
         except Exception as e:
             logger.error(f"OpenAI vision analysis failed: {e}")
@@ -146,15 +147,18 @@ class VLLMVisionProvider(VisionProvider):
             # Try to parse as JSON
             # Some vLLM models might not support strict JSON mode
             try:
-                return json.loads(content)
+                result: dict[str, Any] = json.loads(content)
+                return result
             except json.JSONDecodeError:
                 # Try to extract JSON from markdown code blocks
                 if "```json" in content:
                     json_str = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 elif "```" in content:
                     json_str = content.split("```")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 else:
                     logger.error(f"Failed to parse JSON from vLLM response: {content}")
                     return None
@@ -230,15 +234,18 @@ class OpenRouterVisionProvider(VisionProvider):
             # Try to parse as JSON
             # Some models might not support strict JSON mode
             try:
-                return json.loads(content)
+                result: dict[str, Any] = json.loads(content)
+                return result
             except json.JSONDecodeError:
                 # Try to extract JSON from markdown code blocks
                 if "```json" in content:
                     json_str = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 elif "```" in content:
                     json_str = content.split("```")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 else:
                     logger.error(f"Failed to parse JSON from OpenRouter response: {content}")
                     return None
@@ -328,15 +335,18 @@ class AnthropicVisionProvider(VisionProvider):
 
             # Try to parse as JSON
             try:
-                return json.loads(content)
+                result: dict[str, Any] = json.loads(content)
+                return result
             except json.JSONDecodeError:
                 # Try to extract JSON from markdown code blocks
                 if "```json" in content:
                     json_str = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 elif "```" in content:
                     json_str = content.split("```")[1].split("```")[0].strip()
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    return result  # type: ignore[return-value]
                 else:
                     logger.error(f"Failed to parse JSON from Anthropic response: {content}")
                     return None

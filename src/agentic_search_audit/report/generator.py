@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TextIO
 
 from ..analysis.benchmarks import Industry
 from ..analysis.maturity import MaturityEvaluator, MaturityReport
@@ -204,7 +205,9 @@ class ReportGenerator:
 
         logger.info(f"Markdown report saved to {report_path}")
 
-    def _write_markdown_maturity_section(self, f, maturity_report: MaturityReport) -> None:
+    def _write_markdown_maturity_section(
+        self, f: "TextIO", maturity_report: MaturityReport
+    ) -> None:
         """Write maturity assessment section to markdown file."""
         f.write("## Maturity Assessment\n\n")
         f.write(
@@ -236,7 +239,7 @@ class ReportGenerator:
                 f.write(f"- {weakness}\n")
             f.write("\n")
 
-    def _write_markdown_uplift_section(self, f, uplift_plan: UpliftPlan) -> None:
+    def _write_markdown_uplift_section(self, f: "TextIO", uplift_plan: UpliftPlan) -> None:
         """Write uplift recommendations section to markdown file."""
         f.write("## Conversion Uplift Opportunities\n\n")
         f.write(f"{uplift_plan.summary}\n\n")
@@ -660,7 +663,7 @@ class ReportGenerator:
 
         logger.info(f"HTML report saved to {report_path}")
 
-    def _write_html_maturity_section(self, f, maturity_report: MaturityReport) -> None:
+    def _write_html_maturity_section(self, f: TextIO, maturity_report: MaturityReport) -> None:
         """Write maturity assessment section to HTML file."""
         level_class = f"maturity-l{maturity_report.overall_level.value}"
 
@@ -704,7 +707,7 @@ class ReportGenerator:
 
         f.write("    </div>\n")
 
-    def _write_html_uplift_section(self, f, uplift_plan: UpliftPlan) -> None:
+    def _write_html_uplift_section(self, f: TextIO, uplift_plan: UpliftPlan) -> None:
         """Write uplift recommendations section to HTML file."""
         f.write(f"""
     <div class="uplift-section">

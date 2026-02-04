@@ -109,6 +109,9 @@ class SearchAuditOrchestrator:
 
     async def _navigate_to_site(self) -> None:
         """Navigate to the site and handle initial modals."""
+        if not self.client:
+            raise RuntimeError("Browser client not initialized")
+
         logger.info(f"Navigating to {self.config.site.url}")
 
         await self.client.navigate(str(self.config.site.url))
@@ -129,6 +132,11 @@ class SearchAuditOrchestrator:
         Returns:
             AuditRecord with results and evaluation
         """
+        if not self.client:
+            raise RuntimeError("Browser client not initialized")
+        if not self.judge:
+            raise RuntimeError("Judge not initialized")
+
         # Dismiss any modals that might be blocking the search box
         modal_handler = ModalHandler(self.client, self.config.site.modals)
         await modal_handler.dismiss_modals()
@@ -199,6 +207,9 @@ class SearchAuditOrchestrator:
         Returns:
             PageArtifacts with paths to saved files
         """
+        if not self.client:
+            raise RuntimeError("Browser client not initialized")
+
         # Create safe filename from query
         safe_query = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in query.text)
         safe_query = safe_query.replace(" ", "_")[:50]

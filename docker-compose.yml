@@ -1,6 +1,9 @@
 version: '3.8'
 
 services:
+  # =============================================================================
+  # CLI Service (Original - for standalone audit runs)
+  # =============================================================================
   search-audit:
     build:
       context: .
@@ -8,38 +11,22 @@ services:
     image: agentic-search-audit:latest
     container_name: search-audit
 
-    # Environment variables
     environment:
-      # LLM API keys (set these in your environment or .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-
-      # Chrome flags for containerized environment
       - CHROME_FLAGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
-
-      # Output directory
       - AUDIT_OUTPUT_DIR=/app/runs
 
-    # Mount volumes for persistence
     volumes:
-      # Persist audit results
       - ./runs:/app/runs
-
-      # Mount configs (read-only)
       - ./configs:/app/configs:ro
-
-      # Mount queries (read-only)
       - ./data/queries:/app/data/queries:ro
 
-    # Shared memory size for Chrome
     shm_size: '2gb'
-
-    # Security options
     security_opt:
       - seccomp:unconfined
 
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -49,16 +36,177 @@ services:
           memory: 1G
           cpus: '0.5'
 
-    # Network settings
     networks:
       - audit-network
 
-  # Optional: vLLM server for local vision model
+  # =============================================================================
+  # SaaS Services (API, Database, Redis, Worker)
+  # =============================================================================
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: audit-postgres
+    profiles:
+      - saas
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-audit_db}
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    ports:
+      - "5432:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-audit_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - audit-network
+
+  # Redis for job queue and caching
+  redis:
+    image: redis:7-alpine
+    container_name: audit-redis
+    profiles:
+      - saas
+
+    command: redis-server --appendonly yes
+
+    volumes:
+      - redis-data:/data
+
+    ports:
+      - "6379:6379"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - audit-network
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: agentic-search-audit-api:latest
+    container_name: audit-api
+    profiles:
+      - saas
+
+    environment:
+      # App settings
+      - AUDIT_ENVIRONMENT=${AUDIT_ENVIRONMENT:-development}
+      - AUDIT_SECRET_KEY=${AUDIT_SECRET_KEY:-change-me-in-production}
+      - AUDIT_DEBUG=${AUDIT_DEBUG:-false}
+
+      # Database
+      - AUDIT_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-audit_db}
+
+      # Redis
+      - AUDIT_REDIS_URL=redis://redis:6379/0
+
+      # LLM API keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+
+      # Stripe (for billing)
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+
+      # Sentry (for error tracking)
+      - SENTRY_DSN=${SENTRY_DSN:-}
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - audit-network
+
+  # Background Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: agentic-search-audit-worker:latest
+    container_name: audit-worker
+    profiles:
+      - saas
+
+    environment:
+      # Database
+      - AUDIT_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-audit_db}
+
+      # Redis
+      - AUDIT_REDIS_URL=redis://redis:6379/0
+
+      # LLM API keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+
+      # Chrome flags
+      - CHROME_FLAGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
+
+      # Worker settings
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-2}
+
+    shm_size: '2gb'
+    security_opt:
+      - seccomp:unconfined
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+    networks:
+      - audit-network
+
+  # =============================================================================
+  # Optional Services
+  # =============================================================================
+
+  # vLLM server for local vision model
   vllm-server:
     image: vllm/vllm-openai:latest
     container_name: vllm-server
     profiles:
-      - vllm  # Only start with --profile vllm
+      - vllm
 
     environment:
       - MODEL_NAME=llava-hf/llava-v1.6-mistral-7b-hf
@@ -67,7 +215,7 @@ services:
       - vllm-cache:/root/.cache
 
     ports:
-      - "8000:8000"
+      - "8001:8000"
 
     deploy:
       resources:
@@ -85,10 +233,65 @@ services:
       --host 0.0.0.0
       --port 8000
 
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: audit-prometheus
+    profiles:
+      - monitoring
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+    ports:
+      - "9090:9090"
+
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+
+    networks:
+      - audit-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: audit-grafana
+    profiles:
+      - monitoring
+
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - prometheus
+
+    networks:
+      - audit-network
+
 networks:
   audit-network:
     driver: bridge
 
 volumes:
   vllm-cache:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
     driver: local

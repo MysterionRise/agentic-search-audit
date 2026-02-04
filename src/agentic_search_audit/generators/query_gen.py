@@ -105,6 +105,8 @@ class QueryGenerator:
 
     def _init_client(self) -> None:
         """Initialize the appropriate LLM client based on config."""
+        self.client: AsyncOpenAI | None = None
+
         if self.config.provider == "openai":
             api_key = self.config.api_key or os.getenv("OPENAI_API_KEY")
             if not api_key:
@@ -245,6 +247,8 @@ class QueryGenerator:
 
     async def _call_openai_compatible(self, prompt: str) -> dict[str, Any] | None:
         """Call OpenAI-compatible API."""
+        if not self.client:
+            raise RuntimeError("OpenAI client not initialized")
         response = await self.client.chat.completions.create(
             model=self.config.model,
             messages=[{"role": "user", "content": prompt}],
@@ -280,15 +284,18 @@ class QueryGenerator:
     def _parse_json_response(self, content: str) -> dict[str, Any] | None:
         """Parse JSON from LLM response."""
         try:
-            return json.loads(content)
+            result: dict[str, Any] = json.loads(content)
+            return result
         except json.JSONDecodeError:
             # Try to extract JSON from markdown code blocks
             if "```json" in content:
                 json_str = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
+                result = json.loads(json_str)
+                return result
             elif "```" in content:
                 json_str = content.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)
+                result = json.loads(json_str)
+                return result
             else:
                 logger.error(f"Failed to parse JSON from response: {content[:500]}")
                 return None

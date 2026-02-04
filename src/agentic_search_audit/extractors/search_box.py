@@ -93,7 +93,7 @@ class SearchBoxFinder:
                     if result.get("submit_selector"):
                         self.config.submit_selector = result["submit_selector"]
 
-                    return selector
+                    return str(selector)
 
             logger.warning("LLM suggested selectors but none were valid")
             return None

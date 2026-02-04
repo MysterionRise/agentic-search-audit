@@ -44,8 +44,8 @@ async def retry_with_backoff(
     max_retries: int = 3,
     initial_delay: float = 1.0,
     backoff_factor: float = 2.0,
-    *args,
-    **kwargs,
+    *args: object,
+    **kwargs: object,
 ) -> T:
     """Retry a function with exponential backoff.
 
@@ -68,9 +68,11 @@ async def retry_with_backoff(
     for attempt in range(max_retries + 1):
         try:
             if asyncio.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
+                result: T = await func(*args, **kwargs)  # type: ignore[assignment]
+                return result
             else:
-                return func(*args, **kwargs)
+                result = func(*args, **kwargs)  # type: ignore[assignment]
+                return result
 
         except Exception as e:
             if attempt == max_retries:

@@ -39,7 +39,6 @@ jobs:
 
       - name: Type check with mypy
         run: mypy src/
-        continue-on-error: true  # Don't fail on type errors initially
 
   test:
     name: Test Python ${{ matrix.python-version }}
@@ -126,9 +125,7 @@ jobs:
           pip install safety bandit
 
       - name: Check dependencies for vulnerabilities
-        run: safety check --json || true
-        continue-on-error: true
+        run: safety check
 
       - name: Run Bandit security linter
-        run: bandit -r src/ -f json || true
-        continue-on-error: true
+        run: bandit -r src/ -ll  # Only fail on medium+ severity issues
