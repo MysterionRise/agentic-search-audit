@@ -1,7 +1,6 @@
 """Tests for core configuration module."""
 
 
-
 class TestRunConfig:
     """Test suite for RunConfig."""
 

@@ -1,8 +1,6 @@
 """Tests for billing and subscription endpoints."""
 
 
-
-
 class TestListPlans:
     """Test suite for GET /billing/plans endpoint."""
 

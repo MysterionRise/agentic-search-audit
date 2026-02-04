@@ -1,7 +1,6 @@
 """Tests for API middleware."""
 
 
-
 class TestRateLimiting:
     """Test rate limiting middleware."""
 

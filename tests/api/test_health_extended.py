@@ -1,7 +1,6 @@
 """Extended tests for health check endpoints."""
 
 
-
 class TestHealthEndpoints:
     """Test suite for health check endpoints."""
 

@@ -1,8 +1,6 @@
 """Tests for GDPR compliance endpoints."""
 
 
-
-
 class TestDataExport:
     """Test suite for GET /gdpr/export endpoint."""
 
