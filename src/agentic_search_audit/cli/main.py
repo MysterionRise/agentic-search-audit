@@ -57,7 +57,7 @@ def validate_url(url: str) -> str:
         blocked_hosts = {
             "localhost",
             "127.0.0.1",
-            "0.0.0.0",
+            "0.0.0.0",  # nosec B104 - not binding, blocking this address
             "::1",
         }
 

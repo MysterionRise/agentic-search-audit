@@ -18,7 +18,7 @@ WEBHOOK_ALLOWED_SCHEMES = {"http", "https"}
 WEBHOOK_BLOCKED_HOSTS = {
     "localhost",
     "127.0.0.1",
-    "0.0.0.0",
+    "0.0.0.0",  # nosec B104 - not binding, blocking this address
     "::1",
     "[::1]",
 }
