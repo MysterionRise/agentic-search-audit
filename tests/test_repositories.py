@@ -1,7 +1,7 @@
 """Tests for database repositories."""
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -29,7 +29,7 @@ class TestUserRepository:
     @pytest.mark.asyncio
     async def test_create_user(self, repo, mock_session):
         """Test creating a new user."""
-        user = await repo.create(
+        await repo.create(
             email="test@example.com",
             password_hash="hashed_password",
             name="Test User",
@@ -82,7 +82,7 @@ class TestUserRepository:
         mock_result.scalar_one_or_none.return_value = mock_user
         mock_session.execute.return_value = mock_result
 
-        result = await repo.update(uuid4(), name="Updated Name")
+        await repo.update(uuid4(), name="Updated Name")
 
         assert mock_session.execute.call_count == 2  # update + select
         mock_session.flush.assert_called_once()
@@ -110,7 +110,7 @@ class TestOrganizationRepository:
     @pytest.mark.asyncio
     async def test_create_organization(self, repo, mock_session):
         """Test creating an organization."""
-        org = await repo.create(name="Test Org", owner_id=uuid4())
+        await repo.create(name="Test Org", owner_id=uuid4())
 
         mock_session.add.assert_called_once()
         mock_session.flush.assert_called_once()
@@ -195,7 +195,7 @@ class TestAPIKeyRepository:
     @pytest.mark.asyncio
     async def test_create_api_key(self, repo, mock_session):
         """Test creating an API key."""
-        key = await repo.create(
+        await repo.create(
             user_id=uuid4(),
             name="Test Key",
             key_hash="hashed_key",
@@ -282,7 +282,7 @@ class TestAuditRepository:
     @pytest.mark.asyncio
     async def test_create_audit(self, repo, mock_session):
         """Test creating an audit."""
-        audit = await repo.create(
+        await repo.create(
             user_id=uuid4(),
             site_url="https://example.com",
             queries=["query1", "query2"],
@@ -367,7 +367,6 @@ class TestAuditRepository:
     @pytest.mark.asyncio
     async def test_update_progress(self, repo, mock_session):
         """Test updating audit progress."""
-        from agentic_search_audit.db.repositories import AuditRepository
 
         # Read more of the file to get update_progress method
         await repo.update_progress(

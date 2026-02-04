@@ -1,6 +1,5 @@
 """Tests for core configuration module."""
 
-import pytest
 
 
 class TestRunConfig:

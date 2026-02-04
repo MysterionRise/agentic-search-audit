@@ -1,8 +1,6 @@
 """Tests for GDPR compliance endpoints."""
 
-from uuid import uuid4
 
-import pytest
 
 
 class TestDataExport:

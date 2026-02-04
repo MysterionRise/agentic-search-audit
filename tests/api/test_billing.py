@@ -1,8 +1,6 @@
 """Tests for billing and subscription endpoints."""
 
-from uuid import uuid4
 
-import pytest
 
 
 class TestListPlans:
