@@ -4,36 +4,51 @@
 [![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Open-source tool for evaluating on-site search quality using browser automation and LLM-as-a-judge.
+> AI-powered tool that audits e-commerce search quality using real browser automation and LLM evaluation
 
-## Overview
+<!-- TODO: Add demo GIF here once recorded -->
+<!-- ![Demo](docs/demo.gif) -->
 
-Agentic Search Audit opens a real browser via `chrome-devtools-mcp`, runs on-site searches (e.g., nike.com), extracts the top results, and uses an LLM judge to score search quality. It supports both predefined query sets and LLM-generated queries from site content.
+## Why This Tool?
+
+E-commerce search quality directly impacts conversion rates and user satisfaction. This tool provides:
+
+- **Automated Quality Audits**: Run reproducible search quality assessments across your site
+- **LLM-Powered Analysis**: Get structured, explainable scores with evidence-backed rationale
+- **Real Browser Testing**: Test actual user experience with Playwright stealth mode
+- **Multi-Site Support**: Configure once, audit multiple e-commerce platforms
+
+## Tested Sites
+
+| Site | Status | Products Found |
+|------|--------|----------------|
+| Nike | ✅ Working | 24 |
+| Amazon | ✅ Working | 60 |
+| eBay | ✅ Working | 163 |
 
 ## Features
 
-- 🌐 **Browser Automation**: Uses chrome-devtools-mcp for real Chrome interactions
-- 🤖 **LLM-as-a-Judge**: Structured evaluation with reproducible scores
-- 👁️ **Vision-Based Detection**: Intelligent search box detection using vLLM, OpenRouter, or OpenAI vision models
-- 📊 **Rich Reports**: Generates Markdown and HTML reports with screenshots
-- 🔧 **Configurable**: YAML-based configuration with site-specific overrides
-- 🎯 **Deterministic**: Seed-based reproducibility for LLM judgements
-- 🔍 **Smart Extraction**: Heuristics-based DOM parsing with fallbacks
-- 🏠 **Local or Cloud**: Use local vLLM models or cloud APIs (OpenAI, Anthropic)
+- **Browser Automation**: Playwright with stealth mode for realistic browser interactions
+- **LLM-as-a-Judge**: Structured evaluation with reproducible scores (OpenAI, Anthropic, OpenRouter, vLLM)
+- **Vision-Based Detection**: Intelligent search box detection using vision models
+- **Rich Reports**: Generates Markdown, HTML, and JSONL reports with screenshots
+- **Configurable**: YAML-based configuration with site-specific overrides
+- **Deterministic**: Seed-based reproducibility for LLM judgements
+- **Smart Extraction**: Heuristics-based DOM parsing with fallbacks
+- **Local or Cloud**: Use local vLLM models or cloud APIs
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.10 or higher
-- Node.js (for chrome-devtools-mcp)
-- Chrome/Chromium browser
+- Chrome/Chromium browser (Playwright will manage this)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/agentic-search-audit.git
+git clone https://github.com/MysterionRise/agentic-search-audit.git
 cd agentic-search-audit
 
 # Install Python dependencies
@@ -41,16 +56,9 @@ pip install -e .
 
 # Or with dev dependencies
 pip install -e ".[dev]"
-```
 
-### Setup MCP Server
-
-```bash
-# Install chrome-devtools-mcp globally
-npx chrome-devtools-mcp@latest
-
-# Or configure it in Claude Code
-claude mcp add chrome-devtools npx chrome-devtools-mcp@latest
+# Install Playwright browsers
+playwright install chromium
 ```
 
 ### Configuration
@@ -60,35 +68,30 @@ claude mcp add chrome-devtools npx chrome-devtools-mcp@latest
 cp .env.example .env
 ```
 
-2. **Choose your vision provider:**
+2. **Choose your LLM provider:**
 
    **Option A: Use vLLM (local, free, private)**
    ```bash
    # Start vLLM server (see VLLM_SETUP.md for details)
    vllm serve llava-hf/llava-v1.6-mistral-7b-hf --port 8000
-
-   # No API key needed for local vLLM!
-   # Config already set to use vLLM in configs/default.yaml
    ```
 
    **Option B: Use OpenRouter (cloud, cheap, easy)**
    ```bash
    # Add to .env:
    OPENROUTER_API_KEY=sk-or-v1-...
-
-   # Update configs/default.yaml or use configs/openrouter-example.yaml:
-   # provider: "openrouter"
-   # model: "qwen/qwen-vl-plus"
    ```
 
-   **Option C: Use OpenAI (cloud, paid)**
+   **Option C: Use OpenAI (cloud)**
    ```bash
    # Add to .env:
    OPENAI_API_KEY=your-api-key-here
+   ```
 
-   # Update configs/default.yaml:
-   # provider: "openai"
-   # model: "gpt-4o-mini"
+   **Option D: Use Anthropic (cloud)**
+   ```bash
+   # Add to .env:
+   ANTHROPIC_API_KEY=your-api-key-here
    ```
 
    See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed configuration of all providers.
@@ -99,11 +102,11 @@ cp .env.example .env
 # Run audit on Nike.com with predefined queries
 search-audit --site nike --config configs/sites/nike.yaml
 
+# Run with visible browser (non-headless)
+search-audit --site nike --no-headless
+
 # Run with custom queries
 search-audit --site https://www.nike.com --queries data/queries/custom.json
-
-# Enable headless mode (default) or headed
-search-audit --site nike --headless false
 ```
 
 ## Project Structure
@@ -112,7 +115,7 @@ search-audit --site nike --headless false
 agentic-search-audit/
 ├── src/agentic_search_audit/    # Main package
 │   ├── core/                     # Orchestrator, types, policies
-│   ├── mcp/                      # MCP client wrapper
+│   ├── browser/                  # Playwright browser automation
 │   ├── extractors/               # DOM parsers & heuristics
 │   ├── judge/                    # LLM client & rubric
 │   ├── report/                   # Report generators
@@ -121,9 +124,7 @@ agentic-search-audit/
 │   ├── default.yaml             # Default settings
 │   └── sites/                   # Site-specific configs
 ├── data/queries/                # Predefined query sets
-├── examples/                    # Example configs
 ├── runs/                        # Audit artifacts (gitignored)
-├── scripts/                     # Helper scripts
 └── tests/                       # Unit tests
 ```
 
@@ -135,7 +136,7 @@ See `configs/default.yaml` for all available options. Key settings:
 - **search**: Selectors and strategies for search box and results
 - **modals**: Cookie/consent handling
 - **run**: Top-K results, viewport, headless mode, rate limiting
-- **llm**: Provider (vllm/openai/anthropic), model, temperature, seed, base_url
+- **llm**: Provider (vllm/openai/anthropic/openrouter), model, temperature, seed
 - **report**: Output formats and directory
 
 ### Vision Provider Configuration
@@ -144,20 +145,31 @@ The intelligent search box detection supports multiple vision providers:
 
 - **vLLM**: Local vision models (LLaVA, Qwen-VL, etc.) - Free, private, GPU required
 - **OpenRouter**: Cloud API gateway (Qwen-VL, Claude, GPT-4V, etc.) - Cheap, easy, no GPU needed
-- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based, no GPU needed
-- **Anthropic**: Claude 3.5 Sonnet (coming soon)
+- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based
+- **Anthropic**: Claude 3.5 Sonnet - Direct API, cloud-based
 
 **Recommended for most users**: OpenRouter with Qwen-VL-Plus (best value, excellent quality)
 
-See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions for all providers.
+See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions.
 
 ## Architecture
 
-1. **Orchestrator** (`core/`): Manages audit flow, state, and rate limiting
-2. **MCP Client** (`mcp/`): Wraps chrome-devtools-mcp for browser control
-3. **Extractors** (`extractors/`): Finds search boxes, parses results, handles modals
-4. **Judge** (`judge/`): LLM-based quality scoring with structured rubric
-5. **Reporter** (`report/`): Generates human-readable reports
+```
+CLI (cli/main.py)
+    ↓
+Orchestrator (core/orchestrator.py) - manages audit flow, rate limiting
+    ↓
+Browser Automation (browser/) - Playwright with stealth mode
+    ↓
+Extractors (extractors/):
+  - search_box.py: finds search input via CSS selectors + vision fallback
+  - results.py: parses search results from DOM
+  - modals.py: dismisses cookie/consent dialogs
+    ↓
+Judge (judge/) - LLM evaluation with structured JSON schema
+    ↓
+Reporter (report/) - Markdown, HTML, JSONL output
+```
 
 ## LLM-as-a-Judge Rubric
 
@@ -185,9 +197,8 @@ Each audit run creates a timestamped directory in `runs/` containing:
 ## Security & Compliance
 
 - **Rate Limiting**: Configurable RPS to avoid overloading sites
-- **Robots.txt**: Respect crawling policies (P1)
+- **Stealth Mode**: Playwright stealth to avoid bot detection
 - **Data Privacy**: Use isolated browser profiles, avoid sensitive data
-- **MCP Security**: Be aware that MCP exposes browser contents to the LLM
 
 ## Development
 
@@ -222,24 +233,14 @@ The project has comprehensive test coverage (46%+):
 - **32 unit tests** covering core types, config, judge, extractors, reports, and CLI
 - **CI/CD** with GitHub Actions testing on Python 3.10, 3.11, 3.12, 3.13
 - **Pre-commit hooks** for code quality
-- **Coverage reports** generated with pytest-cov
-
-```bash
-# Quick test run
-make test
-
-# With coverage report
-make test-cov
-
-# Run only unit tests
-make test-unit
-```
 
 ## Roadmap
 
 - [x] P0: Nike.com support with predefined queries
+- [x] P0: Multi-site support (Amazon, eBay)
+- [x] P0: Playwright-based browser automation with stealth mode
 - [ ] P1: LLM-generated queries from site content
-- [ ] P2: Multi-LLM support (Anthropic, Gemini, etc.)
+- [ ] P2: Additional LLM providers (Gemini, local Ollama)
 - [ ] P3: Multi-language support
 - [ ] P4: Cross-model reliability experiments
 
@@ -250,9 +251,3 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [chrome-devtools-mcp](https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer) for browser automation via MCP
-- OpenAI for LLM capabilities
-- The MCP community for the protocol specification
