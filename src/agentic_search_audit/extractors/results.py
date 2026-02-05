@@ -76,12 +76,23 @@ class ResultsExtractor:
 
             try:
                 count_str = await self.client.evaluate(script)
-                count = int(count_str) if count_str else 0
+                logger.debug(f"Selector {selector} returned: {count_str!r}")
+                # Handle undefined/null responses
+                if not count_str or count_str in ["undefined", "null"]:
+                    logger.debug(f"Selector {selector} returned empty/undefined, trying next")
+                    count = 0
+                else:
+                    count = int(count_str)
 
                 if count > 0:
                     logger.info(f"Found {count} items with selector: {selector}")
                     # Return list of nth-child selectors
                     return [f"{selector}:nth-of-type({i + 1})" for i in range(count)]
+                else:
+                    logger.debug(f"Selector {selector} found 0 items")
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Selector {selector} failed to parse count '{count_str}': {e}")
+                continue
             except Exception as e:
                 logger.debug(f"Selector {selector} failed: {e}")
                 continue

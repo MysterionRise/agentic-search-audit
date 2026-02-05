@@ -35,11 +35,14 @@ def _parse_mcp_response(result: Any) -> str | None:
     if not text:
         return None
 
+    logger.debug(f"Raw MCP response text (first 500 chars): {text[:500]!r}")
+
     # Try to extract value from ```json code block
     if "```json" in text and "```" in text.split("```json", 1)[1]:
         try:
             # Extract content between ```json and next ```
             json_content: str = text.split("```json")[1].split("```")[0].strip()
+            logger.debug(f"Extracted JSON content: {json_content!r}")
             return json_content
         except (IndexError, ValueError):
             pass
@@ -261,7 +264,9 @@ class MCPBrowserClient:
             "evaluate_script",
             {"function": f"() => {{ return {expression}; }}"},
         )
-        return _parse_mcp_response(result)
+        parsed = _parse_mcp_response(result)
+        logger.debug(f"Evaluate result parsed: {parsed!r}")
+        return parsed
 
     async def click(self, selector: str) -> None:
         """Click an element.
@@ -299,6 +304,7 @@ class MCPBrowserClient:
         escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
         escaped_text = text.replace("\\", "\\\\").replace("'", "\\'")
         # Use evaluate_script to set the value and trigger input events
+        # This uses the native value setter to work with React and other frameworks
         await self._call_tool(
             "evaluate_script",
             {
@@ -306,8 +312,12 @@ class MCPBrowserClient:
                     const el = document.querySelector('{escaped_selector}');
                     if (el) {{
                         el.focus();
-                        el.value = '{escaped_text}';
-                        // Trigger input event to notify any listeners
+                        // Use the native input value setter for React compatibility
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value'
+                        ).set;
+                        nativeInputValueSetter.call(el, '{escaped_text}');
+                        // Trigger input event to notify React and other frameworks
                         el.dispatchEvent(new Event('input', {{ bubbles: true }}));
                         el.dispatchEvent(new Event('change', {{ bubbles: true }}));
                         return true;

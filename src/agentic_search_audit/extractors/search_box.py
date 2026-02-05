@@ -193,38 +193,20 @@ class SearchBoxFinder:
             # Submit based on strategy
             if self.config.submit_strategy == "enter":
                 logger.debug("Submitting search with Enter key")
-                # Dispatch Enter key event directly on the input element
-                # This triggers the form's JavaScript handlers properly
+                # Focus the input element first
                 await self.client.evaluate(f'''
                     (function() {{
                         const input = document.querySelector("{escaped_selector}");
                         if (input) {{
                             input.focus();
-                            // Dispatch keydown event for Enter key
-                            const keydownEvent = new KeyboardEvent('keydown', {{
-                                key: 'Enter',
-                                code: 'Enter',
-                                keyCode: 13,
-                                which: 13,
-                                bubbles: true,
-                                cancelable: true
-                            }});
-                            input.dispatchEvent(keydownEvent);
-                            // Also dispatch keyup
-                            const keyupEvent = new KeyboardEvent('keyup', {{
-                                key: 'Enter',
-                                code: 'Enter',
-                                keyCode: 13,
-                                which: 13,
-                                bubbles: true,
-                                cancelable: true
-                            }});
-                            input.dispatchEvent(keyupEvent);
                             return true;
                         }}
                         return false;
                     }})()
                 ''')
+                await asyncio.sleep(0.3)
+                # Use native MCP press_key for Enter
+                await self.client.press_key("Enter")
 
             elif self.config.submit_strategy == "clickSelector" and self.config.submit_selector:
                 logger.debug(f"Submitting search by clicking {self.config.submit_selector}")

@@ -60,8 +60,8 @@ run:
   top_k: 10
   viewport_width: 1366
   viewport_height: 900
-  network_idle_ms: 2000
-  post_submit_ms: 1500
+  network_idle_ms: 3000
+  post_submit_ms: 3000
   headless: true
   throttle_rps: 0.5
   seed: 42

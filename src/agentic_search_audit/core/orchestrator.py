@@ -165,6 +165,12 @@ class SearchAuditOrchestrator:
         await asyncio.sleep(self.config.run.post_submit_ms / 1000)
         await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
+        # Scroll down to trigger lazy loading of product cards
+        await self.client.evaluate("window.scrollBy(0, 500)")
+        await asyncio.sleep(1)
+        await self.client.evaluate("window.scrollTo(0, 0)")
+        await asyncio.sleep(0.5)
+
         # Extract results
         results_extractor = ResultsExtractor(
             self.client,
