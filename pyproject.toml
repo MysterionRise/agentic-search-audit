@@ -63,6 +63,9 @@ dev = [
     "types-pyyaml>=6.0.0",
     "build>=1.0.0",
 ]
+pdf = [
+    "weasyprint>=60.0",
+]
 
 [project.scripts]
 search-audit = "agentic_search_audit.cli.main:main"
