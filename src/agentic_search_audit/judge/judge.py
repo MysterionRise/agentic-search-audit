@@ -205,7 +205,9 @@ class SearchQualityJudge:
             required_fields = self.schema["required"]
             for field in required_fields:
                 if field not in data:
-                    logger.error(f"Response missing field '{field}'. Got fields: {list(data.keys())}")
+                    logger.error(
+                        f"Response missing field '{field}'. Got fields: {list(data.keys())}"
+                    )
                     logger.debug(f"Full response data: {data}")
                     raise ValueError(f"Missing required field: {field}")
 
