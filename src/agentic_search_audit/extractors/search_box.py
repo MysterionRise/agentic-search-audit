@@ -4,8 +4,7 @@ import asyncio
 import logging
 import re
 
-from ..core.types import LLMConfig, SearchConfig
-from ..mcp.client import MCPBrowserClient
+from ..core.types import BrowserClient, LLMConfig, SearchConfig
 from .intelligent_finder import IntelligentSearchBoxFinder
 
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ class SearchBoxFinder:
 
     def __init__(
         self,
-        client: MCPBrowserClient,
+        client: BrowserClient,
         config: SearchConfig,
         llm_config: LLMConfig,
         use_intelligent_fallback: bool = True,
@@ -74,7 +73,7 @@ class SearchBoxFinder:
         """Initialize search box finder.
 
         Args:
-            client: MCP browser client
+            client: Browser client (Playwright or MCP)
             config: Search configuration
             llm_config: LLM configuration for vision-based detection
             use_intelligent_fallback: Use LLM-based detection if CSS selectors fail
@@ -194,7 +193,7 @@ class SearchBoxFinder:
             if self.config.submit_strategy == "enter":
                 logger.debug("Submitting search with Enter key")
                 # Focus the input element first
-                await self.client.evaluate(f'''
+                await self.client.evaluate(f"""
                     (function() {{
                         const input = document.querySelector("{escaped_selector}");
                         if (input) {{
@@ -203,7 +202,7 @@ class SearchBoxFinder:
                         }}
                         return false;
                     }})()
-                ''')
+                """)
                 await asyncio.sleep(0.3)
                 # Use native MCP press_key for Enter
                 await self.client.press_key("Enter")

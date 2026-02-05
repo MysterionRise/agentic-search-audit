@@ -3,8 +3,7 @@
 import asyncio
 import logging
 
-from ..core.types import ModalsConfig
-from ..mcp.client import MCPBrowserClient
+from ..core.types import BrowserClient, ModalsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +43,11 @@ COOKIE_CONSENT_SELECTORS = [
 class ModalHandler:
     """Handles cookie consents, popups, and modals."""
 
-    def __init__(self, client: MCPBrowserClient, config: ModalsConfig):
+    def __init__(self, client: BrowserClient, config: ModalsConfig):
         """Initialize modal handler.
 
         Args:
-            client: MCP browser client
+            client: Browser client (Playwright or MCP)
             config: Modals configuration
         """
         self.client = client

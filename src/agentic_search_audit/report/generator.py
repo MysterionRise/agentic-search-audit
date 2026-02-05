@@ -310,8 +310,7 @@ class ReportGenerator:
         avg_nav = sum(r.judge.navigability for r in records) / len(records) if records else 0
 
         with open(report_path, "w", encoding="utf-8") as f:
-            f.write(
-                """<!DOCTYPE html>
+            f.write("""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -526,24 +525,20 @@ class ReportGenerator:
     </style>
 </head>
 <body>
-"""
-            )
+""")
 
             # Header
-            f.write(
-                f"""
+            f.write(f"""
     <div class="header">
         <h1>Search Quality Audit Report</h1>
         <p><strong>Site:</strong> {escape_html(str(self.config.site.url))}</p>
         <p><strong>Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p><strong>Total Queries:</strong> {len(records)}</p>
     </div>
-"""
-            )
+""")
 
             # Summary
-            f.write(
-                f"""
+            f.write(f"""
     <div class="summary">
         <h2>Summary</h2>
         <table>
@@ -573,8 +568,7 @@ class ReportGenerator:
             </tr>
         </table>
     </div>
-"""
-            )
+""")
 
             # Maturity Assessment Section
             if maturity_report:
@@ -589,8 +583,7 @@ class ReportGenerator:
                 score_class = self._get_score_class(record.judge.overall)
                 screenshot_rel = Path(record.page.screenshot_path).relative_to(self.run_dir)
 
-                f.write(
-                    f"""
+                f.write(f"""
     <div class="query-card">
         <h2 class="query-title">{i}. {escape_html(record.query.text)}</h2>
 
@@ -618,8 +611,7 @@ class ReportGenerator:
         </div>
 
         <p><strong>Rationale:</strong> {escape_html(record.judge.rationale)}</p>
-"""
-                )
+""")
 
                 if record.judge.issues:
                     f.write('        <div class="issues">\n')
@@ -640,8 +632,7 @@ class ReportGenerator:
                     f.write("        </div>\n")
 
                 # Results table
-                f.write(
-                    """
+                f.write("""
         <h3>Top Results</h3>
         <table class="results-table">
             <thead>
@@ -653,8 +644,7 @@ class ReportGenerator:
                 </tr>
             </thead>
             <tbody>
-"""
-                )
+""")
 
                 for item in record.items[:10]:
                     title = escape_html((item.title or "N/A")[:80])
@@ -662,39 +652,31 @@ class ReportGenerator:
                     url = (item.url or "")[:80]
                     url_escaped = escape_html(url)
                     url_display = escape_html(url[:50]) + "..." if url else "N/A"
-                    f.write(
-                        f"""
+                    f.write(f"""
                 <tr>
                     <td>{item.rank}</td>
                     <td>{title}</td>
                     <td>{price}</td>
                     <td><a href="{url_escaped}" target="_blank" rel="noopener noreferrer">{url_display}</a></td>
                 </tr>
-"""
-                    )
+""")
 
-                f.write(
-                    """
+                f.write("""
             </tbody>
         </table>
-"""
-                )
+""")
 
                 # Screenshot
-                f.write(
-                    f"""
+                f.write(f"""
         <h3>Screenshot</h3>
         <img src="{screenshot_rel}" alt="Screenshot" class="screenshot">
     </div>
-"""
-                )
+""")
 
-            f.write(
-                """
+            f.write("""
 </body>
 </html>
-"""
-            )
+""")
 
         logger.info(f"HTML report saved to {report_path}")
 
@@ -702,8 +684,7 @@ class ReportGenerator:
         """Write maturity assessment section to HTML file."""
         level_class = f"maturity-l{maturity_report.overall_level.value}"
 
-        f.write(
-            f"""
+        f.write(f"""
     <div class="maturity-section">
         <h2>Maturity Assessment</h2>
         <p><span class="maturity-badge {level_class}">
@@ -714,20 +695,17 @@ class ReportGenerator:
 
         <h3>Dimension Scores</h3>
         <div class="dimension-grid">
-"""
-        )
+""")
 
         for dim_name, dim_score in maturity_report.dimensions.items():
             score_class = self._get_score_class(dim_score.score)
-            f.write(
-                f"""
+            f.write(f"""
             <div class="dimension-item {score_class}">
                 <div class="dimension-name">{escape_html(dim_score.name)}</div>
                 <div class="dimension-score">{dim_score.score:.1f}</div>
                 <div style="font-size: 0.8em; color: #666;">{escape_html(dim_score.level.name)}</div>
             </div>
-"""
-            )
+""")
 
         f.write("        </div>\n")
 
@@ -748,8 +726,7 @@ class ReportGenerator:
 
     def _write_html_uplift_section(self, f: TextIO, uplift_plan: UpliftPlan) -> None:
         """Write uplift recommendations section to HTML file."""
-        f.write(
-            f"""
+        f.write(f"""
     <div class="uplift-section">
         <h2>Conversion Uplift Opportunities</h2>
 
@@ -758,32 +735,28 @@ class ReportGenerator:
             <div>Total Potential Conversion Uplift</div>
             <p style="margin-top: 15px; font-size: 0.9em;">{escape_html(uplift_plan.summary)}</p>
         </div>
-"""
-        )
+""")
 
         # Quick Wins
         if uplift_plan.quick_wins:
             f.write("        <h3>Quick Wins (0-4 weeks)</h3>\n")
             for rec in uplift_plan.quick_wins:
                 priority_value = escape_html(rec.priority.value)
-                f.write(
-                    f"""
+                f.write(f"""
         <div class="recommendation-card priority-{priority_value}">
             <span class="priority-badge priority-{priority_value}">{priority_value}</span>
             <strong>{escape_html(rec.title)}</strong>
             <span style="float: right; color: #28a745;">+{rec.expected_uplift_pct:.1f}%</span>
             <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
         </div>
-"""
-                )
+""")
 
         # Top Recommendations
         f.write("        <h3>All Recommendations</h3>\n")
         for rec in uplift_plan.recommendations[:10]:
             priority_value = escape_html(rec.priority.value)
             effort_value = escape_html(rec.effort.value)
-            f.write(
-                f"""
+            f.write(f"""
         <div class="recommendation-card priority-{priority_value}">
             <span class="priority-badge priority-{priority_value}">{priority_value}</span>
             <strong>{escape_html(rec.title)}</strong>
@@ -793,8 +766,7 @@ class ReportGenerator:
             </span>
             <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
         </div>
-"""
-            )
+""")
 
         # Implementation Phases
         if uplift_plan.phases:
@@ -806,16 +778,14 @@ class ReportGenerator:
                 phase_duration = escape_html(phase.get("duration", ""))
                 phase_uplift = phase.get("expected_uplift", 0)
                 phase_recs = phase.get("recommendations", [])
-                f.write(
-                    f"""
+                f.write(f"""
             <div class="phase-item">
                 <strong>{phase_name}</strong> ({phase_duration})
                 <br>
                 <span style="color: #28a745;">Expected uplift: +{phase_uplift:.1f}%</span>
                 | {len(phase_recs)} recommendations
             </div>
-"""
-                )
+""")
             f.write("        </div>\n")
 
         f.write("    </div>\n")

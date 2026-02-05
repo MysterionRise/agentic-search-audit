@@ -2,9 +2,84 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field, HttpUrl
+
+if TYPE_CHECKING:
+    pass
+
+
+@runtime_checkable
+class BrowserClient(Protocol):
+    """Protocol defining the browser client interface.
+
+    Both PlaywrightBrowserClient and MCPBrowserClient implement this interface,
+    allowing them to be used interchangeably.
+    """
+
+    async def connect(self) -> None:
+        """Connect to the browser."""
+        ...
+
+    async def disconnect(self) -> None:
+        """Disconnect from the browser."""
+        ...
+
+    async def navigate(self, url: str, wait_until: str = "networkidle") -> str:
+        """Navigate to a URL."""
+        ...
+
+    async def query_selector(self, selector: str) -> dict[str, Any] | None:
+        """Query DOM for a single element."""
+        ...
+
+    async def query_selector_all(self, selector: str) -> list[dict[str, Any]]:
+        """Query DOM for all matching elements."""
+        ...
+
+    async def evaluate(self, expression: str) -> Any:
+        """Evaluate JavaScript in the page context."""
+        ...
+
+    async def click(self, selector: str) -> None:
+        """Click an element."""
+        ...
+
+    async def type_text(self, selector: str, text: str, delay: int = 50) -> None:
+        """Type text into an input element."""
+        ...
+
+    async def press_key(self, key: str) -> None:
+        """Press a keyboard key."""
+        ...
+
+    async def screenshot(self, output_path: Path, full_page: bool = True) -> Path:
+        """Take a screenshot of the page."""
+        ...
+
+    async def get_html(self) -> str:
+        """Get current page HTML."""
+        ...
+
+    async def wait_for_selector(
+        self, selector: str, timeout: int = 5000, visible: bool = True
+    ) -> bool:
+        """Wait for a selector to appear."""
+        ...
+
+    async def wait_for_network_idle(self, timeout: int = 2000) -> None:
+        """Wait for network to be idle."""
+        ...
+
+    async def get_element_text(self, selector: str) -> str | None:
+        """Get text content of an element."""
+        ...
+
+    async def get_element_attribute(self, selector: str, attribute: str) -> str | None:
+        """Get attribute value of an element."""
+        ...
 
 
 class QueryOrigin(str, Enum):

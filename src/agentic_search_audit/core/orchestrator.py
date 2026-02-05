@@ -6,13 +6,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from ..browser import PlaywrightBrowserClient
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
-from ..mcp import MCPBrowserClient
 from ..report import ReportGenerator
 from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
-from .types import AuditConfig, AuditRecord, PageArtifacts, Query
+from .types import AuditConfig, AuditRecord, BrowserClient, PageArtifacts, Query
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class SearchAuditOrchestrator:
         self.records: list[AuditRecord] = []
 
         # Initialize components (will be created in async context)
-        self.client: MCPBrowserClient | None = None
+        self.client: BrowserClient | None = None
         self.judge: SearchQualityJudge | None = None
         self.reporter: ReportGenerator | None = None
         self.compliance_checker: ComplianceChecker | None = None
@@ -48,8 +48,8 @@ class SearchAuditOrchestrator:
         logger.info(f"Starting audit with {len(self.queries)} queries")
         logger.info(f"Output directory: {self.run_dir}")
 
-        # Initialize components
-        self.client = MCPBrowserClient(
+        # Initialize components - using Playwright for reliable browser automation
+        self.client = PlaywrightBrowserClient(
             headless=self.config.run.headless,
             viewport_width=self.config.run.viewport_width,
             viewport_height=self.config.run.viewport_height,

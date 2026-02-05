@@ -3,8 +3,7 @@
 import logging
 from urllib.parse import urljoin
 
-from ..core.types import ResultItem, ResultsConfig
-from ..mcp.client import MCPBrowserClient
+from ..core.types import BrowserClient, ResultItem, ResultsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ResultsExtractor:
     """Extracts search results from the page."""
 
-    def __init__(self, client: MCPBrowserClient, config: ResultsConfig, base_url: str):
+    def __init__(self, client: BrowserClient, config: ResultsConfig, base_url: str):
         """Initialize results extractor.
 
         Args:

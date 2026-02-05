@@ -6,8 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..core.types import LLMConfig
-from ..mcp.client import MCPBrowserClient
+from ..core.types import BrowserClient, LLMConfig
 from .vision_provider import VisionProvider, create_vision_provider
 
 logger = logging.getLogger(__name__)
@@ -51,11 +50,11 @@ HTML snippet:
 class IntelligentSearchBoxFinder:
     """Uses LLM with vision to intelligently find search boxes."""
 
-    def __init__(self, client: MCPBrowserClient, llm_config: LLMConfig):
+    def __init__(self, client: BrowserClient, llm_config: LLMConfig):
         """Initialize intelligent finder.
 
         Args:
-            client: MCP browser client
+            client: Browser client (Playwright or MCP)
             llm_config: LLM configuration including provider and model
         """
         self.client = client
