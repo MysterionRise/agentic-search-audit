@@ -12,6 +12,43 @@ from mcp.client.stdio import stdio_client
 logger = logging.getLogger(__name__)
 
 
+def _parse_mcp_response(result: Any) -> str | None:
+    """Parse the value from an MCP evaluate_script response.
+
+    The response is typically markdown-formatted like:
+    # evaluate_script response
+    Script ran on page and returned:
+    ```json
+    <value>
+    ```
+
+    Args:
+        result: MCP tool result
+
+    Returns:
+        The extracted value as a string, or None if not found
+    """
+    if not result or len(result) == 0:
+        return None
+
+    text: str = result[0].text
+    if not text:
+        return None
+
+    # Try to extract value from ```json code block
+    if "```json" in text and "```" in text.split("```json", 1)[1]:
+        try:
+            # Extract content between ```json and next ```
+            json_content: str = text.split("```json")[1].split("```")[0].strip()
+            return json_content
+        except (IndexError, ValueError):
+            pass
+
+    # Fallback: return the raw text
+    stripped: str = text.strip()
+    return stripped
+
+
 class MCPBrowserClient:
     """Client for interacting with Chrome via chrome-devtools-mcp.
 
@@ -147,7 +184,10 @@ class MCPBrowserClient:
             "evaluate_script",
             {"function": "() => { return window.location.href; }"},
         )
-        current_url = result[0].text if result else url
+        current_url = _parse_mcp_response(result) or url
+        # Remove quotes if present (JSON string)
+        if current_url.startswith('"') and current_url.endswith('"'):
+            current_url = current_url[1:-1]
         logger.info(f"Navigated to {current_url}")
         return current_url
 
@@ -160,18 +200,18 @@ class MCPBrowserClient:
         Returns:
             Element info or None if not found
         """
+        # Escape selector for JavaScript string embedding
+        escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
         try:
             result = await self._call_tool(
                 "evaluate_script",
                 {
-                    "function": """(selector) => {
-                        return document.querySelector(selector) !== null;
-                    }""",
-                    "args": [selector],
+                    "function": f"() => {{ return document.querySelector('{escaped_selector}') !== null; }}",
                 },
             )
-            # Check if the result indicates the element exists
-            if result and len(result) > 0 and result[0].text == "true":
+            # Parse the MCP response to get the actual value
+            value = _parse_mcp_response(result)
+            if value == "true":
                 return {"exists": True}
             return None
         except Exception as e:
@@ -187,19 +227,21 @@ class MCPBrowserClient:
         Returns:
             List of element info
         """
+        # Escape selector for JavaScript string embedding
+        escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
         try:
             result = await self._call_tool(
                 "evaluate_script",
                 {
-                    "function": """(selector) => {
-                        const elements = document.querySelectorAll(selector);
-                        return Array.from(elements).map((el, i) => ({index: i}));
-                    }""",
-                    "args": [selector],
+                    "function": f"""() => {{
+                        const elements = document.querySelectorAll('{escaped_selector}');
+                        return Array.from(elements).map((el, i) => ({{index: i}}));
+                    }}""",
                 },
             )
-            if result and result[0].text:
-                elements = json.loads(result[0].text)
+            value = _parse_mcp_response(result)
+            if value:
+                elements = json.loads(value)
                 return elements if isinstance(elements, list) else []
             return []
         except Exception as e:
@@ -219,7 +261,7 @@ class MCPBrowserClient:
             "evaluate_script",
             {"function": f"() => {{ return {expression}; }}"},
         )
-        return result[0].text if result else None
+        return _parse_mcp_response(result)
 
     async def click(self, selector: str) -> None:
         """Click an element.
@@ -228,18 +270,19 @@ class MCPBrowserClient:
             selector: CSS selector for element to click
         """
         logger.debug(f"Clicking {selector}")
+        # Escape selector for JavaScript string embedding
+        escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
         await self._call_tool(
             "evaluate_script",
             {
-                "function": """(selector) => {
-                    const el = document.querySelector(selector);
-                    if (el) {
+                "function": f"""() => {{
+                    const el = document.querySelector('{escaped_selector}');
+                    if (el) {{
                         el.click();
                         return true;
-                    }
+                    }}
                     return false;
-                }""",
-                "args": [selector],
+                }}""",
             },
         )
 
@@ -252,23 +295,25 @@ class MCPBrowserClient:
             delay: Delay between keystrokes in ms (Note: delay not supported in current implementation)
         """
         logger.debug(f"Typing '{text}' into {selector}")
+        # Escape selector and text for JavaScript string embedding
+        escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
+        escaped_text = text.replace("\\", "\\\\").replace("'", "\\'")
         # Use evaluate_script to set the value and trigger input events
         await self._call_tool(
             "evaluate_script",
             {
-                "function": """(selector, text) => {
-                    const el = document.querySelector(selector);
-                    if (el) {
+                "function": f"""() => {{
+                    const el = document.querySelector('{escaped_selector}');
+                    if (el) {{
                         el.focus();
-                        el.value = text;
+                        el.value = '{escaped_text}';
                         // Trigger input event to notify any listeners
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
                         return true;
-                    }
+                    }}
                     return false;
-                }""",
-                "args": [selector, text],
+                }}""",
             },
         )
 
@@ -321,7 +366,14 @@ class MCPBrowserClient:
             "evaluate_script",
             {"function": "() => { return document.documentElement.outerHTML; }"},
         )
-        return result[0].text if result else ""
+        html = _parse_mcp_response(result) or ""
+        # Remove quotes if it's a JSON string (though HTML usually isn't quoted)
+        if html.startswith('"') and html.endswith('"'):
+            try:
+                html = json.loads(html)
+            except json.JSONDecodeError:
+                pass
+        return html
 
     async def wait_for_selector(
         self, selector: str, timeout: int = 5000, visible: bool = True
@@ -336,6 +388,9 @@ class MCPBrowserClient:
         Returns:
             True if found, False if timeout
         """
+        # Escape selector for JavaScript string embedding
+        escaped_selector = selector.replace("\\", "\\\\").replace("'", "\\'")
+        check_visible_str = "true" if visible else "false"
         try:
             # Poll for element using evaluate_script
             start_time = asyncio.get_event_loop().time()
@@ -346,20 +401,20 @@ class MCPBrowserClient:
                 result = await self._call_tool(
                     "evaluate_script",
                     {
-                        "function": """(selector, checkVisible) => {
-                            const el = document.querySelector(selector);
+                        "function": f"""() => {{
+                            const el = document.querySelector('{escaped_selector}');
                             if (!el) return false;
-                            if (checkVisible) {
+                            if ({check_visible_str}) {{
                                 const style = window.getComputedStyle(el);
                                 return style.display !== 'none' && style.visibility !== 'hidden';
-                            }
+                            }}
                             return true;
-                        }""",
-                        "args": [selector, visible],
+                        }}""",
                     },
                 )
 
-                if result and result[0].text == "true":
+                value = _parse_mcp_response(result)
+                if value == "true":
                     return True
 
                 # Check timeout

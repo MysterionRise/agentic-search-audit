@@ -1,0 +1,79 @@
+# Zalando.co.uk specific configuration
+
+site:
+  url: "https://www.zalando.co.uk"
+  locale: "en-GB"
+
+  search:
+    input_selectors:
+      # Zalando-specific selectors (from actual page inspection)
+      - '#header-search-input'
+      - 'input[name="q"]'
+      - 'input[placeholder="Search"]'
+      - 'input[role="combobox"][placeholder="Search"]'
+      # Generic fallbacks
+      - 'input[type="search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      # Zalando search results are article elements
+      - 'article'
+    title_selectors:
+      # Title is in h3 element inside article
+      - 'h3'
+    url_attr: 'href'
+    snippet_selectors:
+      # First span inside article typically contains brand
+      - 'span'
+    price_selectors:
+      # Price spans are further down in the article
+      - 'span'
+    image_selectors:
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "reject"
+      - "necessary only"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 2000
+  post_submit_ms: 1500
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 1000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

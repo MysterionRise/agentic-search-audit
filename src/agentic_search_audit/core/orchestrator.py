@@ -116,9 +116,17 @@ class SearchAuditOrchestrator:
 
         await self.client.navigate(str(self.config.site.url))
 
-        # Handle modals
+        # Wait for JavaScript to render (important for SPAs and dynamic content)
+        logger.debug("Waiting for page JavaScript to render...")
+        await asyncio.sleep(3)  # Initial wait for JS frameworks to bootstrap
+        await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
+
+        # Handle modals (cookie consent, popups, etc.)
         modal_handler = ModalHandler(self.client, self.config.site.modals)
         await modal_handler.dismiss_modals()
+
+        # Wait again after dismissing modals for any animations/transitions
+        await asyncio.sleep(1)
         await modal_handler.wait_for_page_stable()
 
         logger.info("Site loaded and ready")

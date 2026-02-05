@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 # Maximum characters of HTML to include in the search box detection prompt
 # This should cover the header/navigation area where search boxes are typically located
-HTML_SNIPPET_MAX_CHARS = 5000
+# Increased to 15000 to capture more of the page structure including dynamically loaded elements
+HTML_SNIPPET_MAX_CHARS = 15000
 
 
 SEARCH_BOX_FINDER_PROMPT = """You are a web automation expert. Analyze this webpage screenshot and HTML to find the search input box.
@@ -127,8 +128,11 @@ class IntelligentSearchBoxFinder:
             Analysis result or None
         """
         try:
-            # Build prompt
-            prompt = SEARCH_BOX_FINDER_PROMPT.format(html_snippet=html_snippet)
+            # Build prompt - use replace() instead of format() to avoid issues
+            # with curly braces in the HTML snippet
+            prompt = SEARCH_BOX_FINDER_PROMPT.replace("{html_snippet}", html_snippet)
+
+            logger.debug("Calling vision provider analyze_image...")
 
             # Use vision provider to analyze
             result = await self.vision_provider.analyze_image(
@@ -138,10 +142,11 @@ class IntelligentSearchBoxFinder:
                 temperature=self.llm_config.temperature,
             )
 
+            logger.debug(f"Vision provider returned: {result}")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to analyze page with LLM: {e}")
+            logger.error(f"Failed to analyze page with LLM: {e}", exc_info=True)
             return None
 
     async def validate_selector(self, selector: str) -> bool:

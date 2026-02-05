@@ -1,5 +1,6 @@
 """Search box detection and interaction."""
 
+import asyncio
 import logging
 import re
 
@@ -186,10 +187,44 @@ class SearchBoxFinder:
             # Type query
             await self.client.type_text(safe_selector, query_text, delay=30)
 
+            # Wait for autocomplete to load (many search boxes have autocomplete)
+            await asyncio.sleep(1.0)
+
             # Submit based on strategy
             if self.config.submit_strategy == "enter":
                 logger.debug("Submitting search with Enter key")
-                await self.client.press_key("Enter")
+                # Dispatch Enter key event directly on the input element
+                # This triggers the form's JavaScript handlers properly
+                await self.client.evaluate(f'''
+                    (function() {{
+                        const input = document.querySelector("{escaped_selector}");
+                        if (input) {{
+                            input.focus();
+                            // Dispatch keydown event for Enter key
+                            const keydownEvent = new KeyboardEvent('keydown', {{
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true,
+                                cancelable: true
+                            }});
+                            input.dispatchEvent(keydownEvent);
+                            // Also dispatch keyup
+                            const keyupEvent = new KeyboardEvent('keyup', {{
+                                key: 'Enter',
+                                code: 'Enter',
+                                keyCode: 13,
+                                which: 13,
+                                bubbles: true,
+                                cancelable: true
+                            }});
+                            input.dispatchEvent(keyupEvent);
+                            return true;
+                        }}
+                        return false;
+                    }})()
+                ''')
 
             elif self.config.submit_strategy == "clickSelector" and self.config.submit_selector:
                 logger.debug(f"Submitting search by clicking {self.config.submit_selector}")

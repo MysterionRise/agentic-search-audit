@@ -334,12 +334,16 @@ class OpenRouterVisionProvider(VisionProvider):
                 logger.warning("OpenRouter returned empty response content")
                 return None
 
+            # Debug: log raw response (truncated for readability)
+            logger.info(f"OpenRouter raw response (first 1000 chars): {content[:1000]}")
+
             # Parse JSON using common helper (handles multiple formats)
             try:
                 return _parse_json_response(content, "OpenRouter")
             except VisionParsingError as e:
                 # Log the error but return None to allow graceful degradation
-                logger.error(str(e))
+                logger.error(f"JSON parsing error: {str(e)}")
+                logger.error(f"Full raw content: {content}")
                 return None
 
         except asyncio.TimeoutError:
