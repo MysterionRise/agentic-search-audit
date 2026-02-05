@@ -58,7 +58,27 @@ Your task is to objectively evaluate search quality based on the provided result
 
 ## Output Format:
 
-Return ONLY a valid JSON object matching the schema. No additional text before or after.
+Return ONLY a valid JSON object with this EXACT structure (no nesting):
+
+```json
+{
+  "overall": 3.5,
+  "relevance": 4.0,
+  "diversity": 3.0,
+  "result_quality": 4.0,
+  "navigability": 3.5,
+  "rationale": "Brief explanation of your overall assessment...",
+  "issues": ["Issue 1", "Issue 2"],
+  "improvements": ["Improvement 1", "Improvement 2"],
+  "evidence": [
+    {"rank": 1, "reason": "Why this result is good/bad"},
+    {"rank": 2, "reason": "Why this result is good/bad"}
+  ],
+  "schema_version": "1.0"
+}
+```
+
+IMPORTANT: All score fields (overall, relevance, diversity, result_quality, navigability) must be at the TOP LEVEL, NOT nested inside a "scores" object.
 """
 
 JUDGE_USER_PROMPT_TEMPLATE = """Evaluate the search quality for the following query on {site_name}.
@@ -82,7 +102,8 @@ HTML snippet (first 2000 chars):
 
 Analyze the results and provide scores according to the rubric.
 For each result you reference, cite its rank number.
-Return ONLY the JSON object, no other text.
+Return ONLY the JSON object with flat structure (scores at top level, not nested).
+Include schema_version: "1.0" in your response.
 """
 
 
