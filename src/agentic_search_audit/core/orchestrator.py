@@ -114,7 +114,9 @@ class SearchAuditOrchestrator:
 
         logger.info(f"Navigating to {self.config.site.url}")
 
-        await self.client.navigate(str(self.config.site.url))
+        # Use "domcontentloaded" instead of "networkidle" for faster, more reliable loading
+        # Some sites (especially heavy SPAs) never reach "networkidle"
+        await self.client.navigate(str(self.config.site.url), wait_until="domcontentloaded")
 
         # Wait for JavaScript to render (important for SPAs and dynamic content)
         logger.debug("Waiting for page JavaScript to render...")

@@ -96,7 +96,7 @@ class SearchQualityJudge:
         # Parse and validate response
         judge_score = self._parse_response(response)
 
-        logger.info(f"Evaluation complete. Overall score: {judge_score.overall:.2f}")
+        logger.info(f"Evaluation complete. FQI score: {judge_score.fqi:.2f}")
 
         return judge_score
 

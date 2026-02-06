@@ -1,87 +1,99 @@
-"""Judge rubric and prompts."""
+"""Judge rubric and prompts for the FQI (Findability Quality Index) model."""
 
 import json
 from typing import Any
 
-JUDGE_SYSTEM_PROMPT = """You are a search quality evaluator analyzing on-site search results.
+JUDGE_SYSTEM_PROMPT = """You are a search quality evaluator using the Findability Quality Index (FQI) framework.
 
-Your task is to objectively evaluate search quality based on the provided results and page context.
+Your task is to objectively evaluate on-site search quality across 5 weighted dimensions.
 
-## Evaluation Criteria (0-5 scale for each):
+## FQI Dimensions (0-5 scale each):
 
-1. **Relevance** (0-5): How well do the results match the search intent?
-   - 5: Perfect match, all results highly relevant
-   - 4: Most results relevant with minor issues
-   - 3: Mixed relevance, some good results
-   - 2: Mostly irrelevant with few relevant results
-   - 1: Barely relevant results
-   - 0: Completely irrelevant or no results
+### 1. Query Understanding (25% weight)
+How well does the search engine understand the user's intent?
+- 5: Handles synonyms, typos, long-tail, and semantic queries perfectly
+- 4: Good understanding with minor misses on complex queries
+- 3: Handles exact matches well but struggles with synonyms/typos
+- 2: Frequent misunderstanding of intent, literal matching only
+- 1: Fails on most queries beyond exact product names
+- 0: Does not understand queries at all
 
-2. **Diversity** (0-5): Do results show variety in brands, categories, and price points?
-   - 5: Excellent variety across multiple dimensions
-   - 4: Good diversity with minor gaps
-   - 3: Some diversity but noticeable clustering
-   - 2: Limited diversity, mostly similar items
-   - 1: Very limited variety
-   - 0: No diversity or single item type
+### 2. Results Relevance (25% weight)
+How relevant are the returned results to the query intent?
+- 5: All results highly relevant, perfectly ranked
+- 4: Most results relevant with minor ranking issues
+- 3: Mixed relevance, some good results buried
+- 2: Mostly irrelevant with few relevant results
+- 1: Barely relevant results
+- 0: Completely irrelevant or no results
 
-3. **Result Quality** (0-5): Are individual results clear, distinct, and functional?
-   - 5: All results clear, unique, complete information
-   - 4: Most results good quality with minor issues
-   - 3: Acceptable quality with some problems
-   - 2: Many quality issues (duplicates, missing info)
-   - 1: Poor quality results
-   - 0: Broken or unusable results
+### 3. Result Presentation & Navigability (20% weight)
+Are results well-presented with clear info, filters, and navigation aids?
+- 5: Rich product cards, excellent filters/facets, sort options, clear pricing
+- 4: Good presentation with minor gaps in filters or product info
+- 3: Basic presentation, limited filtering options
+- 2: Poor layout, missing product info, few navigation aids
+- 1: Confusing presentation, no filters
+- 0: Broken or unusable layout
 
-4. **Navigability** (0-5): Can users refine and navigate the results effectively?
-   - 5: Excellent filters, sorting, facets available
-   - 4: Good navigation options present
-   - 3: Basic navigation capabilities
-   - 2: Limited navigation features
-   - 1: Minimal navigation support
-   - 0: No navigation aids visible
+### 4. Advanced Features (20% weight)
+Are advanced search capabilities present (autocomplete, did-you-mean, etc.)?
+- 5: Autocomplete, suggestions, spell correction, visual search, personalization
+- 4: Most advanced features present
+- 3: Some advanced features (e.g., basic autocomplete)
+- 2: Limited advanced features
+- 1: Minimal beyond basic search
+- 0: No advanced features
 
-5. **Overall** (0-5): Overall user satisfaction with search experience
-   - This is NOT an average of other scores
-   - Consider the complete user journey
-   - Weight heavily towards whether user would find what they need
+### 5. Error Handling (10% weight)
+How well does search handle edge cases, zero results, and errors?
+- 5: Graceful handling with suggestions, alternatives, and helpful messaging
+- 4: Good error handling with some suggestions
+- 3: Shows "no results" with basic messaging
+- 2: Poor error handling, dead ends
+- 1: Errors or broken states on edge cases
+- 0: Crashes or completely fails
 
-## Important Guidelines:
+## FQI Calculation
+FQI = (QU x 0.25) + (RR x 0.25) + (RP x 0.20) + (AF x 0.20) + (EH x 0.10)
 
+**Hard Rule:** If Query Understanding OR Results Relevance < 2.0, FQI is capped at 3.5
+
+## Score Bands
+- 4.5-5.0: Excellent | 3.5-4.4: Good | 2.5-3.4: Weak | 1.5-2.4: Critical | <1.5: Broken
+
+## Important Guidelines
 - Base evaluation ONLY on the provided results and context
 - Do NOT use external knowledge about the site or products
 - Cite specific result ranks in your evidence
-- Identify concrete issues and improvements
+- Provide per-dimension diagnosis explaining the score
 - Be strict but fair in scoring
-- If results are mostly ads or promotions, penalize appropriately
-- Consider whether results actually answer the query
 
-## Output Format:
+## Output Format
 
-Return ONLY a valid JSON object with this EXACT structure (no nesting):
+Return ONLY a valid JSON object with this EXACT structure:
 
 ```json
 {
-  "overall": 3.5,
-  "relevance": 4.0,
-  "diversity": 3.0,
-  "result_quality": 4.0,
-  "navigability": 3.5,
-  "rationale": "Brief explanation of your overall assessment...",
+  "query_understanding": {"score": 3.5, "diagnosis": "Handles exact match well but..."},
+  "results_relevance": {"score": 4.0, "diagnosis": "Results are relevant to..."},
+  "result_presentation": {"score": 3.0, "diagnosis": "Basic product cards shown..."},
+  "advanced_features": {"score": 2.5, "diagnosis": "Only basic autocomplete..."},
+  "error_handling": {"score": 4.0, "diagnosis": "Good zero-result handling..."},
+  "rationale": "Overall assessment explanation...",
+  "executive_summary": "One-paragraph summary for stakeholders...",
   "issues": ["Issue 1", "Issue 2"],
   "improvements": ["Improvement 1", "Improvement 2"],
   "evidence": [
     {"rank": 1, "reason": "Why this result is good/bad"},
     {"rank": 2, "reason": "Why this result is good/bad"}
   ],
-  "schema_version": "1.0"
+  "schema_version": "2.1"
 }
 ```
-
-IMPORTANT: All score fields (overall, relevance, diversity, result_quality, navigability) must be at the TOP LEVEL, NOT nested inside a "scores" object.
 """
 
-JUDGE_USER_PROMPT_TEMPLATE = """Evaluate the search quality for the following query on {site_name}.
+JUDGE_USER_PROMPT_TEMPLATE = """Evaluate the search quality for the following query on {site_name} using the FQI framework.
 
 ## Query
 "{query_text}"
@@ -100,55 +112,67 @@ HTML snippet (first 2000 chars):
 
 ## Instructions
 
-Analyze the results and provide scores according to the rubric.
+Analyze the results and provide FQI scores across all 5 dimensions.
+For each dimension, provide a score (0-5) and a brief diagnosis.
 For each result you reference, cite its rank number.
-Return ONLY the JSON object with flat structure (scores at top level, not nested).
-Include schema_version: "1.0" in your response.
+Return ONLY the JSON object matching the FQI schema.
+Include schema_version: "2.1" in your response.
 """
 
 
 def get_judge_schema() -> dict[str, Any]:
-    """Get JSON schema for judge output.
+    """Get JSON schema for FQI judge output.
 
     Returns:
         JSON schema dictionary
     """
+    dimension_schema = {
+        "type": "object",
+        "properties": {
+            "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5,
+                "description": "Dimension score (0-5)",
+            },
+            "diagnosis": {
+                "type": "string",
+                "description": "Per-query diagnosis for this dimension",
+            },
+        },
+        "required": ["score", "diagnosis"],
+    }
+
     return {
         "type": "object",
         "properties": {
-            "overall": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 5,
-                "description": "Overall satisfaction score",
+            "query_understanding": {
+                **dimension_schema,
+                "description": "Query understanding score and diagnosis",
             },
-            "relevance": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 5,
-                "description": "Relevance to query intent",
+            "results_relevance": {
+                **dimension_schema,
+                "description": "Results relevance score and diagnosis",
             },
-            "diversity": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 5,
-                "description": "Diversity of results",
+            "result_presentation": {
+                **dimension_schema,
+                "description": "Result presentation & navigability score and diagnosis",
             },
-            "result_quality": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 5,
-                "description": "Quality of individual results",
+            "advanced_features": {
+                **dimension_schema,
+                "description": "Advanced features score and diagnosis",
             },
-            "navigability": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 5,
-                "description": "UI usability and navigation",
+            "error_handling": {
+                **dimension_schema,
+                "description": "Error handling score and diagnosis",
             },
             "rationale": {
                 "type": "string",
-                "description": "Explanation of scores",
+                "description": "Overall assessment explanation",
+            },
+            "executive_summary": {
+                "type": "string",
+                "description": "Executive summary for stakeholders",
             },
             "issues": {
                 "type": "array",
@@ -178,11 +202,11 @@ def get_judge_schema() -> dict[str, Any]:
             },
         },
         "required": [
-            "overall",
-            "relevance",
-            "diversity",
-            "result_quality",
-            "navigability",
+            "query_understanding",
+            "results_relevance",
+            "result_presentation",
+            "advanced_features",
+            "error_handling",
             "rationale",
             "issues",
             "improvements",

@@ -4,11 +4,10 @@ from .benchmarks import IndustryBenchmarks, get_industry_benchmark
 from .maturity import MaturityEvaluator, MaturityLevel, MaturityReport
 from .uplift_planner import (
     Category,
-    Effort,
-    Priority,
-    Recommendation,
-    UpliftPlan,
-    UpliftPlanner,
+    Finding,
+    FindingsAnalyzer,
+    FindingsReport,
+    Severity,
 )
 
 __all__ = [
@@ -17,10 +16,9 @@ __all__ = [
     "MaturityReport",
     "IndustryBenchmarks",
     "get_industry_benchmark",
-    "Priority",
-    "Effort",
+    "Severity",
     "Category",
-    "Recommendation",
-    "UpliftPlan",
-    "UpliftPlanner",
+    "Finding",
+    "FindingsReport",
+    "FindingsAnalyzer",
 ]

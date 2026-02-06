@@ -49,7 +49,7 @@ def sample_config_dict():
         "llm": {
             "provider": "openai",
             "model": "gpt-4o-mini",
-            "max_tokens": 800,
+            "max_tokens": 2000,
             "temperature": 0.2,
         },
         "report": {

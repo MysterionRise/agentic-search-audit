@@ -441,12 +441,12 @@ async def main_async() -> int:
 
         # Print summary
         if records:
-            avg_score = sum(r.judge.overall for r in records) / len(records)
+            avg_score = sum(r.judge.fqi for r in records) / len(records)
             logger.info("=" * 60)
             logger.info("AUDIT COMPLETE")
             logger.info("=" * 60)
             logger.info(f"Processed: {len(records)}/{len(queries)} queries")
-            logger.info(f"Average overall score: {avg_score:.2f}/5.00")
+            logger.info(f"Average FQI score: {avg_score:.2f}/5.00")
             logger.info(f"Results saved to: {config.report.out_dir}")
             logger.info("=" * 60)
 

@@ -21,27 +21,30 @@ class Industry(str, Enum):
 
 @dataclass
 class IndustryBenchmark:
-    """Benchmark scores for an industry."""
+    """Benchmark scores for an industry using FQI dimensions."""
 
     industry: Industry
     name: str
     description: str
 
-    # Average scores by dimension (0-5 scale)
-    relevance_avg: float
-    relevance_top_quartile: float
+    # FQI dimension averages and top quartiles (0-5 scale)
+    query_understanding_avg: float
+    query_understanding_top_quartile: float
 
-    diversity_avg: float
-    diversity_top_quartile: float
+    results_relevance_avg: float
+    results_relevance_top_quartile: float
 
-    result_quality_avg: float
-    result_quality_top_quartile: float
+    result_presentation_avg: float
+    result_presentation_top_quartile: float
 
-    navigability_avg: float
-    navigability_top_quartile: float
+    advanced_features_avg: float
+    advanced_features_top_quartile: float
 
-    overall_avg: float
-    overall_top_quartile: float
+    error_handling_avg: float
+    error_handling_top_quartile: float
+
+    fqi_avg: float
+    fqi_top_quartile: float
 
     # Key metrics
     zero_result_rate_avg: float  # Percentage
@@ -63,11 +66,27 @@ class IndustryBenchmark:
         comparisons = {}
 
         dimension_map = {
-            "relevance": (self.relevance_avg, self.relevance_top_quartile),
-            "diversity": (self.diversity_avg, self.diversity_top_quartile),
-            "result_quality": (self.result_quality_avg, self.result_quality_top_quartile),
-            "navigability": (self.navigability_avg, self.navigability_top_quartile),
-            "overall": (self.overall_avg, self.overall_top_quartile),
+            "query_understanding": (
+                self.query_understanding_avg,
+                self.query_understanding_top_quartile,
+            ),
+            "results_relevance": (
+                self.results_relevance_avg,
+                self.results_relevance_top_quartile,
+            ),
+            "result_presentation": (
+                self.result_presentation_avg,
+                self.result_presentation_top_quartile,
+            ),
+            "advanced_features": (
+                self.advanced_features_avg,
+                self.advanced_features_top_quartile,
+            ),
+            "error_handling": (
+                self.error_handling_avg,
+                self.error_handling_top_quartile,
+            ),
+            "fqi": (self.fqi_avg, self.fqi_top_quartile),
         }
 
         for metric, (avg, top) in dimension_map.items():
@@ -116,16 +135,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.ECOMMERCE,
         name="E-commerce (General)",
         description="General e-commerce sites including multi-category retailers",
-        relevance_avg=3.2,
-        relevance_top_quartile=4.1,
-        diversity_avg=3.0,
-        diversity_top_quartile=3.8,
-        result_quality_avg=3.3,
-        result_quality_top_quartile=4.2,
-        navigability_avg=3.4,
-        navigability_top_quartile=4.3,
-        overall_avg=3.2,
-        overall_top_quartile=4.1,
+        query_understanding_avg=3.0,
+        query_understanding_top_quartile=3.9,
+        results_relevance_avg=3.2,
+        results_relevance_top_quartile=4.1,
+        result_presentation_avg=3.2,
+        result_presentation_top_quartile=4.1,
+        advanced_features_avg=2.8,
+        advanced_features_top_quartile=3.7,
+        error_handling_avg=3.0,
+        error_handling_top_quartile=3.9,
+        fqi_avg=3.1,
+        fqi_top_quartile=4.0,
         zero_result_rate_avg=8.5,
         zero_result_rate_top_quartile=3.0,
         sample_size=150,
@@ -135,16 +156,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.FASHION,
         name="Fashion & Apparel",
         description="Fashion retailers, apparel, and accessories",
-        relevance_avg=3.4,
-        relevance_top_quartile=4.3,
-        diversity_avg=3.3,
-        diversity_top_quartile=4.1,
-        result_quality_avg=3.6,
-        result_quality_top_quartile=4.4,
-        navigability_avg=3.5,
-        navigability_top_quartile=4.4,
-        overall_avg=3.4,
-        overall_top_quartile=4.3,
+        query_understanding_avg=3.2,
+        query_understanding_top_quartile=4.1,
+        results_relevance_avg=3.4,
+        results_relevance_top_quartile=4.3,
+        result_presentation_avg=3.5,
+        result_presentation_top_quartile=4.3,
+        advanced_features_avg=3.0,
+        advanced_features_top_quartile=3.9,
+        error_handling_avg=3.1,
+        error_handling_top_quartile=4.0,
+        fqi_avg=3.3,
+        fqi_top_quartile=4.2,
         zero_result_rate_avg=6.5,
         zero_result_rate_top_quartile=2.5,
         sample_size=80,
@@ -154,16 +177,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.ELECTRONICS,
         name="Electronics & Technology",
         description="Consumer electronics, computers, and tech products",
-        relevance_avg=3.5,
-        relevance_top_quartile=4.4,
-        diversity_avg=2.9,
-        diversity_top_quartile=3.6,
-        result_quality_avg=3.4,
-        result_quality_top_quartile=4.3,
-        navigability_avg=3.3,
-        navigability_top_quartile=4.2,
-        overall_avg=3.3,
-        overall_top_quartile=4.2,
+        query_understanding_avg=3.3,
+        query_understanding_top_quartile=4.2,
+        results_relevance_avg=3.5,
+        results_relevance_top_quartile=4.4,
+        result_presentation_avg=3.2,
+        result_presentation_top_quartile=4.1,
+        advanced_features_avg=3.0,
+        advanced_features_top_quartile=3.8,
+        error_handling_avg=3.1,
+        error_handling_top_quartile=4.0,
+        fqi_avg=3.3,
+        fqi_top_quartile=4.2,
         zero_result_rate_avg=7.0,
         zero_result_rate_top_quartile=2.8,
         sample_size=65,
@@ -173,16 +198,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.MARKETPLACE,
         name="Marketplace",
         description="Multi-vendor marketplaces (Amazon, eBay style)",
-        relevance_avg=3.6,
-        relevance_top_quartile=4.5,
-        diversity_avg=3.5,
-        diversity_top_quartile=4.3,
-        result_quality_avg=3.2,
-        result_quality_top_quartile=4.0,
-        navigability_avg=3.6,
-        navigability_top_quartile=4.5,
-        overall_avg=3.5,
-        overall_top_quartile=4.4,
+        query_understanding_avg=3.5,
+        query_understanding_top_quartile=4.4,
+        results_relevance_avg=3.6,
+        results_relevance_top_quartile=4.5,
+        result_presentation_avg=3.4,
+        result_presentation_top_quartile=4.3,
+        advanced_features_avg=3.3,
+        advanced_features_top_quartile=4.2,
+        error_handling_avg=3.4,
+        error_handling_top_quartile=4.3,
+        fqi_avg=3.5,
+        fqi_top_quartile=4.4,
         zero_result_rate_avg=5.0,
         zero_result_rate_top_quartile=1.5,
         sample_size=40,
@@ -192,16 +219,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.TRAVEL,
         name="Travel & Hospitality",
         description="Travel booking, hotels, flights, and experiences",
-        relevance_avg=3.3,
-        relevance_top_quartile=4.2,
-        diversity_avg=3.1,
-        diversity_top_quartile=3.9,
-        result_quality_avg=3.4,
-        result_quality_top_quartile=4.3,
-        navigability_avg=3.2,
-        navigability_top_quartile=4.1,
-        overall_avg=3.2,
-        overall_top_quartile=4.1,
+        query_understanding_avg=3.1,
+        query_understanding_top_quartile=4.0,
+        results_relevance_avg=3.3,
+        results_relevance_top_quartile=4.2,
+        result_presentation_avg=3.2,
+        result_presentation_top_quartile=4.1,
+        advanced_features_avg=2.9,
+        advanced_features_top_quartile=3.8,
+        error_handling_avg=3.0,
+        error_handling_top_quartile=3.9,
+        fqi_avg=3.1,
+        fqi_top_quartile=4.0,
         zero_result_rate_avg=10.0,
         zero_result_rate_top_quartile=4.0,
         sample_size=55,
@@ -211,16 +240,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.MEDIA,
         name="Media & Content",
         description="News, entertainment, streaming, and content platforms",
-        relevance_avg=3.1,
-        relevance_top_quartile=4.0,
-        diversity_avg=3.2,
-        diversity_top_quartile=4.0,
-        result_quality_avg=3.0,
-        result_quality_top_quartile=3.8,
-        navigability_avg=3.3,
-        navigability_top_quartile=4.2,
-        overall_avg=3.1,
-        overall_top_quartile=4.0,
+        query_understanding_avg=3.0,
+        query_understanding_top_quartile=3.9,
+        results_relevance_avg=3.1,
+        results_relevance_top_quartile=4.0,
+        result_presentation_avg=3.1,
+        result_presentation_top_quartile=3.9,
+        advanced_features_avg=2.8,
+        advanced_features_top_quartile=3.6,
+        error_handling_avg=2.9,
+        error_handling_top_quartile=3.8,
+        fqi_avg=3.0,
+        fqi_top_quartile=3.9,
         zero_result_rate_avg=12.0,
         zero_result_rate_top_quartile=5.0,
         sample_size=45,
@@ -230,16 +261,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.B2B,
         name="B2B & Industrial",
         description="Business-to-business commerce and industrial supplies",
-        relevance_avg=2.9,
-        relevance_top_quartile=3.7,
-        diversity_avg=2.6,
-        diversity_top_quartile=3.3,
-        result_quality_avg=2.8,
-        result_quality_top_quartile=3.6,
-        navigability_avg=2.7,
-        navigability_top_quartile=3.5,
-        overall_avg=2.8,
-        overall_top_quartile=3.5,
+        query_understanding_avg=2.7,
+        query_understanding_top_quartile=3.5,
+        results_relevance_avg=2.9,
+        results_relevance_top_quartile=3.7,
+        result_presentation_avg=2.6,
+        result_presentation_top_quartile=3.4,
+        advanced_features_avg=2.3,
+        advanced_features_top_quartile=3.1,
+        error_handling_avg=2.5,
+        error_handling_top_quartile=3.3,
+        fqi_avg=2.7,
+        fqi_top_quartile=3.5,
         zero_result_rate_avg=15.0,
         zero_result_rate_top_quartile=7.0,
         sample_size=35,
@@ -249,16 +282,18 @@ INDUSTRY_BENCHMARKS: dict[Industry, IndustryBenchmark] = {
         industry=Industry.GENERAL,
         name="General (All Industries)",
         description="Cross-industry average benchmark",
-        relevance_avg=3.2,
-        relevance_top_quartile=4.1,
-        diversity_avg=3.0,
-        diversity_top_quartile=3.8,
-        result_quality_avg=3.2,
-        result_quality_top_quartile=4.0,
-        navigability_avg=3.2,
-        navigability_top_quartile=4.1,
-        overall_avg=3.2,
-        overall_top_quartile=4.0,
+        query_understanding_avg=3.0,
+        query_understanding_top_quartile=3.9,
+        results_relevance_avg=3.2,
+        results_relevance_top_quartile=4.1,
+        result_presentation_avg=3.1,
+        result_presentation_top_quartile=4.0,
+        advanced_features_avg=2.8,
+        advanced_features_top_quartile=3.7,
+        error_handling_avg=2.9,
+        error_handling_top_quartile=3.8,
+        fqi_avg=3.1,
+        fqi_top_quartile=4.0,
         zero_result_rate_avg=9.0,
         zero_result_rate_top_quartile=3.5,
         sample_size=500,

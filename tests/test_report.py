@@ -9,15 +9,13 @@ import pytest
 from agentic_search_audit.analysis.maturity import DimensionScore, MaturityLevel, MaturityReport
 from agentic_search_audit.analysis.uplift_planner import (
     Category,
-    Effort,
-    Priority,
-    Recommendation,
-    UpliftPlan,
+    Finding,
+    FindingsReport,
+    Severity,
 )
 from agentic_search_audit.core.types import (
     AuditConfig,
     AuditRecord,
-    JudgeScore,
     PageArtifacts,
     Query,
     QueryOrigin,
@@ -26,6 +24,7 @@ from agentic_search_audit.core.types import (
     SiteConfig,
 )
 from agentic_search_audit.report.generator import ReportGenerator, escape_html
+from tests.helpers import make_fqi_judge_score
 
 
 @pytest.fixture
@@ -62,17 +61,16 @@ def sample_audit_record():
         screenshot_path="/tmp/test.png",
     )
 
-    judge = JudgeScore(
-        overall=4.5,
-        relevance=4.8,
-        diversity=4.2,
-        result_quality=4.6,
-        navigability=4.0,
+    judge = make_fqi_judge_score(
+        query_understanding_score=4.5,
+        results_relevance_score=4.5,
+        result_presentation_score=4.5,
+        advanced_features_score=4.5,
+        error_handling_score=4.5,
         rationale="Excellent search results with high relevance",
         issues=["Some minor duplicates"],
         improvements=["Add more filter options"],
         evidence=[{"rank": 1, "reason": "Perfect match for query"}],
-        schema_version="1.0",
     )
 
     return AuditRecord(
@@ -135,7 +133,7 @@ def test_generate_markdown_report(audit_config, temp_run_dir, sample_audit_recor
     content = report_path.read_text()
     assert "Search Quality Audit Report" in content
     assert "running shoes" in content
-    assert "4.5" in content  # Overall score
+    assert "4.50" in content  # FQI score (all dimensions at 4.5)
     assert "Nike Air Max" in content
 
 
@@ -159,7 +157,17 @@ def test_generate_html_report(audit_config, temp_run_dir, sample_audit_record):
     assert "<!DOCTYPE html>" in content
     assert "Search Quality Audit Report" in content
     assert "running shoes" in content
-    assert "4.5" in content
+    assert "4.50" in content  # FQI score (all dimensions at 4.5)
+
+    # New UX elements
+    assert "verdict-bar" in content
+    assert "dim-bar" in content
+    assert "dim-fill" in content
+    assert "querySort" in content
+    assert "sortQueries" in content
+    assert "analysis-section" in content
+    assert "screenshot-toggle" in content
+    assert "data-index" in content
 
 
 @pytest.mark.unit
@@ -189,6 +197,7 @@ def test_get_score_class(audit_config, temp_run_dir):
     assert generator._get_score_class(4.5) == "score-excellent"
     assert generator._get_score_class(3.5) == "score-good"
     assert generator._get_score_class(2.5) == "score-fair"
+    assert generator._get_score_class(1.5) == "score-fair"
     assert generator._get_score_class(1.0) == "score-poor"
 
 
@@ -222,8 +231,8 @@ def sample_maturity_report():
         overall_level=MaturityLevel.L3_ENHANCED,
         overall_score=3.5,
         dimensions={
-            "relevance": DimensionScore(
-                name="Relevance Quality",
+            "results_relevance": DimensionScore(
+                name="Results Relevance",
                 score=4.0,
                 level=MaturityLevel.L4_INTELLIGENT,
                 findings=["Strong relevance"],
@@ -259,70 +268,58 @@ def sample_maturity_report():
             ),
         },
         executive_summary="The site search is at Level 3 maturity with a score of 3.5/5.0.",
-        strengths=["Relevance Quality: Excellent performance (score: 4.0)"],
+        strengths=["Results Relevance: Excellent performance (score: 4.0)"],
         weaknesses=["Advanced Features: Needs improvement (score: 2.5)"],
         priority_improvements=["Add autocomplete", "Implement synonym expansion"],
     )
 
 
 @pytest.fixture
-def sample_uplift_plan():
-    """Create a sample uplift plan for testing."""
-    recommendations = [
-        Recommendation(
-            id="rel_001",
-            title="Improve Search Relevance",
-            description="Enhance the search ranking algorithm.",
+def sample_findings_report():
+    """Create a sample findings report for testing."""
+    findings = [
+        Finding(
+            id="F001",
+            observation="Search results are not sufficiently relevant to user queries",
+            affected_queries=8,
+            total_queries=10,
+            severity=Severity.CRITICAL,
+            affected_dimension="results_relevance",
+            avg_dimension_score=1.8,
+            example_queries=["running shoes", "blue jacket", "winter coat"],
+            suggestion="Consider reviewing the search ranking algorithm",
             category=Category.RELEVANCE,
-            priority=Priority.CRITICAL,
-            effort=Effort.SIGNIFICANT,
-            expected_uplift_pct=15.0,
-            confidence=0.8,
-            metrics_to_track=["CTR", "Add-to-cart rate"],
         ),
-        Recommendation(
-            id="ux_001",
-            title="Add Filters",
-            description="Implement faceted navigation with filters.",
+        Finding(
+            id="F002",
+            observation="Search does not handle misspellings or typos gracefully",
+            affected_queries=5,
+            total_queries=10,
+            severity=Severity.HIGH,
+            affected_dimension="query_understanding",
+            avg_dimension_score=2.5,
+            example_queries=["runing shoes", "sneekers"],
+            suggestion="Consider adding typo tolerance or spell correction",
+            category=Category.RELEVANCE,
+        ),
+        Finding(
+            id="F003",
+            observation="Limited or missing search result filtering",
+            affected_queries=3,
+            total_queries=10,
+            severity=Severity.MEDIUM,
+            affected_dimension="result_presentation",
+            avg_dimension_score=3.2,
+            example_queries=["jackets"],
+            suggestion="Consider adding faceted navigation",
             category=Category.UX,
-            priority=Priority.HIGH,
-            effort=Effort.MODERATE,
-            expected_uplift_pct=10.0,
-            confidence=0.75,
-            metrics_to_track=["Filter usage", "Conversion rate"],
-        ),
-        Recommendation(
-            id="tech_001",
-            title="Implement Caching",
-            description="Cache popular search results.",
-            category=Category.TECHNICAL,
-            priority=Priority.MEDIUM,
-            effort=Effort.QUICK_WIN,
-            expected_uplift_pct=3.0,
-            confidence=0.9,
-            metrics_to_track=["Response time", "Cache hit rate"],
         ),
     ]
-    return UpliftPlan(
-        recommendations=recommendations,
-        total_potential_uplift=25.0,
-        quick_wins=[recommendations[2]],
-        strategic_initiatives=[recommendations[0]],
-        summary="We identified 3 improvement opportunities with 25% total uplift potential.",
-        phases=[
-            {
-                "name": "Phase 1: Quick Wins",
-                "duration": "0-4 weeks",
-                "recommendations": ["tech_001"],
-                "expected_uplift": 3.0,
-            },
-            {
-                "name": "Phase 2: Core Improvements",
-                "duration": "1-3 months",
-                "recommendations": ["ux_001"],
-                "expected_uplift": 10.0,
-            },
-        ],
+    return FindingsReport(
+        findings=findings,
+        scope_limitations="This audit evaluates search quality from a frontend user perspective only.",
+        total_queries_analyzed=10,
+        summary="Analysis of 10 queries identified 3 search quality findings.",
     )
 
 
@@ -352,7 +349,7 @@ class TestMaturitySectionReports:
 
         # Check dimension table
         assert "### Dimension Scores" in content
-        assert "Relevance Quality" in content
+        assert "Results Relevance" in content
         assert "4.00" in content  # Relevance score
 
         # Check strengths and weaknesses
@@ -383,7 +380,7 @@ class TestMaturitySectionReports:
 
         # Check dimension grid
         assert "dimension-grid" in content
-        assert "Relevance Quality" in content
+        assert "Results Relevance" in content
 
     @pytest.mark.unit
     def test_json_maturity_section(
@@ -400,8 +397,8 @@ class TestMaturitySectionReports:
         assert content["maturity"]["overall_level"] == "L3_ENHANCED"
         assert content["maturity"]["overall_score"] == 3.5
         assert "dimensions" in content["maturity"]
-        assert "relevance" in content["maturity"]["dimensions"]
-        assert content["maturity"]["dimensions"]["relevance"]["score"] == 4.0
+        assert "results_relevance" in content["maturity"]["dimensions"]
+        assert content["maturity"]["dimensions"]["results_relevance"]["score"] == 4.0
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -439,103 +436,277 @@ class TestMaturitySectionReports:
         assert css_class in content
 
 
-class TestUpliftSectionReports:
-    """Tests for uplift section in reports."""
+class TestFindingsSectionReports:
+    """Tests for findings section in reports."""
 
     @pytest.mark.unit
-    def test_markdown_uplift_section(
-        self, audit_config, temp_run_dir, sample_audit_record, sample_uplift_plan
+    def test_markdown_findings_section(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
     ):
-        """Test markdown uplift section contains expected elements."""
+        """Test markdown findings section contains expected elements."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
         screenshot_path.write_text("dummy")
         sample_audit_record.page.screenshot_path = str(screenshot_path)
 
-        generator._generate_markdown([sample_audit_record], None, sample_uplift_plan)
+        generator._generate_markdown([sample_audit_record], None, sample_findings_report)
 
         content = (temp_run_dir / "report.md").read_text()
 
         # Check header and summary
-        assert "## Conversion Uplift Opportunities" in content
-        assert "25.0%" in content  # Total uplift
+        assert "## Search Quality Issues" in content
+        assert "3 search quality findings" in content
 
-        # Check quick wins section
-        assert "### Quick Wins" in content
-        assert "Implement Caching" in content
+        # Check scope & limitations
+        assert "### Scope & Limitations" in content
+        assert "frontend" in content
 
-        # Check recommendations table
-        assert "### All Recommendations" in content
-        assert "CRITICAL" in content
-        assert "Improve Search Relevance" in content
+        # Check severity headings
+        assert "### Critical Severity" in content
+
+        # Check finding content
+        assert "not sufficiently relevant" in content
+        assert "8/10 queries" in content
 
     @pytest.mark.unit
-    def test_html_uplift_section(
-        self, audit_config, temp_run_dir, sample_audit_record, sample_uplift_plan
+    def test_html_findings_section(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
     ):
-        """Test HTML uplift section contains badges and cards."""
+        """Test HTML findings section contains badges and cards."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
         screenshot_path.write_text("dummy")
         sample_audit_record.page.screenshot_path = str(screenshot_path)
 
-        generator._generate_html([sample_audit_record], None, sample_uplift_plan)
+        generator._generate_html([sample_audit_record], None, sample_findings_report)
 
         content = (temp_run_dir / "report.html").read_text()
 
-        # Check uplift summary box
-        assert "uplift-summary" in content
-        assert "25.0%" in content
+        # Check findings summary box
+        assert "findings-summary" in content
+        assert "Search Quality Issues" in content
 
-        # Check priority badges
-        assert "priority-badge" in content
-        assert "priority-critical" in content
-        assert "priority-high" in content
+        # Check severity badges
+        assert "severity-badge" in content
+        assert "severity-critical" in content
+        assert "severity-high" in content
 
-        # Check recommendation cards
-        assert "recommendation-card" in content
-        assert "Improve Search Relevance" in content
+        # Check finding cards
+        assert "finding-card" in content
+        assert "not sufficiently relevant" in content
+
+        # Check scope limitations
+        assert "scope-limitations" in content
 
     @pytest.mark.unit
-    def test_uplift_with_phases(
-        self, audit_config, temp_run_dir, sample_audit_record, sample_uplift_plan
+    def test_html_findings_query_counts(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
     ):
-        """Test phase timeline is rendered."""
+        """Test that query counts appear in findings."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
         screenshot_path.write_text("dummy")
         sample_audit_record.page.screenshot_path = str(screenshot_path)
 
-        generator._generate_html([sample_audit_record], None, sample_uplift_plan)
+        generator._generate_html([sample_audit_record], None, sample_findings_report)
 
         content = (temp_run_dir / "report.html").read_text()
 
-        # Check phases section
-        assert "Implementation Roadmap" in content
-        assert "Phase 1: Quick Wins" in content
-        assert "0-4 weeks" in content
-        assert "phase-timeline" in content
-        assert "phase-item" in content
+        # Check query count format
+        assert "8/10 queries" in content
+        assert "5/10 queries" in content
 
     @pytest.mark.unit
-    def test_json_uplift_section(
-        self, audit_config, temp_run_dir, sample_audit_record, sample_uplift_plan
+    def test_json_findings_section(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
     ):
-        """Test JSON report contains serialized uplift data."""
+        """Test JSON report contains serialized findings data."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
-        generator._generate_json([sample_audit_record], None, sample_uplift_plan)
+        generator._generate_json([sample_audit_record], None, sample_findings_report)
 
         content = json.loads((temp_run_dir / "audit.json").read_text())
 
-        assert "uplift" in content
-        assert content["uplift"]["total_potential_uplift"] == 25.0
-        assert len(content["uplift"]["recommendations"]) == 3
-        assert content["uplift"]["recommendations"][0]["title"] == "Improve Search Relevance"
-        assert "phases" in content["uplift"]
+        assert "findings" in content
+        assert content["findings"]["total_queries_analyzed"] == 10
+        assert len(content["findings"]["items"]) == 3
+        assert content["findings"]["items"][0]["severity"] == "critical"
+        assert content["findings"]["items"][0]["affected_queries"] == 8
+        assert "scope_limitations" in content["findings"]
+
+
+# ============================================================================
+# HTML UX Improvement Tests
+# ============================================================================
+
+
+class TestHtmlUxImprovements:
+    """Tests for HTML report UX improvements (verdict bar, sort, layout)."""
+
+    @pytest.mark.unit
+    def test_verdict_bar_dimensions(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test verdict bar renders all 5 dimension bars."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        # All 5 dimension labels should appear in dim-bar elements
+        for label in ["QU", "RR", "RP", "AF", "EH"]:
+            assert f'<span class="dim-label">{label}</span>' in content
+
+    @pytest.mark.unit
+    def test_weak_dimension_warning(self, audit_config, temp_run_dir):
+        """Test weak dimension warning badge appears for low scores."""
+        query = Query(id="q001", text="test query", lang="en", origin=QueryOrigin.PREDEFINED)
+        items = [ResultItem(rank=1, title="Product", url="https://example.com")]
+        page = PageArtifacts(
+            url="https://example.com",
+            final_url="https://example.com/search",
+            html_path="/tmp/test.html",
+            screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
+        )
+        # Two dimensions below 3.0
+        judge = make_fqi_judge_score(
+            query_understanding_score=2.0,
+            results_relevance_score=2.5,
+            result_presentation_score=4.0,
+            advanced_features_score=4.0,
+            error_handling_score=4.0,
+            rationale="Test",
+        )
+        record = AuditRecord(
+            site="https://example.com", query=query, items=items, page=page, judge=judge
+        )
+
+        (temp_run_dir / "screenshots" / "test.png").write_text("dummy")
+
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        generator._generate_html([record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        assert "summary-warn" in content
+        assert "2 weak" in content
+        assert "dim-warn" in content
+
+    @pytest.mark.unit
+    def test_no_weak_warning_when_all_high(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test no weak warning when all dimensions >= 3.0."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        # The CSS class exists in stylesheet, but no actual warning badge in HTML body
+        assert "\u26a0" not in content  # No warning emoji in output
+
+    @pytest.mark.unit
+    def test_results_before_analysis(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test results table appears before analysis section in HTML."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        # Search within query content area (after </style>) to avoid matching CSS
+        body_content = content[content.index("</style>") :]
+        results_pos = body_content.index("results-table")
+        analysis_pos = body_content.index("analysis-section")
+        assert results_pos < analysis_pos
+
+    @pytest.mark.unit
+    def test_screenshot_in_collapsible(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test screenshot is wrapped in collapsible details element."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        assert "screenshot-toggle" in content
+        # Screenshot img should be inside a <details> element
+        assert '<details class="screenshot-toggle">' in content
+
+    @pytest.mark.unit
+    def test_sort_dropdown_options(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test sort dropdown has all expected options."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        assert 'value="original"' in content
+        assert 'value="alpha-asc"' in content
+        assert 'value="alpha-desc"' in content
+        assert 'value="score-asc"' in content
+        assert 'value="score-desc"' in content
+
+    @pytest.mark.unit
+    def test_fill_class_helper(self, audit_config, temp_run_dir):
+        """Test _get_fill_class returns correct classes."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        assert generator._get_fill_class(4.5) == "fill-excellent"
+        assert generator._get_fill_class(3.5) == "fill-good"
+        assert generator._get_fill_class(2.5) == "fill-fair"
+        assert generator._get_fill_class(1.5) == "fill-poor"
+
+    @pytest.mark.unit
+    def test_executive_summary_preferred_over_rationale(self, audit_config, temp_run_dir):
+        """Test executive summary is shown instead of rationale when available."""
+        query = Query(id="q001", text="test", lang="en", origin=QueryOrigin.PREDEFINED)
+        items = [ResultItem(rank=1, title="Product", url="https://example.com")]
+        page = PageArtifacts(
+            url="https://example.com",
+            final_url="https://example.com/search",
+            html_path="/tmp/test.html",
+            screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
+        )
+        judge = make_fqi_judge_score(
+            rationale="This is the rationale text",
+            executive_summary="This is the executive summary text",
+        )
+        record = AuditRecord(
+            site="https://example.com", query=query, items=items, page=page, judge=judge
+        )
+
+        (temp_run_dir / "screenshots" / "test.png").write_text("dummy")
+
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        generator._generate_html([record])
+        content = (temp_run_dir / "report.html").read_text()
+
+        # Inside analysis section, executive summary should appear
+        assert "This is the executive summary text" in content
+        # Rationale should NOT appear in the analysis section
+        # Search within HTML body (after </style>) to avoid CSS definitions
+        body_content = content[content.index("</style>") :]
+        analysis_start = body_content.index("analysis-section")
+        analysis_section = body_content[analysis_start : analysis_start + 500]
+        assert "This is the executive summary text" in analysis_section
+        assert "This is the rationale text" not in analysis_section
 
 
 # ============================================================================
@@ -552,7 +723,7 @@ class TestReportEdgeCases:
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         # Should not raise exception
-        generator.generate_reports([], include_maturity=False, include_uplift=False)
+        generator.generate_reports([], include_maturity=False, include_findings=False)
 
         # Files should still be created (with minimal content)
         assert (temp_run_dir / "report.md").exists()
@@ -578,18 +749,7 @@ class TestReportEdgeCases:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="Test",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="Test")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -620,18 +780,7 @@ class TestReportEdgeCases:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="Test rationale",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="Test rationale")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -669,18 +818,7 @@ class TestReportEdgeCases:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="テスト rationale",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="テスト rationale")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -717,17 +855,13 @@ class TestReportEdgeCases:
                 html_path="/tmp/test.html",
                 screenshot_path=str(temp_run_dir / "screenshots" / f"q{i:03d}.png"),
             )
-            judge = JudgeScore(
-                overall=3.0 + (i % 20) / 10,
-                relevance=3.5,
-                diversity=3.0,
-                result_quality=3.5,
-                navigability=3.0,
+            judge = make_fqi_judge_score(
+                query_understanding_score=3.0 + (i % 20) / 10,
+                results_relevance_score=3.5,
+                result_presentation_score=3.0,
+                advanced_features_score=3.5,
+                error_handling_score=3.0,
                 rationale=f"Rationale for query {i}",
-                issues=[],
-                improvements=[],
-                evidence=[],
-                schema_version="1.0",
             )
             records.append(
                 AuditRecord(
@@ -741,7 +875,7 @@ class TestReportEdgeCases:
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         # Should complete without timeout
-        generator.generate_reports(records, include_maturity=False, include_uplift=False)
+        generator.generate_reports(records, include_maturity=False, include_findings=False)
 
         content = (temp_run_dir / "report.md").read_text()
         assert "100" in content  # Total queries
@@ -782,18 +916,7 @@ class TestXSSPrevention:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="Test",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="Test")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -825,17 +948,11 @@ class TestXSSPrevention:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
+        judge = make_fqi_judge_score(
             rationale=malicious_rationale,
+            executive_summary="",
             issues=["<script>malicious</script>"],
             improvements=["<a onclick='evil()'>click me</a>"],
-            evidence=[],
-            schema_version="1.0",
         )
 
         record = AuditRecord(
@@ -877,18 +994,7 @@ class TestXSSPrevention:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="Test",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="Test")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -922,18 +1028,7 @@ class TestXSSPrevention:
             html_path="/tmp/test.html",
             screenshot_path=str(temp_run_dir / "screenshots" / "test.png"),
         )
-        judge = JudgeScore(
-            overall=3.0,
-            relevance=3.0,
-            diversity=3.0,
-            result_quality=3.0,
-            navigability=3.0,
-            rationale="Test",
-            issues=[],
-            improvements=[],
-            evidence=[],
-            schema_version="1.0",
-        )
+        judge = make_fqi_judge_score(rationale="Test")
 
         record = AuditRecord(
             site="https://example.com", query=query, items=items, page=page, judge=judge
@@ -960,30 +1055,30 @@ class TestCSVExport:
     """Tests for CSV export functionality."""
 
     @pytest.mark.unit
-    def test_csv_export_creates_file(
-        self, audit_config, temp_run_dir, sample_audit_record, sample_uplift_plan
-    ):
-        """Test that CSV file is created when uplift plan is available."""
+    def test_csv_export_creates_file(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test that CSV file is created when findings are available."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
         screenshot_path.write_text("dummy")
         sample_audit_record.page.screenshot_path = str(screenshot_path)
 
+        # Need records with issues so findings are generated
+        sample_audit_record.judge.issues = ["Typo not handled", "No filter options"]
         generator.generate_reports(
-            [sample_audit_record], include_maturity=False, include_uplift=True
+            [sample_audit_record], include_maturity=False, include_findings=True
         )
 
-        csv_path = temp_run_dir / "uplift_recommendations.csv"
+        csv_path = temp_run_dir / "findings.csv"
         assert csv_path.exists()
 
     @pytest.mark.unit
-    def test_csv_export_headers(self, temp_run_dir, sample_uplift_plan):
+    def test_csv_export_headers(self, sample_findings_report):
         """Test CSV has expected column headers."""
-        from agentic_search_audit.analysis.uplift_planner import UpliftPlanner
+        from agentic_search_audit.analysis.uplift_planner import FindingsAnalyzer
 
-        planner = UpliftPlanner()
-        csv_content = planner.export_to_csv(sample_uplift_plan)
+        analyzer = FindingsAnalyzer()
+        csv_content = analyzer.export_to_csv(sample_findings_report)
 
         lines = csv_content.strip().split("\n")
         header = lines[0]
@@ -991,53 +1086,49 @@ class TestCSVExport:
         # Check all expected columns
         expected_headers = [
             "ID",
-            "Title",
-            "Description",
+            "Observation",
+            "Affected Queries",
+            "Severity",
+            "Dimension",
             "Category",
-            "Priority",
-            "Effort",
-            "Expected Uplift %",
-            "Confidence",
-            "ROI Score",
-            "Metrics to Track",
+            "Suggestion",
         ]
         for h in expected_headers:
             assert h in header
 
     @pytest.mark.unit
-    def test_csv_export_special_chars(self, temp_run_dir):
+    def test_csv_export_special_chars(self):
         """Test CSV properly escapes commas and quotes."""
-        from agentic_search_audit.analysis.uplift_planner import UpliftPlanner
+        from agentic_search_audit.analysis.uplift_planner import FindingsAnalyzer
 
-        recommendation = Recommendation(
-            id="test_001",
-            title='Title with "quotes" and, commas',
-            description="Description with\nnewline",
+        finding = Finding(
+            id="F001",
+            observation='Observation with "quotes" and, commas',
+            affected_queries=5,
+            total_queries=10,
+            severity=Severity.HIGH,
+            affected_dimension="results_relevance",
+            avg_dimension_score=2.5,
+            example_queries=["query 1, with comma", "query 2"],
+            suggestion="Suggestion with\nnewline",
             category=Category.RELEVANCE,
-            priority=Priority.HIGH,
-            effort=Effort.MODERATE,
-            expected_uplift_pct=10.0,
-            confidence=0.8,
-            metrics_to_track=["metric1, metric2", "metric3"],
         )
 
-        plan = UpliftPlan(
-            recommendations=[recommendation],
-            total_potential_uplift=10.0,
-            quick_wins=[],
-            strategic_initiatives=[],
+        report = FindingsReport(
+            findings=[finding],
+            scope_limitations="Test",
+            total_queries_analyzed=10,
             summary="Test",
-            phases=[],
         )
 
-        planner = UpliftPlanner()
-        csv_content = planner.export_to_csv(plan)
+        analyzer = FindingsAnalyzer()
+        csv_content = analyzer.export_to_csv(report)
 
         # CSV should be parseable
-        import csv
+        import csv as csv_mod
         import io
 
-        reader = csv.reader(io.StringIO(csv_content))
+        reader = csv_mod.reader(io.StringIO(csv_content))
         rows = list(reader)
 
         # Header + 1 data row
@@ -1045,6 +1136,6 @@ class TestCSVExport:
 
         # Data should be properly escaped
         data_row = rows[1]
-        assert data_row[0] == "test_001"
+        assert data_row[0] == "F001"
         assert '"quotes"' in data_row[1]
         assert "commas" in data_row[1]

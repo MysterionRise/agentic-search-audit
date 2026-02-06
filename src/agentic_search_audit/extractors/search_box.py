@@ -180,8 +180,27 @@ class SearchBoxFinder:
             # Replace backslashes first, then quotes
             escaped_selector = safe_selector.replace("\\", "\\\\").replace('"', '\\"')
 
-            # Clear any existing text
+            # Clear any existing text using multiple approaches for reliability
+            # 1. Set value to empty (works for simple inputs)
             await self.client.evaluate(f'document.querySelector("{escaped_selector}").value = ""')
+            # 2. Also dispatch input event for React/Angular frameworks
+            await self.client.evaluate(f"""
+                (function() {{
+                    const input = document.querySelector("{escaped_selector}");
+                    if (input) {{
+                        input.value = "";
+                        input.dispatchEvent(new Event("input", {{ bubbles: true }}));
+                        input.dispatchEvent(new Event("change", {{ bubbles: true }}));
+                    }}
+                }})()
+            """)
+            # 3. Click to focus and use keyboard shortcuts as fallback
+            await self.client.click(safe_selector)
+            await asyncio.sleep(0.2)
+            # Select all and delete using keyboard
+            await self.client.evaluate(f'document.querySelector("{escaped_selector}").select()')
+            await self.client.press_key("Backspace")
+            await asyncio.sleep(0.2)
 
             # Type query
             await self.client.type_text(safe_selector, query_text, delay=30)

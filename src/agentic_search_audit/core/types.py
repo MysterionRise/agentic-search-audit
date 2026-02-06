@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 if TYPE_CHECKING:
     pass
@@ -120,21 +120,96 @@ class PageArtifacts(BaseModel):
     ts: datetime = Field(default_factory=datetime.now, description="Timestamp of capture")
 
 
-class JudgeScore(BaseModel):
-    """LLM judge scoring for a search query."""
+FQI_WEIGHTS: dict[str, float] = {
+    "query_understanding": 0.25,
+    "results_relevance": 0.25,
+    "result_presentation": 0.20,
+    "advanced_features": 0.20,
+    "error_handling": 0.10,
+}
 
-    overall: float = Field(ge=0, le=5, description="Overall satisfaction score (0-5)")
-    relevance: float = Field(ge=0, le=5, description="Relevance to query intent (0-5)")
-    diversity: float = Field(ge=0, le=5, description="Diversity of brands/categories/prices (0-5)")
-    result_quality: float = Field(ge=0, le=5, description="Quality of individual results (0-5)")
-    navigability: float = Field(ge=0, le=5, description="UI usability and filters (0-5)")
-    rationale: str = Field(description="Explanation of the overall score")
+FQI_HARD_CAP = 3.5
+
+FQI_BANDS: list[tuple[float, str]] = [
+    (4.5, "Excellent"),
+    (3.5, "Good"),
+    (2.5, "Weak"),
+    (1.5, "Critical"),
+    (0.0, "Broken"),
+]
+
+
+def compute_fqi(dimensions: dict[str, float]) -> float:
+    """Compute FQI score from dimension scores with hard cap rule.
+
+    Args:
+        dimensions: Dict mapping dimension name to score (0-5).
+
+    Returns:
+        FQI score (0-5), capped at 3.5 if query_understanding or results_relevance < 2.0.
+    """
+    fqi = sum(dimensions.get(dim, 0.0) * weight for dim, weight in FQI_WEIGHTS.items())
+    if (
+        dimensions.get("query_understanding", 0.0) < 2.0
+        or dimensions.get("results_relevance", 0.0) < 2.0
+    ):
+        fqi = min(fqi, FQI_HARD_CAP)
+    return round(fqi, 4)
+
+
+def get_fqi_band(score: float) -> str:
+    """Get FQI band label for a score."""
+    for threshold, label in FQI_BANDS:
+        if score >= threshold:
+            return label
+    return "Broken"
+
+
+class DimensionDiagnosis(BaseModel):
+    """Score and diagnosis for a single FQI dimension."""
+
+    score: float = Field(ge=0, le=5, description="Dimension score (0-5)")
+    diagnosis: str = Field(default="", description="Per-query diagnosis for this dimension")
+
+
+class JudgeScore(BaseModel):
+    """LLM judge scoring for a search query using the FQI model."""
+
+    query_understanding: DimensionDiagnosis = Field(
+        description="Query understanding score and diagnosis"
+    )
+    results_relevance: DimensionDiagnosis = Field(
+        description="Results relevance score and diagnosis"
+    )
+    result_presentation: DimensionDiagnosis = Field(
+        description="Result presentation & navigability score and diagnosis"
+    )
+    advanced_features: DimensionDiagnosis = Field(
+        description="Advanced features score and diagnosis"
+    )
+    error_handling: DimensionDiagnosis = Field(description="Error handling score and diagnosis")
+    fqi: float = Field(default=0.0, ge=0, le=5, description="Findability Quality Index (computed)")
+    rationale: str = Field(description="Explanation of the overall assessment")
+    executive_summary: str = Field(default="", description="Executive summary for this query")
     issues: list[str] = Field(default_factory=list, description="List of identified problems")
     improvements: list[str] = Field(default_factory=list, description="Suggested improvements")
     evidence: list[dict[str, Any]] = Field(
         default_factory=list, description="Per-result evidence with rank and reason"
     )
-    schema_version: str = Field(default="1.0", description="Schema version for compatibility")
+    schema_version: str = Field(default="2.1", description="Schema version for compatibility")
+
+    @model_validator(mode="after")
+    def _compute_fqi(self) -> "JudgeScore":
+        """Auto-compute FQI from dimension scores."""
+        dims = {
+            "query_understanding": self.query_understanding.score,
+            "results_relevance": self.results_relevance.score,
+            "result_presentation": self.result_presentation.score,
+            "advanced_features": self.advanced_features.score,
+            "error_handling": self.error_handling.score,
+        }
+        self.fqi = compute_fqi(dims)
+        return self
 
 
 class AuditRecord(BaseModel):
@@ -235,7 +310,7 @@ class LLMConfig(BaseModel):
         default="openai", description="LLM provider"
     )
     model: str = Field(default="gpt-4o-mini", description="Model identifier")
-    max_tokens: int = Field(default=800, description="Max tokens in response")
+    max_tokens: int = Field(default=2000, description="Max tokens in response")
     temperature: float = Field(default=0.2, description="Sampling temperature")
     system_prompt: str | None = Field(default=None, description="Custom system prompt override")
 

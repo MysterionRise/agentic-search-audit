@@ -1,269 +1,60 @@
-"""Tests for conversion uplift planner."""
+"""Tests for observation-based findings analyzer."""
 
+import csv
+import io
 from datetime import datetime
 
 import pytest
 
 from agentic_search_audit.analysis.uplift_planner import (
     Category,
-    Effort,
-    Priority,
-    Recommendation,
-    UpliftPlan,
-    UpliftPlanner,
+    Finding,
+    FindingsAnalyzer,
+    FindingsReport,
+    Severity,
+    calculate_severity,
 )
 from agentic_search_audit.core.types import (
     AuditRecord,
-    JudgeScore,
     PageArtifacts,
     Query,
     ResultItem,
 )
+from tests.helpers import make_fqi_judge_score
 
 
-class TestRecommendation:
-    """Tests for Recommendation dataclass."""
-
-    def test_creation(self):
-        """Test recommendation creation."""
-        rec = Recommendation(
-            id="test_001",
-            title="Test Recommendation",
-            description="A test recommendation",
-            category=Category.RELEVANCE,
-            priority=Priority.HIGH,
-            effort=Effort.MODERATE,
-            expected_uplift_pct=10.0,
-            confidence=0.8,
-        )
-
-        assert rec.id == "test_001"
-        assert rec.priority == Priority.HIGH
-        assert rec.expected_uplift_pct == 10.0
-
-    def test_roi_score_calculation(self):
-        """Test ROI score calculation."""
-        # Quick win with high uplift
-        quick_win = Recommendation(
-            id="qw_001",
-            title="Quick Win",
-            description="Quick win recommendation",
-            category=Category.UX,
-            priority=Priority.HIGH,
-            effort=Effort.QUICK_WIN,
-            expected_uplift_pct=5.0,
-            confidence=0.9,
-        )
-
-        # Major effort with higher uplift
-        major = Recommendation(
-            id="maj_001",
-            title="Major Initiative",
-            description="Major initiative",
-            category=Category.RELEVANCE,
-            priority=Priority.MEDIUM,
-            effort=Effort.MAJOR,
-            expected_uplift_pct=15.0,
-            confidence=0.7,
-        )
-
-        # Quick win should have higher ROI despite lower uplift
-        assert quick_win.roi_score > major.roi_score
-
-    def test_roi_score_formula(self):
-        """Test ROI score formula correctness."""
-        rec = Recommendation(
-            id="test",
-            title="Test",
-            description="Test",
-            category=Category.TECHNICAL,
-            priority=Priority.LOW,
-            effort=Effort.MODERATE,  # weight = 2
-            expected_uplift_pct=10.0,
-            confidence=0.5,
-        )
-
-        # ROI = (uplift * confidence) / effort_weight
-        # = (10.0 * 0.5) / 2 = 2.5
-        assert rec.roi_score == 2.5
+def _make_record(
+    query_text: str, issues: list[str], index: int = 0, **score_overrides
+) -> AuditRecord:
+    """Helper to create an AuditRecord with specified issues."""
+    return AuditRecord(
+        site="https://example.com",
+        query=Query(id=f"q{index}", text=query_text),
+        items=[ResultItem(rank=1, title="Product 1", price="$10")],
+        page=PageArtifacts(
+            url="https://example.com",
+            final_url="https://example.com/search",
+            html_path="/tmp/test.html",
+            screenshot_path="/tmp/test.png",
+            ts=datetime.now(),
+        ),
+        judge=make_fqi_judge_score(issues=issues, **score_overrides),
+    )
 
 
-class TestUpliftPlanner:
-    """Tests for UpliftPlanner class."""
+class TestSeverity:
+    """Tests for Severity enum."""
 
-    @pytest.fixture
-    def planner(self):
-        """Create planner instance."""
-        return UpliftPlanner()
+    def test_severity_values(self):
+        """Test severity string values."""
+        assert Severity.CRITICAL.value == "critical"
+        assert Severity.HIGH.value == "high"
+        assert Severity.MEDIUM.value == "medium"
+        assert Severity.LOW.value == "low"
 
-    @pytest.fixture
-    def sample_records(self):
-        """Create sample audit records."""
-        records = []
-        for i in range(5):
-            record = AuditRecord(
-                site="https://example.com",
-                query=Query(id=f"q{i}", text=f"test query {i}"),
-                items=[
-                    ResultItem(rank=1, title="Product 1", price="$10"),
-                    ResultItem(rank=2, title="Product 2", price="$20"),
-                ],
-                page=PageArtifacts(
-                    url="https://example.com",
-                    final_url="https://example.com/search",
-                    html_path="/tmp/test.html",
-                    screenshot_path="/tmp/test.png",
-                    ts=datetime.now(),
-                ),
-                judge=JudgeScore(
-                    overall=3.5,
-                    relevance=3.8,
-                    diversity=3.2,
-                    result_quality=3.6,
-                    navigability=3.4,
-                    rationale="Good search results",
-                    issues=["Minor issue"],
-                    improvements=["Add filters"],
-                ),
-            )
-            records.append(record)
-        return records
-
-    @pytest.fixture
-    def poor_records(self):
-        """Create records with poor performance."""
-        records = []
-        for i in range(5):
-            record = AuditRecord(
-                site="https://example.com",
-                query=Query(id=f"q{i}", text=f"test query {i}"),
-                items=(
-                    [] if i < 2 else [ResultItem(rank=1, title="Product")]
-                ),  # High zero-result rate
-                page=PageArtifacts(
-                    url="https://example.com",
-                    final_url="https://example.com/search",
-                    html_path="/tmp/test.html",
-                    screenshot_path="/tmp/test.png",
-                    ts=datetime.now(),
-                ),
-                judge=JudgeScore(
-                    overall=1.5,
-                    relevance=1.8,
-                    diversity=1.5,
-                    result_quality=1.6,
-                    navigability=1.4,
-                    rationale="Poor search results",
-                    issues=["Typo not handled", "No results", "Missing filters"],
-                    improvements=["Add spell correction", "Add filters"],
-                ),
-            )
-            records.append(record)
-        return records
-
-    def test_generate_plan_basic(self, planner, sample_records):
-        """Test basic plan generation."""
-        plan = planner.generate_plan(sample_records)
-
-        assert isinstance(plan, UpliftPlan)
-        assert len(plan.recommendations) > 0
-        assert plan.total_potential_uplift > 0
-        assert plan.summary != ""
-
-    def test_generate_plan_with_poor_records(self, planner, poor_records):
-        """Test plan generation with poor performance records."""
-        plan = planner.generate_plan(poor_records)
-
-        # Should identify critical issues
-        critical_recs = [r for r in plan.recommendations if r.priority == Priority.CRITICAL]
-        assert len(critical_recs) > 0
-
-        # Should have higher urgency recommendations
-        assert any(r.priority in [Priority.CRITICAL, Priority.HIGH] for r in plan.recommendations)
-
-    def test_recommendations_sorted_by_roi(self, planner, sample_records):
-        """Test that recommendations are sorted by ROI score."""
-        plan = planner.generate_plan(sample_records)
-
-        for i in range(len(plan.recommendations) - 1):
-            assert plan.recommendations[i].roi_score >= plan.recommendations[i + 1].roi_score
-
-    def test_quick_wins_identified(self, planner, sample_records):
-        """Test that quick wins are correctly identified."""
-        plan = planner.generate_plan(sample_records)
-
-        for rec in plan.quick_wins:
-            assert rec.effort == Effort.QUICK_WIN
-
-    def test_strategic_initiatives_identified(self, planner, sample_records):
-        """Test that strategic initiatives are correctly identified."""
-        plan = planner.generate_plan(sample_records)
-
-        for rec in plan.strategic_initiatives:
-            assert rec.effort in [Effort.SIGNIFICANT, Effort.MAJOR]
-
-    def test_phases_generated(self, planner, sample_records):
-        """Test that implementation phases are generated."""
-        plan = planner.generate_plan(sample_records)
-
-        assert isinstance(plan.phases, list)
-        # Should have at least some phases
-        if plan.recommendations:
-            assert len(plan.phases) > 0
-
-    def test_max_recommendations_limit(self, planner, sample_records):
-        """Test that max recommendations limit is respected."""
-        plan = planner.generate_plan(sample_records, max_recommendations=5)
-        assert len(plan.recommendations) <= 5
-
-    def test_total_uplift_capped(self, planner, sample_records):
-        """Test that total uplift is capped at reasonable maximum."""
-        plan = planner.generate_plan(sample_records)
-        assert plan.total_potential_uplift <= 50.0
-
-    def test_export_to_csv(self, planner, sample_records):
-        """Test CSV export functionality."""
-        plan = planner.generate_plan(sample_records)
-        csv_output = planner.export_to_csv(plan)
-
-        assert isinstance(csv_output, str)
-        assert "ID" in csv_output  # Header
-        assert "Title" in csv_output
-        assert "Priority" in csv_output
-
-        # Check that recommendations are in CSV
-        for rec in plan.recommendations:
-            assert rec.id in csv_output
-
-    def test_empty_records(self, planner):
-        """Test handling of empty records."""
-        plan = planner.generate_plan([])
-
-        assert isinstance(plan, UpliftPlan)
-        # Should still generate some general recommendations
-        assert plan.total_potential_uplift >= 0
-
-
-class TestPriority:
-    """Tests for Priority enum."""
-
-    def test_priority_values(self):
-        """Test priority string values."""
-        assert Priority.CRITICAL.value == "critical"
-        assert Priority.HIGH.value == "high"
-        assert Priority.MEDIUM.value == "medium"
-        assert Priority.LOW.value == "low"
-
-
-class TestEffort:
-    """Tests for Effort enum."""
-
-    def test_effort_values(self):
-        """Test effort string values."""
-        assert Effort.QUICK_WIN.value == "quick_win"
-        assert Effort.MODERATE.value == "moderate"
-        assert Effort.SIGNIFICANT.value == "significant"
-        assert Effort.MAJOR.value == "major"
+    def test_severity_is_str_enum(self):
+        """Test Severity is a string enum."""
+        assert isinstance(Severity.CRITICAL, str)
 
 
 class TestCategory:
@@ -277,3 +68,292 @@ class TestCategory:
         assert Category.TECHNICAL.value == "technical"
         assert Category.CONTENT.value == "content"
         assert Category.PERSONALIZATION.value == "personalization"
+
+
+class TestCalculateSeverity:
+    """Tests for calculate_severity function."""
+
+    def test_critical_high_pct(self):
+        """Test >75% affected -> CRITICAL."""
+        assert calculate_severity(80.0, 3.5) == Severity.CRITICAL
+
+    def test_critical_low_score(self):
+        """Test avg_dim_score <2.0 -> CRITICAL."""
+        assert calculate_severity(10.0, 1.5) == Severity.CRITICAL
+
+    def test_high_pct(self):
+        """Test >50% affected -> HIGH."""
+        assert calculate_severity(60.0, 3.5) == Severity.HIGH
+
+    def test_high_low_score(self):
+        """Test avg_dim_score <3.0 -> HIGH."""
+        assert calculate_severity(10.0, 2.5) == Severity.HIGH
+
+    def test_medium_pct(self):
+        """Test >25% affected -> MEDIUM."""
+        assert calculate_severity(30.0, 3.5) == Severity.MEDIUM
+
+    def test_low(self):
+        """Test <25% affected with good score -> LOW."""
+        assert calculate_severity(10.0, 4.0) == Severity.LOW
+
+    def test_boundary_75(self):
+        """Test exactly 75% is not CRITICAL (>75 required)."""
+        assert calculate_severity(75.0, 3.5) == Severity.HIGH
+
+    def test_boundary_50(self):
+        """Test exactly 50% is not HIGH (>50 required)."""
+        assert calculate_severity(50.0, 3.5) == Severity.MEDIUM
+
+    def test_boundary_25(self):
+        """Test exactly 25% is not MEDIUM (>25 required)."""
+        assert calculate_severity(25.0, 3.5) == Severity.LOW
+
+    def test_boundary_score_2(self):
+        """Test exactly 2.0 is not CRITICAL (<2.0 required)."""
+        assert calculate_severity(10.0, 2.0) == Severity.HIGH
+
+
+class TestFinding:
+    """Tests for Finding dataclass."""
+
+    def test_affected_pct(self):
+        """Test affected percentage calculation."""
+        finding = Finding(
+            id="F001",
+            observation="Test",
+            affected_queries=3,
+            total_queries=10,
+            severity=Severity.MEDIUM,
+            affected_dimension="results_relevance",
+            avg_dimension_score=3.0,
+        )
+        assert finding.affected_pct == 30.0
+
+    def test_affected_pct_zero_total(self):
+        """Test affected percentage with zero total queries."""
+        finding = Finding(
+            id="F001",
+            observation="Test",
+            affected_queries=0,
+            total_queries=0,
+            severity=Severity.LOW,
+            affected_dimension="results_relevance",
+            avg_dimension_score=0.0,
+        )
+        assert finding.affected_pct == 0.0
+
+
+class TestFindingsAnalyzer:
+    """Tests for FindingsAnalyzer class."""
+
+    @pytest.fixture
+    def analyzer(self):
+        """Create analyzer instance."""
+        return FindingsAnalyzer()
+
+    def test_empty_records(self, analyzer):
+        """Test analysis with no records."""
+        report = analyzer.analyze([])
+
+        assert isinstance(report, FindingsReport)
+        assert len(report.findings) == 0
+        assert report.total_queries_analyzed == 0
+        assert "No queries" in report.summary
+
+    def test_no_issues(self, analyzer):
+        """Test records with no issues produce no findings."""
+        records = [_make_record("running shoes", [], index=i) for i in range(5)]
+        report = analyzer.analyze(records)
+
+        assert len(report.findings) == 0
+        assert report.total_queries_analyzed == 5
+        assert "No recurring" in report.summary
+
+    def test_typo_pattern_detected(self, analyzer):
+        """Test that typo-related issues are grouped."""
+        records = [
+            _make_record("runing shoes", ["Typo not handled"], index=0),
+            _make_record("sneekers", ["Misspelling ignored"], index=1),
+            _make_record("jackets", [], index=2),
+        ]
+        report = analyzer.analyze(records)
+
+        typo_findings = [f for f in report.findings if "typo" in f.observation.lower()]
+        assert len(typo_findings) == 1
+        assert typo_findings[0].affected_queries == 2
+        assert typo_findings[0].total_queries == 3
+
+    def test_multiple_patterns_detected(self, analyzer):
+        """Test that multiple issue patterns are detected."""
+        records = [
+            _make_record(
+                "test query",
+                ["Typo not handled", "No filter options available"],
+                index=i,
+            )
+            for i in range(4)
+        ]
+        report = analyzer.analyze(records)
+
+        # Should have at least typo and filter findings
+        pattern_observations = {f.observation for f in report.findings}
+        assert any(
+            "typo" in obs.lower() or "misspell" in obs.lower() for obs in pattern_observations
+        )
+        assert any("filter" in obs.lower() for obs in pattern_observations)
+
+    def test_severity_ordering(self, analyzer):
+        """Test findings are sorted by severity then affected count."""
+        records = [
+            _make_record(
+                f"query {i}",
+                ["Irrelevant results", "Typo not handled"],
+                index=i,
+                query_understanding_score=1.5,
+                results_relevance_score=1.5,
+            )
+            for i in range(10)
+        ]
+        report = analyzer.analyze(records)
+
+        # Verify sorted by severity order
+        severity_order = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
+        last_severity_idx = -1
+        for finding in report.findings:
+            idx = severity_order.index(finding.severity)
+            assert idx >= last_severity_idx
+            last_severity_idx = idx
+
+    def test_example_queries_max_3(self, analyzer):
+        """Test that example queries are limited to 3."""
+        records = [_make_record(f"query {i}", ["Typo not handled"], index=i) for i in range(10)]
+        report = analyzer.analyze(records)
+
+        for finding in report.findings:
+            assert len(finding.example_queries) <= 3
+
+    def test_affected_count_accuracy(self, analyzer):
+        """Test that affected counts are deduplicated per query."""
+        # Same query index should only be counted once per pattern
+        # even if it has multiple issues matching the same pattern
+        records = [
+            _make_record(
+                "test query",
+                ["Typo not handled", "Spelling error detected"],
+                index=0,
+            ),
+            _make_record("another query", ["Typo ignored"], index=1),
+        ]
+        report = analyzer.analyze(records)
+
+        typo_findings = [f for f in report.findings if "typo" in f.observation.lower()]
+        assert len(typo_findings) == 1
+        # Query 0 matched twice but should count as 1
+        assert typo_findings[0].affected_queries == 2
+
+    def test_catchall_novel_issues(self, analyzer):
+        """Test that unmatched issues appearing in 2+ queries become findings."""
+        records = [
+            _make_record("query 1", ["custom unusual problem xyz"], index=0),
+            _make_record("query 2", ["custom unusual problem xyz"], index=1),
+            _make_record("query 3", ["one-off issue"], index=2),
+        ]
+        report = analyzer.analyze(records)
+
+        # The novel issue should appear as a finding
+        novel = [f for f in report.findings if "unusual" in f.observation.lower()]
+        assert len(novel) == 1
+        assert novel[0].affected_queries == 2
+
+        # The one-off issue should NOT appear
+        oneoff = [f for f in report.findings if "one-off" in f.observation.lower()]
+        assert len(oneoff) == 0
+
+    def test_scope_limitations_present(self, analyzer):
+        """Test that scope limitations are included."""
+        records = [_make_record("test", ["Typo issue"], index=0)]
+        report = analyzer.analyze(records)
+
+        assert report.scope_limitations != ""
+        assert "frontend" in report.scope_limitations.lower()
+
+    def test_summary_critical_count(self, analyzer):
+        """Test summary mentions critical issue count."""
+        records = [
+            _make_record(
+                f"query {i}",
+                ["Irrelevant results"],
+                index=i,
+                results_relevance_score=1.5,
+            )
+            for i in range(10)
+        ]
+        report = analyzer.analyze(records)
+
+        assert "critical" in report.summary.lower()
+
+    def test_csv_export(self, analyzer):
+        """Test CSV export functionality."""
+        records = [
+            _make_record(f"query {i}", ["Typo not handled", "No filter options"], index=i)
+            for i in range(5)
+        ]
+        report = analyzer.analyze(records)
+        csv_output = analyzer.export_to_csv(report)
+
+        assert isinstance(csv_output, str)
+
+        # Parse and verify
+        reader = csv.reader(io.StringIO(csv_output))
+        rows = list(reader)
+
+        # Header row
+        header = rows[0]
+        assert "ID" in header
+        assert "Observation" in header
+        assert "Affected Queries" in header
+        assert "Severity" in header
+        assert "Suggestion" in header
+
+        # Data rows match findings count
+        assert len(rows) - 1 == len(report.findings)
+
+        # Verify finding IDs are in CSV
+        for finding in report.findings:
+            assert any(finding.id in row[0] for row in rows[1:])
+
+    def test_csv_export_empty(self, analyzer):
+        """Test CSV export with no findings."""
+        report = analyzer.analyze([])
+        csv_output = analyzer.export_to_csv(report)
+
+        reader = csv.reader(io.StringIO(csv_output))
+        rows = list(reader)
+
+        # Only header row
+        assert len(rows) == 1
+
+    def test_dimension_score_tracking(self, analyzer):
+        """Test that avg dimension score is correctly calculated."""
+        records = [
+            _make_record(
+                "query 1",
+                ["Typo not handled"],
+                index=0,
+                query_understanding_score=2.0,
+            ),
+            _make_record(
+                "query 2",
+                ["Misspelling ignored"],
+                index=1,
+                query_understanding_score=4.0,
+            ),
+        ]
+        report = analyzer.analyze(records)
+
+        typo_findings = [f for f in report.findings if "typo" in f.observation.lower()]
+        assert len(typo_findings) == 1
+        # Average of 2.0 and 4.0
+        assert typo_findings[0].avg_dimension_score == 3.0
+        assert typo_findings[0].affected_dimension == "query_understanding"

@@ -17,11 +17,11 @@ from agentic_search_audit.analysis.maturity import (
 )
 from agentic_search_audit.core.types import (
     AuditRecord,
-    JudgeScore,
     PageArtifacts,
     Query,
     ResultItem,
 )
+from tests.helpers import make_fqi_judge_score
 
 
 class TestMaturityLevel:
@@ -68,12 +68,12 @@ class TestMaturityEvaluator:
                     screenshot_path="/tmp/test.png",
                     ts=datetime.now(),
                 ),
-                judge=JudgeScore(
-                    overall=3.5 + i * 0.1,
-                    relevance=3.8 + i * 0.1,
-                    diversity=3.2 + i * 0.1,
-                    result_quality=3.6 + i * 0.1,
-                    navigability=3.4 + i * 0.1,
+                judge=make_fqi_judge_score(
+                    query_understanding_score=3.8 + i * 0.1,
+                    results_relevance_score=3.5 + i * 0.1,
+                    result_presentation_score=3.6 + i * 0.1,
+                    advanced_features_score=3.2 + i * 0.1,
+                    error_handling_score=3.4 + i * 0.1,
                     rationale="Good search results",
                     issues=["Minor relevance issue"],
                     improvements=["Add more filters"],
@@ -98,12 +98,12 @@ class TestMaturityEvaluator:
                     screenshot_path="/tmp/test.png",
                     ts=datetime.now(),
                 ),
-                judge=JudgeScore(
-                    overall=1.5,
-                    relevance=1.2,
-                    diversity=1.8,
-                    result_quality=1.5,
-                    navigability=1.6,
+                judge=make_fqi_judge_score(
+                    query_understanding_score=1.2,
+                    results_relevance_score=1.5,
+                    result_presentation_score=1.5,
+                    advanced_features_score=1.8,
+                    error_handling_score=1.6,
                     rationale="Poor search results",
                     issues=["Typo not handled", "No results found", "Broken filters"],
                     improvements=["Add spell correction", "Improve synonym matching"],
@@ -245,30 +245,31 @@ class TestIndustryBenchmarks:
     def test_compare_to_industry(self):
         """Test comparing scores to industry benchmark."""
         scores = {
-            "relevance": 4.0,
-            "diversity": 3.5,
-            "result_quality": 3.8,
-            "navigability": 3.6,
-            "overall": 3.7,
+            "query_understanding": 4.0,
+            "results_relevance": 3.5,
+            "result_presentation": 3.8,
+            "advanced_features": 3.6,
+            "error_handling": 3.6,
+            "fqi": 3.7,
         }
 
         result = IndustryBenchmarks.compare_to_industry(scores, Industry.ECOMMERCE)
 
         assert result["industry"] == "ecommerce"
         assert "comparisons" in result
-        assert "relevance" in result["comparisons"]
-        assert "percentile" in result["comparisons"]["relevance"]
+        assert "query_understanding" in result["comparisons"]
+        assert "percentile" in result["comparisons"]["query_understanding"]
 
     def test_benchmark_compare_method(self):
         """Test benchmark compare method directly."""
         benchmark = get_industry_benchmark(Industry.FASHION)
-        scores = {"relevance": 4.5, "overall": 3.0}
+        scores = {"results_relevance": 4.5, "fqi": 3.0}
 
         comparison = benchmark.compare(scores)
 
-        assert "relevance" in comparison
-        assert comparison["relevance"]["status"] == "top_performer"
-        assert "overall" in comparison
+        assert "results_relevance" in comparison
+        assert comparison["results_relevance"]["status"] == "top_performer"
+        assert "fqi" in comparison
 
     def test_percentile_rating(self):
         """Test percentile rating strings."""
@@ -283,7 +284,7 @@ class TestIndustryBenchmarks:
         for industry in Industry:
             benchmark = get_industry_benchmark(industry)
 
-            assert benchmark.relevance_avg > 0
-            assert benchmark.relevance_top_quartile > benchmark.relevance_avg
+            assert benchmark.results_relevance_avg > 0
+            assert benchmark.results_relevance_top_quartile > benchmark.results_relevance_avg
             assert benchmark.sample_size > 0
             assert benchmark.last_updated != ""

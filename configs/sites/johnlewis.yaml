@@ -1,21 +1,18 @@
-# Zalando.co.uk specific configuration
+# John Lewis specific configuration
 
 site:
-  url: "https://www.zalando.co.uk"
+  url: "https://www.johnlewis.com"
   locale: "en-GB"
 
   search:
     input_selectors:
-      # Zalando-specific selectors (from actual page inspection)
-      - '#header-search-input'
-      - 'input[name="q"]'
-      - 'input[placeholder="Search"]'
-      - 'input[role="combobox"][placeholder="Search"]'
-      # Generic fallbacks
-      - 'input[type="search"]'
+      # John Lewis search selectors
+      - 'input[name="search-term"]'
       - 'input[data-testid="search-input"]'
+      - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
+      - 'input[name="q"]'
     submit_strategy: "enter"
     submit_selector: null
     use_intelligent_fallback: true
@@ -23,18 +20,24 @@ site:
 
   results:
     item_selectors:
-      # Zalando search results are article elements
+      - '[data-testid="product-card"]'
       - 'article'
+      - 'div[class*="product-card"]'
+      - 'a[href*="/p/"]'
     title_selectors:
-      # Title is in h3 element inside article
+      - 'h2'
       - 'h3'
+      - '[data-testid="product-card-title"]'
+      - 'span[class*="title"]'
     url_attr: 'href'
     snippet_selectors:
-      # First span inside article typically contains brand
+      - 'span[class*="brand"]'
+      - 'p'
       - 'span'
     price_selectors:
-      # Price spans are further down in the article
-      - 'span'
+      - '[data-testid="product-card-price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
     image_selectors:
       - 'img'
 
@@ -49,7 +52,8 @@ site:
       - "no thanks"
       - "maybe later"
       - "reject"
-      - "necessary only"
+      - "allow all"
+      - "accept all"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -57,8 +61,8 @@ run:
   top_k: 10
   viewport_width: 1366
   viewport_height: 900
-  network_idle_ms: 2000
-  post_submit_ms: 1500
+  network_idle_ms: 3000
+  post_submit_ms: 2000
   headless: true
   throttle_rps: 0.5
   seed: 42

@@ -337,7 +337,7 @@ class AuditWorker:
                         screenshot_path=record.page.screenshot_path,
                         html_path=record.page.html_path,
                     )
-                    scores.append(record.judge.overall)
+                    scores.append(record.judge.fqi)
 
                 # Calculate average score
                 avg_score = sum(scores) / len(scores) if scores else None

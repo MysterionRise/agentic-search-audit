@@ -13,30 +13,52 @@ COOKIE_CONSENT_SELECTORS = [
     "#onetrust-accept-btn-handler",
     ".onetrust-close-btn-handler",
     "#accept-recommended-btn-handler",
+    # OneTrust reject/necessary only
+    "#onetrust-reject-all-handler",
     # Cookiebot
     "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
     "#CybotCookiebotDialogBodyButtonAccept",
+    "#CybotCookiebotDialogBodyButtonDecline",
     # TrustArc/TrustE
     ".trustarc-agree-btn",
     ".call[data-accept]",
     # Quantcast
     ".qc-cmp2-summary-buttons button[mode='primary']",
+    ".qc-cmp2-summary-buttons button[mode='secondary']",
+    # John Lewis specific
+    "[data-test='cookie-accept-all']",
+    "[data-test='cookie-reject-all']",
+    "[data-testid='cookie-banner-accept']",
+    "[data-testid='cookie-banner-reject']",
+    "button[class*='CookieBanner']",
     # Generic consent buttons (common patterns)
     "[data-testid='uc-accept-all-button']",
+    "[data-testid='uc-deny-all-button']",
     "[data-testid='accept-all']",
+    "[data-testid='reject-all']",
     "[data-testid='cookie-accept']",
+    "[data-testid='cookie-reject']",
     "button[id*='accept']",
+    "button[id*='reject']",
     "button[class*='accept']",
+    "button[class*='reject']",
     "button[class*='consent']",
     "button[class*='cookie'][class*='accept']",
+    "button[class*='cookie'][class*='reject']",
     # Zalando-specific (uses Usercentrics)
     "#uc-btn-accept-banner",
+    "#uc-btn-deny-banner",
     "[data-testid='uc-accept-all-button']",
+    "[data-testid='uc-deny-all-button']",
     "button[data-testid*='accept']",
+    "button[data-testid*='deny']",
     # Common aria labels
     "[aria-label*='Accept all' i]",
     "[aria-label*='Accept cookies' i]",
     "[aria-label*='Accept All' i]",
+    "[aria-label*='Reject all' i]",
+    "[aria-label*='Reject cookies' i]",
+    "[aria-label*='Decline' i]",
 ]
 
 
@@ -139,18 +161,21 @@ class ModalHandler:
             except Exception as e:
                 logger.debug(f"Usercentrics API consent failed: {e}")
 
-        # Try clicking any visible button with accept-like text
+        # Try clicking any visible button with accept-like text (or reject as fallback)
         if dismissed == 0:
             try:
                 result = await self.client.evaluate("""
                     (function() {
-                        // Find all visible buttons and links with accept-like text
-                        const acceptPatterns = /accept|agree|allow|consent/i;
-                        const rejectPatterns = /reject|decline|deny|necessary only/i;
+                        // Find all visible buttons and links with consent-related text
+                        const acceptPatterns = /accept|agree|allow|consent|got it|continue/i;
+                        const rejectPatterns = /reject|decline|deny|necessary only|only essential/i;
 
                         const candidates = Array.from(document.querySelectorAll(
-                            'button, [role="button"], a[href="#"]'
+                            'button, [role="button"], a[href="#"], a[class*="cookie"], a[class*="consent"]'
                         ));
+
+                        let acceptButton = null;
+                        let rejectButton = null;
 
                         for (const el of candidates) {
                             const text = (el.textContent || el.innerText || '').trim();
@@ -160,11 +185,19 @@ class ModalHandler:
                             if (rect.width === 0 || rect.height === 0) continue;
                             if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
 
-                            // Prefer "Accept All" type buttons, avoid reject buttons
+                            // Track accept and reject buttons separately
                             if (acceptPatterns.test(text) && !rejectPatterns.test(text)) {
-                                el.click();
-                                return text.substring(0, 50);
+                                acceptButton = { el, text };
+                            } else if (rejectPatterns.test(text)) {
+                                rejectButton = { el, text };
                             }
+                        }
+
+                        // Prefer accept button, but use reject if no accept found
+                        const target = acceptButton || rejectButton;
+                        if (target) {
+                            target.el.click();
+                            return target.text.substring(0, 50);
                         }
                         return false;
                     })()

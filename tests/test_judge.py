@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentic_search_audit.core.types import JudgeScore, LLMConfig, Query, QueryOrigin, ResultItem
+from agentic_search_audit.core.types import (
+    DimensionDiagnosis,
+    JudgeScore,
+    LLMConfig,
+    Query,
+    QueryOrigin,
+    ResultItem,
+)
 from agentic_search_audit.judge.judge import HTML_SNIPPET_MAX_CHARS, SearchQualityJudge
 from agentic_search_audit.judge.rubric import (
     JUDGE_SYSTEM_PROMPT,
@@ -26,15 +33,23 @@ def test_judge_schema():
 
     # Check all required fields are present
     required_fields = schema["required"]
-    assert "overall" in required_fields
-    assert "relevance" in required_fields
-    assert "diversity" in required_fields
-    assert "result_quality" in required_fields
-    assert "navigability" in required_fields
+    assert "query_understanding" in required_fields
+    assert "results_relevance" in required_fields
+    assert "result_presentation" in required_fields
+    assert "advanced_features" in required_fields
+    assert "error_handling" in required_fields
     assert "rationale" in required_fields
     assert "issues" in required_fields
     assert "improvements" in required_fields
     assert "evidence" in required_fields
+    assert "schema_version" in required_fields
+
+    # Old fields should NOT be present
+    assert "overall" not in required_fields
+    assert "relevance" not in required_fields
+    assert "diversity" not in required_fields
+    assert "result_quality" not in required_fields
+    assert "navigability" not in required_fields
 
 
 @pytest.mark.unit
@@ -74,11 +89,13 @@ def test_judge_system_prompt():
     """Test that system prompt contains key elements."""
     prompt = JUDGE_SYSTEM_PROMPT
 
-    # Should mention key evaluation criteria
-    assert "relevance" in prompt.lower()
-    assert "diversity" in prompt.lower()
-    assert "quality" in prompt.lower()
-    assert "navigability" in prompt.lower()
+    # Should mention FQI framework and key evaluation dimensions
+    assert "fqi" in prompt.lower() or "findability" in prompt.lower()
+    assert "query understanding" in prompt.lower()
+    assert "results relevance" in prompt.lower()
+    assert "result presentation" in prompt.lower()
+    assert "advanced features" in prompt.lower()
+    assert "error handling" in prompt.lower()
 
     # Should mention score range
     assert "0-5" in prompt or "0 to 5" in prompt.lower()
@@ -90,22 +107,24 @@ def test_judge_system_prompt():
 @pytest.mark.unit
 def test_judge_score_validation():
     """Test JudgeScore validation."""
-    # Valid score
+    # Valid score using new FQI structure
     score = JudgeScore(
-        overall=4.5,
-        relevance=4.8,
-        diversity=4.2,
-        result_quality=4.6,
-        navigability=4.0,
+        query_understanding=DimensionDiagnosis(score=4.5, diagnosis="Good understanding"),
+        results_relevance=DimensionDiagnosis(score=4.8, diagnosis="Highly relevant"),
+        result_presentation=DimensionDiagnosis(score=4.2, diagnosis="Well presented"),
+        advanced_features=DimensionDiagnosis(score=4.6, diagnosis="Rich features"),
+        error_handling=DimensionDiagnosis(score=4.0, diagnosis="Good error handling"),
         rationale="Excellent results",
         issues=["Minor issue"],
         improvements=["Add filters"],
         evidence=[{"rank": 1, "reason": "Perfect match"}],
-        schema_version="1.0",
+        schema_version="2.0",
     )
 
-    assert score.overall == 4.5
-    assert score.relevance == 4.8
+    assert score.query_understanding.score == 4.5
+    assert score.results_relevance.score == 4.8
+    # FQI should be auto-computed
+    assert score.fqi > 0
 
 
 @pytest.mark.unit
@@ -113,16 +132,16 @@ def test_judge_score_bounds_upper():
     """Test JudgeScore upper bound validation."""
     with pytest.raises(ValueError):
         JudgeScore(
-            overall=6.0,  # Invalid: > 5
-            relevance=4.0,
-            diversity=4.0,
-            result_quality=4.0,
-            navigability=4.0,
+            query_understanding=DimensionDiagnosis(score=6.0, diagnosis="Invalid"),  # > 5
+            results_relevance=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            result_presentation=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            advanced_features=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            error_handling=DimensionDiagnosis(score=4.0, diagnosis="OK"),
             rationale="Test",
             issues=[],
             improvements=[],
             evidence=[],
-            schema_version="1.0",
+            schema_version="2.1",
         )
 
 
@@ -131,16 +150,16 @@ def test_judge_score_bounds_lower():
     """Test JudgeScore lower bound validation."""
     with pytest.raises(ValueError):
         JudgeScore(
-            overall=-0.5,  # Invalid: < 0
-            relevance=4.0,
-            diversity=4.0,
-            result_quality=4.0,
-            navigability=4.0,
+            query_understanding=DimensionDiagnosis(score=-0.5, diagnosis="Invalid"),  # < 0
+            results_relevance=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            result_presentation=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            advanced_features=DimensionDiagnosis(score=4.0, diagnosis="OK"),
+            error_handling=DimensionDiagnosis(score=4.0, diagnosis="OK"),
             rationale="Test",
             issues=[],
             improvements=[],
             evidence=[],
-            schema_version="1.0",
+            schema_version="2.1",
         )
 
 
@@ -330,19 +349,20 @@ class TestSearchQualityJudgeEvaluate:
 
     @pytest.fixture
     def valid_judge_response(self):
-        """Create a valid judge response JSON."""
+        """Create a valid judge response JSON in FQI format."""
         return json.dumps(
             {
-                "overall": 4.5,
-                "relevance": 4.8,
-                "diversity": 4.2,
-                "result_quality": 4.6,
-                "navigability": 4.0,
+                "query_understanding": {"score": 4.5, "diagnosis": "Good query understanding"},
+                "results_relevance": {"score": 4.8, "diagnosis": "Highly relevant results"},
+                "result_presentation": {"score": 4.2, "diagnosis": "Well presented"},
+                "advanced_features": {"score": 4.6, "diagnosis": "Rich feature set"},
+                "error_handling": {"score": 4.0, "diagnosis": "Good error handling"},
                 "rationale": "Excellent results matching the query intent.",
+                "executive_summary": "Search performs well across all dimensions.",
                 "issues": ["Minor: Could show more price ranges"],
                 "improvements": ["Add filter by brand"],
                 "evidence": [{"rank": 1, "reason": "Perfect match"}],
-                "schema_version": "1.0",
+                "schema_version": "2.1",
             }
         )
 
@@ -367,8 +387,8 @@ class TestSearchQualityJudgeEvaluate:
         )
 
         assert isinstance(result, JudgeScore)
-        assert result.overall == 4.5
-        assert result.relevance == 4.8
+        assert result.fqi > 0
+        assert result.results_relevance.score == 4.8
         assert result.rationale == "Excellent results matching the query intent."
 
     @pytest.mark.asyncio
@@ -379,7 +399,8 @@ class TestSearchQualityJudgeEvaluate:
         mock_response.choices = [MagicMock()]
         # Modify response to reflect empty results scenario
         response_data = json.loads(valid_judge_response)
-        response_data["overall"] = 1.0
+        response_data["query_understanding"]["score"] = 1.0
+        response_data["results_relevance"]["score"] = 1.0
         response_data["rationale"] = "No results found."
         mock_response.choices[0].message.content = json.dumps(response_data)
 
@@ -394,7 +415,7 @@ class TestSearchQualityJudgeEvaluate:
         )
 
         assert isinstance(result, JudgeScore)
-        assert result.overall == 1.0
+        assert result.fqi > 0  # FQI is computed from dimension scores
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -537,44 +558,44 @@ class TestSearchQualityJudgeParseResponse:
         """Test parsing valid JSON response."""
         response = json.dumps(
             {
-                "overall": 4.5,
-                "relevance": 4.8,
-                "diversity": 4.2,
-                "result_quality": 4.6,
-                "navigability": 4.0,
+                "query_understanding": {"score": 4.5, "diagnosis": "Good understanding"},
+                "results_relevance": {"score": 4.8, "diagnosis": "Highly relevant"},
+                "result_presentation": {"score": 4.2, "diagnosis": "Well presented"},
+                "advanced_features": {"score": 4.6, "diagnosis": "Rich features"},
+                "error_handling": {"score": 4.0, "diagnosis": "Good handling"},
                 "rationale": "Excellent results",
                 "issues": [],
                 "improvements": [],
                 "evidence": [{"rank": 1, "reason": "Good match"}],
-                "schema_version": "1.0",
+                "schema_version": "2.1",
             }
         )
 
         result = mock_judge._parse_response(response)
 
         assert isinstance(result, JudgeScore)
-        assert result.overall == 4.5
-        assert result.relevance == 4.8
+        assert result.query_understanding.score == 4.5
+        assert result.results_relevance.score == 4.8
 
     @pytest.mark.unit
     def test_parse_response_missing_required_field(self, mock_judge):
         """Test parsing response with missing required field raises ValueError."""
         response = json.dumps(
             {
-                # Missing 'overall' field
-                "relevance": 4.8,
-                "diversity": 4.2,
-                "result_quality": 4.6,
-                "navigability": 4.0,
+                # Missing 'query_understanding' field
+                "results_relevance": {"score": 4.8, "diagnosis": "Relevant"},
+                "result_presentation": {"score": 4.2, "diagnosis": "Good"},
+                "advanced_features": {"score": 4.6, "diagnosis": "Rich"},
+                "error_handling": {"score": 4.0, "diagnosis": "OK"},
                 "rationale": "Test",
                 "issues": [],
                 "improvements": [],
                 "evidence": [],
-                "schema_version": "1.0",
+                "schema_version": "2.1",
             }
         )
 
-        with pytest.raises(ValueError, match="Missing required field: overall"):
+        with pytest.raises(ValueError, match="Missing required field: query_understanding"):
             mock_judge._parse_response(response)
 
     @pytest.mark.unit
@@ -587,19 +608,19 @@ class TestSearchQualityJudgeParseResponse:
 
     @pytest.mark.unit
     def test_parse_response_score_out_of_bounds_upper(self, mock_judge):
-        """Test parsing response with score > 5 raises validation error."""
+        """Test parsing response with dimension score > 5 raises validation error."""
         response = json.dumps(
             {
-                "overall": 6.0,  # Invalid: > 5
-                "relevance": 4.8,
-                "diversity": 4.2,
-                "result_quality": 4.6,
-                "navigability": 4.0,
+                "query_understanding": {"score": 6.0, "diagnosis": "Invalid"},  # > 5
+                "results_relevance": {"score": 4.8, "diagnosis": "OK"},
+                "result_presentation": {"score": 4.2, "diagnosis": "OK"},
+                "advanced_features": {"score": 4.6, "diagnosis": "OK"},
+                "error_handling": {"score": 4.0, "diagnosis": "OK"},
                 "rationale": "Test",
                 "issues": [],
                 "improvements": [],
                 "evidence": [],
-                "schema_version": "1.0",
+                "schema_version": "2.1",
             }
         )
 
@@ -608,19 +629,19 @@ class TestSearchQualityJudgeParseResponse:
 
     @pytest.mark.unit
     def test_parse_response_score_out_of_bounds_lower(self, mock_judge):
-        """Test parsing response with score < 0 raises validation error."""
+        """Test parsing response with dimension score < 0 raises validation error."""
         response = json.dumps(
             {
-                "overall": -1.0,  # Invalid: < 0
-                "relevance": 4.8,
-                "diversity": 4.2,
-                "result_quality": 4.6,
-                "navigability": 4.0,
+                "query_understanding": {"score": -1.0, "diagnosis": "Invalid"},  # < 0
+                "results_relevance": {"score": 4.8, "diagnosis": "OK"},
+                "result_presentation": {"score": 4.2, "diagnosis": "OK"},
+                "advanced_features": {"score": 4.6, "diagnosis": "OK"},
+                "error_handling": {"score": 4.0, "diagnosis": "OK"},
                 "rationale": "Test",
                 "issues": [],
                 "improvements": [],
                 "evidence": [],
-                "schema_version": "1.0",
+                "schema_version": "2.1",
             }
         )
 

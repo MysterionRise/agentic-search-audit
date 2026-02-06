@@ -1,38 +1,27 @@
-"""Conversion uplift planning and recommendations."""
+"""Observation-based findings analysis for search quality audits."""
 
 import csv
 import io
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from ..core.types import AuditRecord
-from .maturity import MaturityEvaluator, MaturityReport
 
 logger = logging.getLogger(__name__)
 
 
-class Priority(str, Enum):
-    """Recommendation priority levels."""
+class Severity(str, Enum):
+    """Finding severity levels."""
 
-    CRITICAL = "critical"  # Must fix - blocking conversions
-    HIGH = "high"  # High impact, should address soon
-    MEDIUM = "medium"  # Notable improvement opportunity
-    LOW = "low"  # Nice to have
-
-
-class Effort(str, Enum):
-    """Implementation effort levels."""
-
-    QUICK_WIN = "quick_win"  # < 1 week
-    MODERATE = "moderate"  # 1-4 weeks
-    SIGNIFICANT = "significant"  # 1-3 months
-    MAJOR = "major"  # 3+ months
+    CRITICAL = "critical"  # >75% affected OR dimension avg <2.0
+    HIGH = "high"  # >50% affected OR dimension avg <3.0
+    MEDIUM = "medium"  # >25% affected
+    LOW = "low"  # <25% affected
 
 
 class Category(str, Enum):
-    """Recommendation categories."""
+    """Finding categories."""
 
     RELEVANCE = "relevance"
     UX = "user_experience"
@@ -43,610 +32,388 @@ class Category(str, Enum):
 
 
 @dataclass
-class Recommendation:
-    """A single improvement recommendation."""
+class Finding:
+    """A single observation-based finding."""
 
     id: str
-    title: str
-    description: str
-    category: Category
-    priority: Priority
-    effort: Effort
-    expected_uplift_pct: float  # Expected conversion uplift percentage
-    confidence: float  # Confidence in the estimate (0-1)
-    prerequisites: list[str] = field(default_factory=list)
-    metrics_to_track: list[str] = field(default_factory=list)
-    implementation_notes: str = ""
+    observation: str
+    affected_queries: int
+    total_queries: int
+    severity: Severity
+    affected_dimension: str
+    avg_dimension_score: float
+    example_queries: list[str] = field(default_factory=list)
+    suggestion: str = ""
+    category: Category = Category.RELEVANCE
 
     @property
-    def roi_score(self) -> float:
-        """Calculate ROI score (uplift weighted by confidence, divided by effort)."""
-        effort_weights = {
-            Effort.QUICK_WIN: 1,
-            Effort.MODERATE: 2,
-            Effort.SIGNIFICANT: 4,
-            Effort.MAJOR: 8,
-        }
-        return (self.expected_uplift_pct * self.confidence) / effort_weights[self.effort]
+    def affected_pct(self) -> float:
+        """Percentage of queries affected."""
+        if self.total_queries == 0:
+            return 0.0
+        return (self.affected_queries / self.total_queries) * 100
 
 
 @dataclass
-class UpliftPlan:
-    """Complete uplift implementation plan."""
+class FindingsReport:
+    """Complete findings report."""
 
-    recommendations: list[Recommendation]
-    total_potential_uplift: float
-    quick_wins: list[Recommendation]
-    strategic_initiatives: list[Recommendation]
+    findings: list[Finding]
+    scope_limitations: str
+    total_queries_analyzed: int
     summary: str
-    phases: list[dict[str, Any]]
 
 
-class UpliftPlanner:
-    """Generates conversion uplift recommendations based on audit results."""
+def calculate_severity(affected_pct: float, avg_dim_score: float) -> Severity:
+    """Determine severity from frequency and dimension impact.
 
-    # Rule-based recommendation templates
-    RECOMMENDATION_RULES: list[dict[str, Any]] = [
-        # Relevance issues
-        {
-            "id": "rel_001",
-            "condition": lambda r, m: m.dimensions.get("relevance", DummyDim()).score < 3.0,
-            "title": "Improve Search Relevance Algorithm",
-            "description": "Search results are not sufficiently relevant to user queries. "
-            "Consider implementing BM25, learning-to-rank, or semantic search.",
-            "category": Category.RELEVANCE,
-            "priority": Priority.CRITICAL,
-            "effort": Effort.SIGNIFICANT,
-            "uplift": 15.0,
-            "confidence": 0.8,
-            "metrics": ["Search exit rate", "Click-through rate", "Add-to-cart from search"],
-        },
-        {
-            "id": "rel_002",
-            "condition": lambda r, m: _has_typo_issues(r),
-            "title": "Implement Typo Tolerance / Spell Correction",
-            "description": "Search fails to handle misspellings. Add fuzzy matching or "
-            "spell correction to catch common typos.",
-            "category": Category.RELEVANCE,
-            "priority": Priority.HIGH,
-            "effort": Effort.MODERATE,
-            "uplift": 8.0,
-            "confidence": 0.85,
-            "metrics": ["Zero-result rate", "Search refinement rate"],
-        },
-        {
-            "id": "rel_003",
-            "condition": lambda r, m: _has_synonym_issues(r),
-            "title": "Add Synonym Expansion",
-            "description": "Search misses results due to vocabulary mismatch. "
-            "Implement synonym dictionaries or semantic similarity.",
-            "category": Category.RELEVANCE,
-            "priority": Priority.HIGH,
-            "effort": Effort.MODERATE,
-            "uplift": 6.0,
-            "confidence": 0.75,
-            "metrics": ["Search success rate", "Query refinement rate"],
-        },
-        # Zero result issues
-        {
-            "id": "err_001",
-            "condition": lambda r, m: _high_zero_result_rate(r),
-            "title": "Reduce Zero-Result Searches",
-            "description": "Too many searches return no results. Implement fallback strategies: "
-            "did-you-mean suggestions, related products, or category recommendations.",
-            "category": Category.UX,
-            "priority": Priority.CRITICAL,
-            "effort": Effort.MODERATE,
-            "uplift": 12.0,
-            "confidence": 0.85,
-            "metrics": ["Zero-result rate", "Search abandonment rate"],
-        },
-        {
-            "id": "err_002",
-            "condition": lambda r, m: _high_zero_result_rate(r),
-            "title": "Add 'Did You Mean' Suggestions",
-            "description": "When no results found, suggest corrected queries or alternatives "
-            "to help users find what they're looking for.",
-            "category": Category.UX,
-            "priority": Priority.HIGH,
-            "effort": Effort.QUICK_WIN,
-            "uplift": 5.0,
-            "confidence": 0.9,
-            "metrics": ["Zero-result recovery rate", "Suggestion click rate"],
-        },
-        # UX issues
-        {
-            "id": "ux_001",
-            "condition": lambda r, m: m.dimensions.get("result_presentation", DummyDim()).score
-            < 3.0,
-            "title": "Improve Search Results Display",
-            "description": "Search results presentation needs enhancement. Ensure results show "
-            "images, prices, ratings, and key product attributes clearly.",
-            "category": Category.UX,
-            "priority": Priority.HIGH,
-            "effort": Effort.MODERATE,
-            "uplift": 10.0,
-            "confidence": 0.8,
-            "metrics": ["Result card CTR", "Time to first click"],
-        },
-        {
-            "id": "ux_002",
-            "condition": lambda r, m: _low_navigability(r),
-            "title": "Add Faceted Search / Filters",
-            "description": "Users cannot easily refine results. Add faceted navigation with "
-            "filters for category, price range, brand, ratings, etc.",
-            "category": Category.UX,
-            "priority": Priority.HIGH,
-            "effort": Effort.SIGNIFICANT,
-            "uplift": 18.0,
-            "confidence": 0.85,
-            "metrics": ["Filter usage rate", "Search-to-purchase conversion"],
-        },
-        {
-            "id": "ux_003",
-            "condition": lambda r, m: _low_diversity(r),
-            "title": "Improve Result Diversity",
-            "description": "Search results lack variety. Implement diversity algorithms to show "
-            "different brands, price points, and categories.",
-            "category": Category.RELEVANCE,
-            "priority": Priority.MEDIUM,
-            "effort": Effort.MODERATE,
-            "uplift": 5.0,
-            "confidence": 0.7,
-            "metrics": ["Unique brands in top 10", "Price range coverage"],
-        },
-        # Conversion optimization
-        {
-            "id": "conv_001",
-            "condition": lambda r, m: True,  # Always recommend if not present
-            "title": "Implement Search Autocomplete",
-            "description": "Add predictive autocomplete to help users formulate queries faster "
-            "and discover products. Show trending/popular searches.",
-            "category": Category.CONVERSION,
-            "priority": Priority.HIGH,
-            "effort": Effort.MODERATE,
-            "uplift": 12.0,
-            "confidence": 0.85,
-            "metrics": ["Autocomplete selection rate", "Time to search"],
-        },
-        {
-            "id": "conv_002",
-            "condition": lambda r, m: m.overall_level.value >= 3,
-            "title": "Add Search Analytics Dashboard",
-            "description": "Implement comprehensive search analytics to track KPIs, identify "
-            "failing queries, and measure improvements over time.",
-            "category": Category.TECHNICAL,
-            "priority": Priority.MEDIUM,
-            "effort": Effort.MODERATE,
-            "uplift": 3.0,
-            "confidence": 0.6,
-            "metrics": ["Query coverage", "Search conversion funnel"],
-        },
-        # Advanced features
-        {
-            "id": "adv_001",
-            "condition": lambda r, m: m.overall_level.value >= 3,
-            "title": "Implement Personalized Search Results",
-            "description": "Personalize search results based on user history, preferences, "
-            "and behavior to improve relevance for returning users.",
-            "category": Category.PERSONALIZATION,
-            "priority": Priority.MEDIUM,
-            "effort": Effort.SIGNIFICANT,
-            "uplift": 15.0,
-            "confidence": 0.7,
-            "metrics": ["Returning user search conversion", "Personal relevance score"],
-        },
-        {
-            "id": "adv_002",
-            "condition": lambda r, m: m.overall_level.value >= 4,
-            "title": "Add Visual Search Capability",
-            "description": "Allow users to search using images. Particularly valuable for "
-            "fashion, home decor, and visually-driven categories.",
-            "category": Category.CONVERSION,
-            "priority": Priority.LOW,
-            "effort": Effort.MAJOR,
-            "uplift": 8.0,
-            "confidence": 0.5,
-            "metrics": ["Visual search usage", "Visual search conversion"],
-        },
-        {
-            "id": "adv_003",
-            "condition": lambda r, m: m.overall_level.value >= 4,
-            "title": "Implement Conversational / AI Search",
-            "description": "Add natural language understanding for conversational queries. "
-            "Allow users to ask questions like 'best running shoes under $100'.",
-            "category": Category.RELEVANCE,
-            "priority": Priority.LOW,
-            "effort": Effort.MAJOR,
-            "uplift": 10.0,
-            "confidence": 0.5,
-            "metrics": ["NLU query handling rate", "Complex query conversion"],
-        },
-        # Content optimization
-        {
-            "id": "cont_001",
-            "condition": lambda r, m: _missing_product_data(r),
-            "title": "Improve Product Data Quality",
-            "description": "Search results missing key information (titles, images, prices). "
-            "Ensure all products have complete, searchable metadata.",
-            "category": Category.CONTENT,
-            "priority": Priority.HIGH,
-            "effort": Effort.SIGNIFICANT,
-            "uplift": 8.0,
-            "confidence": 0.8,
-            "metrics": ["Product data completeness", "Rich result display rate"],
-        },
-        {
-            "id": "cont_002",
-            "condition": lambda r, m: True,
-            "title": "Optimize Product Titles for Search",
-            "description": "Ensure product titles include key attributes and keywords that "
-            "users actually search for. Avoid cryptic product codes.",
-            "category": Category.CONTENT,
-            "priority": Priority.MEDIUM,
-            "effort": Effort.MODERATE,
-            "uplift": 5.0,
-            "confidence": 0.75,
-            "metrics": ["Title keyword match rate", "Position improvement"],
-        },
-        # Technical improvements
-        {
-            "id": "tech_001",
-            "condition": lambda r, m: True,
-            "title": "Implement Search Result Caching",
-            "description": "Cache popular search results to improve response times. "
-            "Fast search improves user experience and conversion.",
-            "category": Category.TECHNICAL,
-            "priority": Priority.MEDIUM,
-            "effort": Effort.QUICK_WIN,
-            "uplift": 3.0,
-            "confidence": 0.8,
-            "metrics": ["Search latency P95", "Cache hit rate"],
-        },
-        {
-            "id": "tech_002",
-            "condition": lambda r, m: True,
-            "title": "Add Search Query Logging & Analysis",
-            "description": "Log all search queries with results and user actions. "
-            "Essential for understanding user intent and improving search.",
-            "category": Category.TECHNICAL,
-            "priority": Priority.HIGH,
-            "effort": Effort.QUICK_WIN,
-            "uplift": 2.0,
-            "confidence": 0.9,
-            "metrics": ["Query log coverage", "Analysis actionability"],
-        },
-        # Mobile optimization
-        {
-            "id": "mob_001",
-            "condition": lambda r, m: True,
-            "title": "Optimize Search for Mobile",
-            "description": "Ensure search experience is fully optimized for mobile devices. "
-            "Consider voice search, larger touch targets, and simplified filters.",
-            "category": Category.UX,
-            "priority": Priority.HIGH,
-            "effort": Effort.MODERATE,
-            "uplift": 10.0,
-            "confidence": 0.8,
-            "metrics": ["Mobile search conversion", "Mobile filter usage"],
-        },
-    ]
+    Args:
+        affected_pct: Percentage of queries affected (0-100).
+        avg_dim_score: Average dimension score for affected queries (0-5).
 
-    def __init__(self) -> None:
-        """Initialize uplift planner."""
-        self.maturity_evaluator = MaturityEvaluator()
+    Returns:
+        Severity level.
+    """
+    if affected_pct > 75 or avg_dim_score < 2.0:
+        return Severity.CRITICAL
+    if affected_pct > 50 or avg_dim_score < 3.0:
+        return Severity.HIGH
+    if affected_pct > 25:
+        return Severity.MEDIUM
+    return Severity.LOW
 
-    def generate_plan(
-        self,
-        records: list[AuditRecord],
-        maturity_report: MaturityReport | None = None,
-        max_recommendations: int = 15,
-    ) -> UpliftPlan:
-        """Generate uplift plan from audit records.
+
+# Keyword-based issue patterns for grouping judge-reported issues into findings
+ISSUE_PATTERNS: dict[str, dict] = {
+    "autocomplete": {
+        "keywords": ["autocomplete", "auto-complete", "auto complete", "predictive", "typeahead"],
+        "dimension": "advanced_features",
+        "category": Category.CONVERSION,
+        "observation": "No autocomplete or predictive search suggestions observed",
+        "suggestion": (
+            "Consider implementing autocomplete if not already present, "
+            "to help users formulate queries faster"
+        ),
+    },
+    "typo_tolerance": {
+        "keywords": ["typo", "misspell", "spelling", "spell correct", "fuzzy"],
+        "dimension": "query_understanding",
+        "category": Category.RELEVANCE,
+        "observation": "Search does not handle misspellings or typos gracefully",
+        "suggestion": (
+            "Consider adding typo tolerance or spell correction " "if not already implemented"
+        ),
+    },
+    "no_results": {
+        "keywords": ["no result", "zero result", "empty result", "nothing found"],
+        "dimension": "error_handling",
+        "category": Category.UX,
+        "observation": "Searches return zero results without helpful fallback content",
+        "suggestion": (
+            "Consider adding fallback strategies such as related products "
+            "or alternative query suggestions when no results are found"
+        ),
+    },
+    "synonym": {
+        "keywords": ["synonym", "semantic", "vocabulary", "meaning", "intent"],
+        "dimension": "query_understanding",
+        "category": Category.RELEVANCE,
+        "observation": "Search misses results due to vocabulary mismatch or lack of synonym handling",
+        "suggestion": (
+            "Consider implementing synonym expansion or semantic matching "
+            "if not already in place"
+        ),
+    },
+    "filters": {
+        "keywords": ["filter", "facet", "refinement", "narrow", "sort option"],
+        "dimension": "result_presentation",
+        "category": Category.UX,
+        "observation": "Limited or missing search result filtering and faceted navigation",
+        "suggestion": (
+            "Consider adding faceted navigation with filters for key attributes "
+            "(category, price, brand) if not already available"
+        ),
+    },
+    "relevance": {
+        "keywords": ["irrelevant", "not relevant", "poor ranking", "wrong result", "mismatch"],
+        "dimension": "results_relevance",
+        "category": Category.RELEVANCE,
+        "observation": "Search results are not sufficiently relevant to user queries",
+        "suggestion": (
+            "Consider reviewing the search ranking algorithm; "
+            "semantic search or learning-to-rank may improve relevance"
+        ),
+    },
+    "presentation": {
+        "keywords": [
+            "missing image",
+            "no image",
+            "missing price",
+            "no price",
+            "incomplete",
+            "truncated",
+            "product data",
+        ],
+        "dimension": "result_presentation",
+        "category": Category.CONTENT,
+        "observation": "Search result cards are missing key product information (images, prices, etc.)",
+        "suggestion": (
+            "Consider ensuring all product cards display complete information "
+            "including images, prices, and key attributes"
+        ),
+    },
+    "sorting": {
+        "keywords": ["sort", "ordering", "rank order", "best match"],
+        "dimension": "result_presentation",
+        "category": Category.UX,
+        "observation": "Sort options are missing or results ordering does not match user expectations",
+        "suggestion": (
+            "Consider providing sort options (relevance, price, popularity) "
+            "if not already available"
+        ),
+    },
+    "did_you_mean": {
+        "keywords": ["did you mean", "suggestion", "alternative", "recommend"],
+        "dimension": "error_handling",
+        "category": Category.UX,
+        "observation": "No 'did you mean' or query correction suggestions observed",
+        "suggestion": (
+            "Consider adding query correction suggestions "
+            "to help users recover from failed searches"
+        ),
+    },
+    "pagination": {
+        "keywords": ["pagination", "next page", "load more", "infinite scroll"],
+        "dimension": "result_presentation",
+        "category": Category.UX,
+        "observation": "Pagination or progressive loading of results is missing or problematic",
+        "suggestion": (
+            "Consider implementing clear pagination or infinite scroll " "if not already present"
+        ),
+    },
+}
+
+SCOPE_LIMITATIONS = (
+    "This audit evaluates search quality from a frontend user perspective only. "
+    "Observations are based on visible UI behavior and returned results. "
+    "Backend implementation details, search infrastructure, and internal analytics "
+    "are not assessed. Suggestions are qualified recommendations based on observed "
+    "behavior and may already be partially addressed in ways not visible to the auditor."
+)
+
+_SEVERITY_ORDER = {
+    Severity.CRITICAL: 0,
+    Severity.HIGH: 1,
+    Severity.MEDIUM: 2,
+    Severity.LOW: 3,
+}
+
+
+class FindingsAnalyzer:
+    """Aggregates per-query judge issues into site-level findings with evidence counts."""
+
+    def analyze(self, records: list[AuditRecord]) -> FindingsReport:
+        """Analyze audit records and produce a findings report.
 
         Args:
-            records: Audit records
-            maturity_report: Pre-computed maturity report (optional)
-            max_recommendations: Maximum recommendations to include
+            records: Audit records with judge scores.
 
         Returns:
-            UpliftPlan with prioritized recommendations
+            FindingsReport with observation-based findings.
         """
-        if maturity_report is None:
-            maturity_report = self.maturity_evaluator.evaluate(records)
+        total = len(records)
+        if total == 0:
+            return FindingsReport(
+                findings=[],
+                scope_limitations=SCOPE_LIMITATIONS,
+                total_queries_analyzed=0,
+                summary="No queries were analyzed.",
+            )
 
-        # Generate recommendations based on rules
-        recommendations = self._generate_recommendations(records, maturity_report)
+        # Step 1: Collect issues per query and match to patterns
+        # pattern_key -> set of query indices that matched
+        pattern_hits: dict[str, set[int]] = {k: set() for k in ISSUE_PATTERNS}
+        # Track unmatched issues: issue_text_lower -> set of query indices
+        unmatched: dict[str, set[int]] = {}
 
-        # Sort by ROI score
-        recommendations.sort(key=lambda r: r.roi_score, reverse=True)
+        for idx, record in enumerate(records):
+            for issue in record.judge.issues:
+                issue_lower = issue.lower()
+                matched = False
+                for pattern_key, pattern in ISSUE_PATTERNS.items():
+                    if any(kw in issue_lower for kw in pattern["keywords"]):
+                        pattern_hits[pattern_key].add(idx)
+                        matched = True
+                        break
+                if not matched:
+                    # Normalize for grouping: strip and lowercase
+                    normalized = issue_lower.strip()
+                    if normalized not in unmatched:
+                        unmatched[normalized] = set()
+                    unmatched[normalized].add(idx)
 
-        # Limit to max
-        recommendations = recommendations[:max_recommendations]
+        findings: list[Finding] = []
+        finding_id = 1
 
-        # Identify quick wins and strategic initiatives
-        quick_wins = [r for r in recommendations if r.effort == Effort.QUICK_WIN]
-        strategic = [r for r in recommendations if r.effort in [Effort.SIGNIFICANT, Effort.MAJOR]]
-
-        # Calculate total potential uplift (with diminishing returns)
-        total_uplift = self._calculate_total_uplift(recommendations)
-
-        # Generate phases
-        phases = self._generate_phases(recommendations)
-
-        # Generate summary
-        summary = self._generate_summary(recommendations, total_uplift, maturity_report)
-
-        return UpliftPlan(
-            recommendations=recommendations,
-            total_potential_uplift=total_uplift,
-            quick_wins=quick_wins,
-            strategic_initiatives=strategic,
-            summary=summary,
-            phases=phases,
-        )
-
-    def _generate_recommendations(
-        self, records: list[AuditRecord], maturity: MaturityReport
-    ) -> list[Recommendation]:
-        """Generate recommendations based on audit data."""
-        recommendations = []
-        seen_ids = set()
-
-        for rule in self.RECOMMENDATION_RULES:
-            if rule["id"] in seen_ids:
+        # Step 2: Create findings from matched patterns
+        for pattern_key, query_indices in pattern_hits.items():
+            if not query_indices:
                 continue
 
-            try:
-                if rule["condition"](records, maturity):
-                    rec = Recommendation(
-                        id=rule["id"],
-                        title=rule["title"],
-                        description=rule["description"],
-                        category=rule["category"],
-                        priority=rule["priority"],
-                        effort=rule["effort"],
-                        expected_uplift_pct=rule["uplift"],
-                        confidence=rule["confidence"],
-                        metrics_to_track=rule.get("metrics", []),
-                    )
-                    recommendations.append(rec)
-                    seen_ids.add(rule["id"])
-            except Exception as e:
-                logger.warning(f"Error evaluating rule {rule['id']}: {e}")
+            pattern = ISSUE_PATTERNS[pattern_key]
+            dim_name = pattern["dimension"]
 
-        return recommendations
+            # Calculate avg dimension score for affected queries
+            avg_score = self._avg_dimension_score(records, query_indices, dim_name)
+            affected_pct = (len(query_indices) / total) * 100
+            severity = calculate_severity(affected_pct, avg_score)
 
-    def _calculate_total_uplift(self, recommendations: list[Recommendation]) -> float:
-        """Calculate total uplift with diminishing returns."""
-        if not recommendations:
-            return 0.0
+            # Collect example queries (max 3)
+            examples = [records[i].query.text for i in sorted(query_indices)[:3]]
 
-        # Sort by uplift
-        sorted_recs = sorted(recommendations, key=lambda r: r.expected_uplift_pct, reverse=True)
-
-        total = 0.0
-        remaining_headroom = 100.0  # Percentage points available
-
-        for rec in sorted_recs:
-            # Apply diminishing returns
-            actual_uplift = rec.expected_uplift_pct * rec.confidence * (remaining_headroom / 100)
-            total += actual_uplift
-            remaining_headroom -= actual_uplift * 0.5  # Each improvement reduces future headroom
-
-        return min(total, 50.0)  # Cap at 50% total uplift
-
-    def _generate_phases(self, recommendations: list[Recommendation]) -> list[dict[str, Any]]:
-        """Generate implementation phases."""
-        phases = []
-
-        # Phase 1: Quick wins (0-4 weeks)
-        phase1_recs = [r for r in recommendations if r.effort == Effort.QUICK_WIN]
-        if phase1_recs:
-            phases.append(
-                {
-                    "name": "Phase 1: Quick Wins",
-                    "duration": "0-4 weeks",
-                    "recommendations": [r.id for r in phase1_recs],
-                    "expected_uplift": sum(
-                        r.expected_uplift_pct * r.confidence for r in phase1_recs
-                    ),
-                }
+            findings.append(
+                Finding(
+                    id=f"F{finding_id:03d}",
+                    observation=pattern["observation"],
+                    affected_queries=len(query_indices),
+                    total_queries=total,
+                    severity=severity,
+                    affected_dimension=dim_name,
+                    avg_dimension_score=round(avg_score, 2),
+                    example_queries=examples,
+                    suggestion=pattern["suggestion"],
+                    category=pattern["category"],
+                )
             )
+            finding_id += 1
 
-        # Phase 2: Core improvements (1-3 months)
-        phase2_recs = [
-            r
-            for r in recommendations
-            if r.effort == Effort.MODERATE and r.priority in [Priority.CRITICAL, Priority.HIGH]
-        ]
-        if phase2_recs:
-            phases.append(
-                {
-                    "name": "Phase 2: Core Improvements",
-                    "duration": "1-3 months",
-                    "recommendations": [r.id for r in phase2_recs],
-                    "expected_uplift": sum(
-                        r.expected_uplift_pct * r.confidence for r in phase2_recs
-                    ),
-                }
+        # Step 3: Catch-all for unmatched issues appearing in 2+ queries
+        for issue_text, query_indices in unmatched.items():
+            if len(query_indices) < 2:
+                continue
+
+            # Use results_relevance as default dimension for unmatched issues
+            avg_score = self._avg_dimension_score(records, query_indices, "results_relevance")
+            affected_pct = (len(query_indices) / total) * 100
+            severity = calculate_severity(affected_pct, avg_score)
+
+            examples = [records[i].query.text for i in sorted(query_indices)[:3]]
+
+            # Capitalize first letter for display
+            display_text = issue_text[0].upper() + issue_text[1:] if issue_text else issue_text
+
+            findings.append(
+                Finding(
+                    id=f"F{finding_id:03d}",
+                    observation=display_text,
+                    affected_queries=len(query_indices),
+                    total_queries=total,
+                    severity=severity,
+                    affected_dimension="results_relevance",
+                    avg_dimension_score=round(avg_score, 2),
+                    example_queries=examples,
+                    suggestion="",
+                    category=Category.RELEVANCE,
+                )
             )
+            finding_id += 1
 
-        # Phase 3: Strategic initiatives (3-6 months)
-        phase3_recs = [r for r in recommendations if r.effort in [Effort.SIGNIFICANT, Effort.MAJOR]]
-        if phase3_recs:
-            phases.append(
-                {
-                    "name": "Phase 3: Strategic Initiatives",
-                    "duration": "3-6 months",
-                    "recommendations": [r.id for r in phase3_recs],
-                    "expected_uplift": sum(
-                        r.expected_uplift_pct * r.confidence for r in phase3_recs
-                    ),
-                }
-            )
+        # Step 4: Sort by severity then affected count (descending)
+        findings.sort(key=lambda f: (_SEVERITY_ORDER[f.severity], -f.affected_queries))
 
-        # Phase 4: Optimization (ongoing)
-        phase4_recs = [
-            r
-            for r in recommendations
-            if r.effort == Effort.MODERATE and r.priority in [Priority.MEDIUM, Priority.LOW]
-        ]
-        if phase4_recs:
-            phases.append(
-                {
-                    "name": "Phase 4: Continuous Optimization",
-                    "duration": "Ongoing",
-                    "recommendations": [r.id for r in phase4_recs],
-                    "expected_uplift": sum(
-                        r.expected_uplift_pct * r.confidence for r in phase4_recs
-                    ),
-                }
-            )
+        summary = self._build_summary(findings, total)
 
-        return phases
-
-    def _generate_summary(
-        self, recommendations: list[Recommendation], total_uplift: float, maturity: MaturityReport
-    ) -> str:
-        """Generate executive summary."""
-        critical = len([r for r in recommendations if r.priority == Priority.CRITICAL])
-        quick_wins = len([r for r in recommendations if r.effort == Effort.QUICK_WIN])
-
-        summary = (
-            f"Based on the search quality audit, we've identified {len(recommendations)} "
-            f"improvement opportunities with a combined potential conversion uplift of "
-            f"{total_uplift:.1f}%. "
+        return FindingsReport(
+            findings=findings,
+            scope_limitations=SCOPE_LIMITATIONS,
+            total_queries_analyzed=total,
+            summary=summary,
         )
 
-        if critical > 0:
-            summary += f"There are {critical} critical issues requiring immediate attention. "
-
-        if quick_wins > 0:
-            summary += (
-                f"{quick_wins} quick wins can be implemented within 1-4 weeks to "
-                f"deliver early results. "
-            )
-
-        summary += (
-            f"The current search maturity level is {maturity.overall_level.name} "
-            f"({maturity.overall_score:.1f}/5.0). Following this plan could elevate "
-            f"the site to the next maturity level."
-        )
-
-        return summary
-
-    def export_to_csv(self, plan: UpliftPlan) -> str:
-        """Export recommendations to CSV format (for JIRA import).
+    def export_to_csv(self, report: FindingsReport) -> str:
+        """Export findings to CSV format.
 
         Args:
-            plan: Uplift plan to export
+            report: Findings report to export.
 
         Returns:
-            CSV string
+            CSV string.
         """
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Header row
         writer.writerow(
             [
                 "ID",
-                "Title",
-                "Description",
+                "Observation",
+                "Affected Queries",
+                "Total Queries",
+                "Affected %",
+                "Severity",
+                "Dimension",
+                "Avg Dimension Score",
                 "Category",
-                "Priority",
-                "Effort",
-                "Expected Uplift %",
-                "Confidence",
-                "ROI Score",
-                "Metrics to Track",
+                "Example Queries",
+                "Suggestion",
             ]
         )
 
-        # Data rows
-        for rec in plan.recommendations:
+        for finding in report.findings:
             writer.writerow(
                 [
-                    rec.id,
-                    rec.title,
-                    rec.description,
-                    rec.category.value,
-                    rec.priority.value,
-                    rec.effort.value,
-                    f"{rec.expected_uplift_pct:.1f}",
-                    f"{rec.confidence:.0%}",
-                    f"{rec.roi_score:.2f}",
-                    "; ".join(rec.metrics_to_track),
+                    finding.id,
+                    finding.observation,
+                    finding.affected_queries,
+                    finding.total_queries,
+                    f"{finding.affected_pct:.1f}",
+                    finding.severity.value,
+                    finding.affected_dimension,
+                    f"{finding.avg_dimension_score:.2f}",
+                    finding.category.value,
+                    "; ".join(finding.example_queries),
+                    finding.suggestion,
                 ]
             )
 
         return output.getvalue()
 
+    @staticmethod
+    def _avg_dimension_score(
+        records: list[AuditRecord], query_indices: set[int], dimension: str
+    ) -> float:
+        """Calculate average dimension score for a set of affected queries."""
+        scores: list[float] = []
+        for idx in query_indices:
+            record = records[idx]
+            dim_diagnosis = getattr(record.judge, dimension, None)
+            if dim_diagnosis is not None:
+                scores.append(float(dim_diagnosis.score))
+        if not scores:
+            return 0.0
+        return sum(scores) / len(scores)
 
-# Helper class for default dimension
-class DummyDim:
-    """Dummy dimension for safe attribute access."""
+    @staticmethod
+    def _build_summary(findings: list["Finding"], total: int) -> str:
+        """Build executive summary from findings."""
+        if not findings:
+            return (
+                f"No recurring search quality issues were identified across "
+                f"{total} analyzed queries."
+            )
 
-    score = 0.0
+        critical = sum(1 for f in findings if f.severity == Severity.CRITICAL)
+        high = sum(1 for f in findings if f.severity == Severity.HIGH)
 
+        summary = (
+            f"Analysis of {total} queries identified {len(findings)} " f"search quality findings."
+        )
 
-# Helper functions for rule conditions
-def _has_typo_issues(records: list[AuditRecord]) -> bool:
-    """Check if records indicate typo handling issues."""
-    typo_count = 0
-    for record in records:
-        issues_text = " ".join(record.judge.issues).lower()
-        if "typo" in issues_text or "misspell" in issues_text or "spelling" in issues_text:
-            typo_count += 1
-    return typo_count >= len(records) * 0.15
+        if critical > 0:
+            summary += f" {critical} critical issue{'s' if critical > 1 else ''} require{'s' if critical == 1 else ''} immediate attention."
 
+        if high > 0:
+            summary += (
+                f" {high} high-severity issue{'s' if high > 1 else ''} should be addressed soon."
+            )
 
-def _has_synonym_issues(records: list[AuditRecord]) -> bool:
-    """Check if records indicate synonym/semantic issues."""
-    semantic_count = 0
-    for record in records:
-        issues_text = " ".join(record.judge.issues).lower()
-        if "synonym" in issues_text or "semantic" in issues_text or "vocabulary" in issues_text:
-            semantic_count += 1
-    return semantic_count >= len(records) * 0.15
-
-
-def _high_zero_result_rate(records: list[AuditRecord]) -> bool:
-    """Check for high zero-result rate."""
-    if not records:
-        return False
-    zero_results = sum(1 for r in records if len(r.items) == 0)
-    return (zero_results / len(records)) > 0.15
-
-
-def _low_navigability(records: list[AuditRecord]) -> bool:
-    """Check for low navigability scores."""
-    if not records:
-        return False
-    avg = sum(r.judge.navigability for r in records) / len(records)
-    return avg < 3.0
-
-
-def _low_diversity(records: list[AuditRecord]) -> bool:
-    """Check for low diversity scores."""
-    if not records:
-        return False
-    avg = sum(r.judge.diversity for r in records) / len(records)
-    return avg < 2.8
-
-
-def _missing_product_data(records: list[AuditRecord]) -> bool:
-    """Check for missing product data in results."""
-    missing_count = 0
-    total_items = 0
-
-    for record in records:
-        for item in record.items:
-            total_items += 1
-            if not item.title or not item.price:
-                missing_count += 1
-
-    if total_items == 0:
-        return False
-    return (missing_count / total_items) > 0.2
+        return summary

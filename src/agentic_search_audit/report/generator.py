@@ -9,8 +9,8 @@ from typing import TextIO
 
 from ..analysis.benchmarks import Industry
 from ..analysis.maturity import MaturityEvaluator, MaturityReport
-from ..analysis.uplift_planner import UpliftPlan, UpliftPlanner
-from ..core.types import AuditConfig, AuditRecord
+from ..analysis.uplift_planner import FindingsAnalyzer, FindingsReport, Severity
+from ..core.types import AuditConfig, AuditRecord, get_fqi_band
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +53,13 @@ class ReportGenerator:
         self.run_dir = run_dir
         self.industry = industry
         self.maturity_evaluator = MaturityEvaluator()
-        self.uplift_planner = UpliftPlanner()
+        self.findings_analyzer = FindingsAnalyzer()
 
     def generate_reports(
         self,
         records: list[AuditRecord],
         include_maturity: bool = True,
-        include_uplift: bool = True,
+        include_findings: bool = True,
         generate_pdf: bool = False,
     ) -> None:
         """Generate all configured report formats.
@@ -67,14 +67,14 @@ class ReportGenerator:
         Args:
             records: List of audit records
             include_maturity: Include maturity assessment section
-            include_uplift: Include uplift recommendations section
+            include_findings: Include findings section
             generate_pdf: Generate PDF version of the HTML report
         """
         logger.info(f"Generating reports in {self.run_dir}")
 
-        # Generate maturity and uplift analysis
+        # Generate maturity and findings analysis
         maturity_report = None
-        uplift_plan = None
+        findings_report = None
 
         if include_maturity and records:
             maturity_report = self.maturity_evaluator.evaluate(records)
@@ -83,32 +83,32 @@ class ReportGenerator:
                 f"(score: {maturity_report.overall_score:.2f})"
             )
 
-        if include_uplift and records:
-            uplift_plan = self.uplift_planner.generate_plan(records, maturity_report)
+        if include_findings and records:
+            findings_report = self.findings_analyzer.analyze(records)
             logger.info(
-                f"Uplift plan: {len(uplift_plan.recommendations)} recommendations, "
-                f"{uplift_plan.total_potential_uplift:.1f}% potential uplift"
+                f"Findings: {len(findings_report.findings)} issues identified "
+                f"across {findings_report.total_queries_analyzed} queries"
             )
 
         if "md" in self.config.report.formats:
-            self._generate_markdown(records, maturity_report, uplift_plan)
+            self._generate_markdown(records, maturity_report, findings_report)
 
         if "html" in self.config.report.formats:
-            self._generate_html(records, maturity_report, uplift_plan)
+            self._generate_html(records, maturity_report, findings_report)
 
         if "json" in self.config.report.formats:
-            self._generate_json(records, maturity_report, uplift_plan)
+            self._generate_json(records, maturity_report, findings_report)
 
         # Generate PDF if requested
         if generate_pdf:
             self._generate_pdf()
 
-        # Export uplift plan to CSV if available
-        if uplift_plan and uplift_plan.recommendations:
-            csv_path = self.run_dir / "uplift_recommendations.csv"
-            csv_content = self.uplift_planner.export_to_csv(uplift_plan)
+        # Export findings to CSV if available
+        if findings_report and findings_report.findings:
+            csv_path = self.run_dir / "findings.csv"
+            csv_content = self.findings_analyzer.export_to_csv(findings_report)
             csv_path.write_text(csv_content, encoding="utf-8")
-            logger.info(f"Exported uplift recommendations to {csv_path}")
+            logger.info(f"Exported findings to {csv_path}")
 
         logger.info("Reports generated successfully")
 
@@ -116,14 +116,14 @@ class ReportGenerator:
         self,
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
-        uplift_plan: UpliftPlan | None = None,
+        findings_report: FindingsReport | None = None,
     ) -> None:
         """Generate Markdown report.
 
         Args:
             records: Audit records
             maturity_report: Maturity assessment report
-            uplift_plan: Uplift recommendations plan
+            findings_report: Findings analysis report
         """
         report_path = self.run_dir / "report.md"
         logger.info(f"Generating Markdown report: {report_path}")
@@ -142,44 +142,52 @@ class ReportGenerator:
 
             # Summary statistics
             if records:
-                avg_overall = sum(r.judge.overall for r in records) / len(records)
-                avg_relevance = sum(r.judge.relevance for r in records) / len(records)
-                avg_diversity = sum(r.judge.diversity for r in records) / len(records)
-                avg_quality = sum(r.judge.result_quality for r in records) / len(records)
-                avg_nav = sum(r.judge.navigability for r in records) / len(records)
+                avg_fqi = sum(r.judge.fqi for r in records) / len(records)
+                avg_qu = sum(r.judge.query_understanding.score for r in records) / len(records)
+                avg_rr = sum(r.judge.results_relevance.score for r in records) / len(records)
+                avg_rp = sum(r.judge.result_presentation.score for r in records) / len(records)
+                avg_af = sum(r.judge.advanced_features.score for r in records) / len(records)
+                avg_eh = sum(r.judge.error_handling.score for r in records) / len(records)
 
                 f.write("## Summary\n\n")
                 f.write("| Metric | Average Score |\n")
                 f.write("|--------|---------------|\n")
-                f.write(f"| Overall | {avg_overall:.2f} |\n")
-                f.write(f"| Relevance | {avg_relevance:.2f} |\n")
-                f.write(f"| Diversity | {avg_diversity:.2f} |\n")
-                f.write(f"| Result Quality | {avg_quality:.2f} |\n")
-                f.write(f"| Navigability | {avg_nav:.2f} |\n\n")
+                f.write(f"| FQI | {avg_fqi:.2f} |\n")
+                f.write(f"| QU | {avg_qu:.2f} |\n")
+                f.write(f"| RR | {avg_rr:.2f} |\n")
+                f.write(f"| RP | {avg_rp:.2f} |\n")
+                f.write(f"| AF | {avg_af:.2f} |\n")
+                f.write(f"| EH | {avg_eh:.2f} |\n\n")
 
             # Maturity Assessment Section
             if maturity_report:
                 self._write_markdown_maturity_section(f, maturity_report)
 
-            # Uplift Recommendations Section
-            if uplift_plan:
-                self._write_markdown_uplift_section(f, uplift_plan)
+            # Findings Section
+            if findings_report:
+                self._write_markdown_findings_section(f, findings_report)
 
             # Score distribution
             f.write("## Score Distribution\n\n")
-            score_ranges = {"0-1": 0, "1-2": 0, "2-3": 0, "3-4": 0, "4-5": 0}
+            score_ranges = {
+                "Broken (0-1.5)": 0,
+                "Critical (1.5-2.5)": 0,
+                "Weak (2.5-3.5)": 0,
+                "Good (3.5-4.5)": 0,
+                "Excellent (4.5-5)": 0,
+            }
             for record in records:
-                score = record.judge.overall
-                if score < 1:
-                    score_ranges["0-1"] += 1
-                elif score < 2:
-                    score_ranges["1-2"] += 1
-                elif score < 3:
-                    score_ranges["2-3"] += 1
-                elif score < 4:
-                    score_ranges["3-4"] += 1
+                score = record.judge.fqi
+                if score >= 4.5:
+                    score_ranges["Excellent (4.5-5)"] += 1
+                elif score >= 3.5:
+                    score_ranges["Good (3.5-4.5)"] += 1
+                elif score >= 2.5:
+                    score_ranges["Weak (2.5-3.5)"] += 1
+                elif score >= 1.5:
+                    score_ranges["Critical (1.5-2.5)"] += 1
                 else:
-                    score_ranges["4-5"] += 1
+                    score_ranges["Broken (0-1.5)"] += 1
 
             for range_label, count in score_ranges.items():
                 f.write(f"- {range_label}: {count} queries\n")
@@ -191,13 +199,36 @@ class ReportGenerator:
             for i, record in enumerate(records, 1):
                 f.write(f"### {i}. {record.query.text}\n\n")
 
-                # Scores
-                f.write("**Scores:**\n")
-                f.write(f"- Overall: {record.judge.overall:.2f}\n")
-                f.write(f"- Relevance: {record.judge.relevance:.2f}\n")
-                f.write(f"- Diversity: {record.judge.diversity:.2f}\n")
-                f.write(f"- Result Quality: {record.judge.result_quality:.2f}\n")
-                f.write(f"- Navigability: {record.judge.navigability:.2f}\n\n")
+                # FQI score with band
+                band = get_fqi_band(record.judge.fqi)
+                f.write(f"**FQI:** {record.judge.fqi:.2f} ({band})\n\n")
+
+                # Dimension breakdown with diagnosis
+                f.write("**Dimension Scores:**\n")
+                f.write(
+                    f"- Query Understanding: {record.judge.query_understanding.score:.2f}"
+                    f" - {record.judge.query_understanding.diagnosis}\n"
+                )
+                f.write(
+                    f"- Results Relevance: {record.judge.results_relevance.score:.2f}"
+                    f" - {record.judge.results_relevance.diagnosis}\n"
+                )
+                f.write(
+                    f"- Result Presentation: {record.judge.result_presentation.score:.2f}"
+                    f" - {record.judge.result_presentation.diagnosis}\n"
+                )
+                f.write(
+                    f"- Advanced Features: {record.judge.advanced_features.score:.2f}"
+                    f" - {record.judge.advanced_features.diagnosis}\n"
+                )
+                f.write(
+                    f"- Error Handling: {record.judge.error_handling.score:.2f}"
+                    f" - {record.judge.error_handling.diagnosis}\n\n"
+                )
+
+                # Executive Summary
+                if record.judge.executive_summary:
+                    f.write(f"**Executive Summary:** {record.judge.executive_summary}\n\n")
 
                 # Rationale
                 f.write(f"**Rationale:** {record.judge.rationale}\n\n")
@@ -272,60 +303,71 @@ class ReportGenerator:
                 f.write(f"- {weakness}\n")
             f.write("\n")
 
-    def _write_markdown_uplift_section(self, f: "TextIO", uplift_plan: UpliftPlan) -> None:
-        """Write uplift recommendations section to markdown file."""
-        f.write("## Conversion Uplift Opportunities\n\n")
-        f.write(f"{uplift_plan.summary}\n\n")
-        f.write(f"**Total Potential Uplift:** {uplift_plan.total_potential_uplift:.1f}%\n\n")
+    def _write_markdown_findings_section(
+        self, f: "TextIO", findings_report: FindingsReport
+    ) -> None:
+        """Write findings section to markdown file."""
+        f.write("## Search Quality Issues\n\n")
+        f.write(f"{findings_report.summary}\n\n")
 
-        # Quick Wins
-        if uplift_plan.quick_wins:
-            f.write("### Quick Wins (0-4 weeks)\n\n")
-            for rec in uplift_plan.quick_wins:
-                f.write(f"**{rec.title}** (Expected uplift: {rec.expected_uplift_pct:.1f}%)\n")
-                f.write(f"> {rec.description}\n\n")
+        # Scope & Limitations
+        f.write("### Scope & Limitations\n\n")
+        f.write(f"> {findings_report.scope_limitations}\n\n")
 
-        # Top Recommendations Table
-        f.write("### All Recommendations\n\n")
-        f.write("| Priority | Title | Effort | Expected Uplift |\n")
-        f.write("|----------|-------|--------|----------------|\n")
-        for rec in uplift_plan.recommendations[:10]:
-            f.write(
-                f"| {rec.priority.value.upper()} | {rec.title} | "
-                f"{rec.effort.value} | {rec.expected_uplift_pct:.1f}% |\n"
-            )
-        f.write("\n")
+        # Group findings by severity
+        for severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]:
+            group = [f for f in findings_report.findings if f.severity == severity]
+            if not group:
+                continue
 
-        # Implementation Phases
-        if uplift_plan.phases:
-            f.write("### Implementation Phases\n\n")
-            for phase in uplift_plan.phases:
-                f.write(f"**{phase['name']}** ({phase['duration']})\n")
-                f.write(f"- Expected uplift: {phase['expected_uplift']:.1f}%\n")
-                f.write(f"- Recommendations: {len(phase['recommendations'])} items\n\n")
+            f.write(f"### {severity.value.title()} Severity\n\n")
+            for finding in group:
+                f.write(
+                    f"**{finding.observation}** "
+                    f"({finding.affected_queries}/{finding.total_queries} queries)\n"
+                )
+                f.write(
+                    f"- Dimension: {finding.affected_dimension} "
+                    f"(avg score: {finding.avg_dimension_score:.1f})\n"
+                )
+                if finding.example_queries:
+                    examples = ", ".join(f'"{q}"' for q in finding.example_queries)
+                    f.write(f"- Examples: {examples}\n")
+                if finding.suggestion:
+                    f.write(f"- Suggestion: {finding.suggestion}\n")
+                f.write("\n")
 
     def _generate_html(
         self,
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
-        uplift_plan: UpliftPlan | None = None,
+        findings_report: FindingsReport | None = None,
     ) -> None:
         """Generate HTML report.
 
         Args:
             records: Audit records
             maturity_report: Maturity assessment report
-            uplift_plan: Uplift recommendations plan
+            findings_report: Findings analysis report
         """
         report_path = self.run_dir / "report.html"
         logger.info(f"Generating HTML report: {report_path}")
 
         # Calculate summary stats
-        avg_overall = sum(r.judge.overall for r in records) / len(records) if records else 0
-        avg_relevance = sum(r.judge.relevance for r in records) / len(records) if records else 0
-        avg_diversity = sum(r.judge.diversity for r in records) / len(records) if records else 0
-        avg_quality = sum(r.judge.result_quality for r in records) / len(records) if records else 0
-        avg_nav = sum(r.judge.navigability for r in records) / len(records) if records else 0
+        avg_fqi = sum(r.judge.fqi for r in records) / len(records) if records else 0
+        avg_qu = (
+            sum(r.judge.query_understanding.score for r in records) / len(records) if records else 0
+        )
+        avg_rr = (
+            sum(r.judge.results_relevance.score for r in records) / len(records) if records else 0
+        )
+        avg_rp = (
+            sum(r.judge.result_presentation.score for r in records) / len(records) if records else 0
+        )
+        avg_af = (
+            sum(r.judge.advanced_features.score for r in records) / len(records) if records else 0
+        )
+        avg_eh = sum(r.judge.error_handling.score for r in records) / len(records) if records else 0
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("""<!DOCTYPE html>
@@ -492,7 +534,7 @@ class ReportGenerator:
             font-weight: 300;
         }
         details.query-details[open] summary::after {
-            content: '−';
+            content: '\u2212';
         }
         details.query-details .query-content {
             padding: 0 25px 25px 25px;
@@ -511,32 +553,118 @@ class ReportGenerator:
             background: #333;
         }
 
-        .scores {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .score-item {
-            background: var(--bg-primary);
-            padding: 15px;
-            border-radius: 6px;
-            border-left: 4px solid #007bff;
-        }
-        .score-label {
-            font-size: 0.9em;
-            color: var(--text-secondary);
-            margin-bottom: 5px;
-        }
-        .score-value {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: var(--text-primary);
-        }
         .score-excellent { border-left-color: #28a745; }
         .score-good { border-left-color: #17a2b8; }
         .score-fair { border-left-color: #ffc107; }
         .score-poor { border-left-color: #dc3545; }
+
+        /* FQI badge */
+        .fqi-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 0.85em;
+            margin-left: 8px;
+        }
+        .fqi-excellent { background: #d4edda; color: #155724; }
+        .fqi-good { background: #cce5ff; color: #004085; }
+        .fqi-weak { background: #fff3cd; color: #856404; }
+        .fqi-critical { background: #f8d7da; color: #721c24; }
+        .fqi-broken { background: #dc3545; color: white; }
+
+        /* Verdict Bar */
+        .verdict-bar {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 12px 15px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .verdict-fqi {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 140px;
+        }
+        .verdict-score {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .dimension-bars {
+            display: flex;
+            gap: 12px;
+            flex: 1;
+            flex-wrap: wrap;
+        }
+        .dim-bar {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 100px;
+        }
+        .dim-label {
+            font-size: 0.75em;
+            font-weight: 600;
+            color: var(--text-secondary);
+            width: 22px;
+        }
+        .dim-track {
+            width: 60px;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .dim-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .dim-fill.fill-excellent { background: #28a745; }
+        .dim-fill.fill-good { background: #17a2b8; }
+        .dim-fill.fill-fair { background: #ffc107; }
+        .dim-fill.fill-poor { background: #dc3545; }
+        .dim-score {
+            font-size: 0.8em;
+            font-weight: 600;
+            min-width: 24px;
+        }
+        .dim-warn {
+            background: rgba(220, 53, 69, 0.08);
+            border-radius: 4px;
+            padding: 2px 6px;
+        }
+        .dim-warn .dim-score { color: #dc3545; font-weight: 700; }
+
+        /* Analysis section */
+        .analysis-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+        .analysis-section h4 {
+            margin: 0 0 10px 0;
+            color: var(--text-secondary);
+        }
+
+        /* Collapsible screenshot */
+        .screenshot-toggle summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding: 8px 0;
+        }
+
+        /* Summary warning badge */
+        .summary-warn {
+            color: #dc3545;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
 
         /* Sortable tables */
         .results-table {
@@ -558,8 +686,8 @@ class ReportGenerator:
         .results-table th:hover {
             background: var(--border-color);
         }
-        .results-table th.sort-asc::after { content: ' ↑'; }
-        .results-table th.sort-desc::after { content: ' ↓'; }
+        .results-table th.sort-asc::after { content: ' \u2191'; }
+        .results-table th.sort-desc::after { content: ' \u2193'; }
 
         .no-results-message {
             padding: 20px;
@@ -633,45 +761,59 @@ class ReportGenerator:
             font-size: 1.5em;
             font-weight: bold;
         }
-        /* Uplift Section Styles */
-        .uplift-section {
+        /* Findings Section Styles */
+        .findings-section {
             background: var(--bg-card);
             padding: 25px;
             border-radius: 8px;
             margin-bottom: 20px;
             box-shadow: var(--shadow);
         }
-        .uplift-summary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .findings-summary {
+            background: var(--bg-primary);
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
+            border-left: 4px solid #667eea;
         }
-        .uplift-number {
+        .findings-number {
             font-size: 2.5em;
             font-weight: bold;
+            color: var(--text-primary);
         }
-        .recommendation-card {
+        .scope-limitations {
+            background: var(--bg-primary);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #aaa;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+        .scope-limitations h4 {
+            margin: 0 0 8px 0;
+            color: var(--text-secondary);
+        }
+        .finding-card {
             border: 1px solid var(--border-color);
             border-radius: 6px;
             padding: 15px;
             margin-bottom: 10px;
             background: var(--bg-card);
         }
-        .recommendation-card.priority-critical {
+        .finding-card.severity-critical {
             border-left: 4px solid #dc3545;
         }
-        .recommendation-card.priority-high {
+        .finding-card.severity-high {
             border-left: 4px solid #fd7e14;
         }
-        .recommendation-card.priority-medium {
+        .finding-card.severity-medium {
             border-left: 4px solid #ffc107;
         }
-        .recommendation-card.priority-low {
+        .finding-card.severity-low {
             border-left: 4px solid #28a745;
         }
-        .priority-badge {
+        .severity-badge {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 4px;
@@ -679,28 +821,17 @@ class ReportGenerator:
             font-weight: bold;
             text-transform: uppercase;
         }
-        .priority-critical { background: #dc3545; color: white; }
-        .priority-high { background: #fd7e14; color: white; }
-        .priority-medium { background: #ffc107; color: #333; }
-        .priority-low { background: #28a745; color: white; }
-        .phase-timeline {
-            margin: 20px 0;
-        }
-        .phase-item {
-            padding: 15px;
-            border-left: 3px solid #007bff;
-            margin-left: 20px;
-            margin-bottom: 15px;
-            background: var(--bg-primary);
-            border-radius: 0 6px 6px 0;
-        }
+        .severity-critical { background: #dc3545; color: white; }
+        .severity-high { background: #fd7e14; color: white; }
+        .severity-medium { background: #ffc107; color: #333; }
+        .severity-low { background: #28a745; color: white; }
 
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             body {
                 padding: 10px;
             }
-            .header, .summary, .query-card, .maturity-section, .uplift-section, .charts-section {
+            .header, .summary, .query-card, .maturity-section, .findings-section, .charts-section {
                 padding: 15px;
             }
             .theme-toggle {
@@ -719,15 +850,12 @@ class ReportGenerator:
             .chart-container {
                 height: 250px;
             }
-            .scores {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
+            .verdict-bar {
+                gap: 12px;
+                padding: 10px 12px;
             }
-            .score-item {
-                padding: 10px;
-            }
-            .score-value {
-                font-size: 1.4em;
+            .dimension-bars {
+                gap: 8px;
             }
             .dimension-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -748,7 +876,7 @@ class ReportGenerator:
             details.query-details .query-content {
                 padding: 0 15px 15px 15px;
             }
-            .uplift-number {
+            .findings-number {
                 font-size: 2em;
             }
             h1 {
@@ -763,8 +891,8 @@ class ReportGenerator:
         }
 
         @media (max-width: 480px) {
-            .scores {
-                grid-template-columns: 1fr;
+            .dimension-bars {
+                flex-direction: column;
             }
             .dimension-grid {
                 grid-template-columns: 1fr;
@@ -780,14 +908,14 @@ class ReportGenerator:
                 background: white;
                 color: black;
             }
-            .query-card, .maturity-section, .uplift-section {
+            .query-card, .maturity-section, .findings-section {
                 break-inside: avoid;
             }
         }
     </style>
 </head>
 <body>
-    <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+    <button class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
 """)
 
             # Header
@@ -803,13 +931,22 @@ class ReportGenerator:
             if records:
                 f.write("""
     <div class="filter-controls">
-        <label>Filter by score:</label>
+        <label>Sort:</label>
+        <select id="querySort" onchange="sortQueries()">
+            <option value="original">Original Order</option>
+            <option value="alpha-asc">A &rarr; Z</option>
+            <option value="alpha-desc">Z &rarr; A</option>
+            <option value="score-asc">Score &uarr;</option>
+            <option value="score-desc">Score &darr;</option>
+        </select>
+        <label>Filter by FQI band:</label>
         <select id="scoreFilter" onchange="filterQueries()">
-            <option value="all">All Scores</option>
-            <option value="0-2">Poor (0-2)</option>
-            <option value="2-3">Fair (2-3)</option>
-            <option value="3-4">Good (3-4)</option>
-            <option value="4-5">Excellent (4-5)</option>
+            <option value="all">All Bands</option>
+            <option value="0-1.5">Broken (0-1.5)</option>
+            <option value="1.5-2.5">Critical (1.5-2.5)</option>
+            <option value="2.5-3.5">Weak (2.5-3.5)</option>
+            <option value="3.5-4.5">Good (3.5-4.5)</option>
+            <option value="4.5-5">Excellent (4.5-5)</option>
         </select>
         <label>Search:</label>
         <input type="text" id="querySearch" placeholder="Search queries..." oninput="filterQueries()">
@@ -826,24 +963,28 @@ class ReportGenerator:
                 <th>Average Score</th>
             </tr>
             <tr>
-                <td>Overall</td>
-                <td>{avg_overall:.2f}</td>
+                <td>FQI</td>
+                <td>{avg_fqi:.2f}</td>
             </tr>
             <tr>
-                <td>Relevance</td>
-                <td>{avg_relevance:.2f}</td>
+                <td>QU</td>
+                <td>{avg_qu:.2f}</td>
             </tr>
             <tr>
-                <td>Diversity</td>
-                <td>{avg_diversity:.2f}</td>
+                <td>RR</td>
+                <td>{avg_rr:.2f}</td>
             </tr>
             <tr>
-                <td>Result Quality</td>
-                <td>{avg_quality:.2f}</td>
+                <td>RP</td>
+                <td>{avg_rp:.2f}</td>
             </tr>
             <tr>
-                <td>Navigability</td>
-                <td>{avg_nav:.2f}</td>
+                <td>AF</td>
+                <td>{avg_af:.2f}</td>
+            </tr>
+            <tr>
+                <td>EH</td>
+                <td>{avg_eh:.2f}</td>
             </tr>
         </table>
     </div>
@@ -851,83 +992,93 @@ class ReportGenerator:
 
             # Charts section
             if records:
-                self._write_html_score_charts(
-                    f, records, avg_relevance, avg_diversity, avg_quality, avg_nav
-                )
+                self._write_html_score_charts(f, records, avg_qu, avg_rr, avg_rp, avg_af, avg_eh)
 
             # Maturity Assessment Section
             if maturity_report:
                 self._write_html_maturity_section(f, maturity_report)
 
-            # Uplift Recommendations Section
-            if uplift_plan:
-                self._write_html_uplift_section(f, uplift_plan)
+            # Findings Section
+            if findings_report:
+                self._write_html_findings_section(f, findings_report)
 
             # Query details header
             if records:
                 f.write("    <h2>Query Details</h2>\n")
                 f.write('    <div id="queryContainer">\n')
-            for i, record in enumerate(records, 1):
-                score_class = self._get_score_class(record.judge.overall)
+            for i, record in enumerate(records):
+                fqi_score = record.judge.fqi
+                score_class = self._get_score_class(fqi_score)
+                fqi_band = get_fqi_band(fqi_score)
+                fqi_band_class = self._get_fqi_band_class(fqi_band)
                 screenshot_rel = Path(record.page.screenshot_path).relative_to(self.run_dir)
                 query_escaped = escape_html(record.query.text.lower())
 
+                # Count weak dimensions for summary warning
+                dim_scores = [
+                    record.judge.query_understanding.score,
+                    record.judge.results_relevance.score,
+                    record.judge.result_presentation.score,
+                    record.judge.advanced_features.score,
+                    record.judge.error_handling.score,
+                ]
+                weak_count = sum(1 for s in dim_scores if s < 3.0)
+
+                weak_badge = ""
+                if weak_count > 0:
+                    weak_badge = f'<span class="summary-warn">' f"\u26a0 {weak_count} weak</span>"
+
                 f.write(f"""
-    <details class="query-details" data-score="{record.judge.overall:.2f}" data-query="{query_escaped}">
+    <details class="query-details" data-score="{fqi_score:.2f}" data-query="{query_escaped}" data-index="{i}">
         <summary>
-            <span>{i}. {escape_html(record.query.text)}</span>
+            <span>{i + 1}. {escape_html(record.query.text)}</span>
             <span class="summary-scores">
-                <span class="score-badge {score_class}">Overall: {record.judge.overall:.2f}</span>
-                <span class="score-badge">Rel: {record.judge.relevance:.1f}</span>
-                <span class="score-badge">Div: {record.judge.diversity:.1f}</span>
+                <span class="score-badge {score_class}">FQI: {fqi_score:.2f}</span>
+                <span class="fqi-badge {fqi_band_class}">{escape_html(fqi_band)}</span>
+                <span class="score-badge">QU: {record.judge.query_understanding.score:.1f}</span>
+                <span class="score-badge">RR: {record.judge.results_relevance.score:.1f}</span>
+                {weak_badge}
             </span>
         </summary>
         <div class="query-content">
-        <div class="scores">
-            <div class="score-item {score_class}">
-                <div class="score-label">Overall</div>
-                <div class="score-value">{record.judge.overall:.2f}</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">Relevance</div>
-                <div class="score-value">{record.judge.relevance:.2f}</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">Diversity</div>
-                <div class="score-value">{record.judge.diversity:.2f}</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">Result Quality</div>
-                <div class="score-value">{record.judge.result_quality:.2f}</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">Navigability</div>
-                <div class="score-value">{record.judge.navigability:.2f}</div>
-            </div>
-        </div>
-
-        <p><strong>Rationale:</strong> {escape_html(record.judge.rationale)}</p>
 """)
 
-                if record.judge.issues:
-                    f.write('        <div class="issues">\n')
-                    f.write("            <strong>Issues:</strong>\n")
-                    f.write("            <ul>\n")
-                    for issue in record.judge.issues:
-                        f.write(f"                <li>{escape_html(issue)}</li>\n")
-                    f.write("            </ul>\n")
-                    f.write("        </div>\n")
+                # --- Verdict Bar ---
+                dimensions = [
+                    ("QU", record.judge.query_understanding),
+                    ("RR", record.judge.results_relevance),
+                    ("RP", record.judge.result_presentation),
+                    ("AF", record.judge.advanced_features),
+                    ("EH", record.judge.error_handling),
+                ]
 
-                if record.judge.improvements:
-                    f.write('        <div class="improvements">\n')
-                    f.write("            <strong>Suggested Improvements:</strong>\n")
-                    f.write("            <ul>\n")
-                    for improvement in record.judge.improvements:
-                        f.write(f"                <li>{escape_html(improvement)}</li>\n")
-                    f.write("            </ul>\n")
-                    f.write("        </div>\n")
+                f.write(f"""        <div class="verdict-bar">
+            <div class="verdict-fqi">
+                <span class="verdict-score {score_class}">{fqi_score:.2f}</span>
+                <span class="fqi-badge {fqi_band_class}">{escape_html(fqi_band)}</span>
+            </div>
+            <div class="dimension-bars">
+""")
+                for dim_label, dim in dimensions:
+                    dim_score = dim.score
+                    fill_class = self._get_fill_class(dim_score)
+                    warn_class = "dim-warn" if dim_score < 3.0 else ""
+                    width_pct = dim_score / 5.0 * 100
+                    diagnosis_escaped = escape_html(dim.diagnosis)
+                    f.write(
+                        f'                <div class="dim-bar {warn_class}"'
+                        f' title="{diagnosis_escaped}">\n'
+                        f'                    <span class="dim-label">{dim_label}</span>\n'
+                        f'                    <div class="dim-track">\n'
+                        f'                        <div class="dim-fill {fill_class}"'
+                        f' style="width: {width_pct:.0f}%"></div>\n'
+                        f"                    </div>\n"
+                        f'                    <span class="dim-score">{dim_score:.1f}</span>\n'
+                        f"                </div>\n"
+                    )
+                f.write("            </div>\n        </div>\n")
 
-                # Results table
+                # --- Results table (moved up, before analysis) ---
                 if record.items:
                     f.write("""
         <h3>Top Results</h3>
@@ -969,10 +1120,42 @@ class ReportGenerator:
         </div>
 """)
 
-                # Screenshot
+                # --- Analysis section ---
+                f.write('        <div class="analysis-section">\n')
+                f.write("            <h4>Analysis</h4>\n")
+
+                # Show executive_summary if available, otherwise rationale
+                if record.judge.executive_summary:
+                    f.write(f"            <p>{escape_html(record.judge.executive_summary)}</p>\n")
+                else:
+                    f.write(f"            <p>{escape_html(record.judge.rationale)}</p>\n")
+
+                if record.judge.issues:
+                    f.write('            <div class="issues">\n')
+                    f.write("                <strong>Issues:</strong>\n")
+                    f.write("                <ul>\n")
+                    for issue in record.judge.issues:
+                        f.write(f"                    <li>{escape_html(issue)}</li>\n")
+                    f.write("                </ul>\n")
+                    f.write("            </div>\n")
+
+                if record.judge.improvements:
+                    f.write('            <div class="improvements">\n')
+                    f.write("                <strong>Suggested Improvements:</strong>\n")
+                    f.write("                <ul>\n")
+                    for improvement in record.judge.improvements:
+                        f.write(f"                    <li>{escape_html(improvement)}</li>\n")
+                    f.write("                </ul>\n")
+                    f.write("            </div>\n")
+
+                f.write("        </div>\n")
+
+                # --- Screenshot in collapsible ---
                 f.write(f"""
-        <h3>Screenshot</h3>
-        <img src="{screenshot_rel}" alt="Screenshot" class="screenshot" loading="lazy">
+        <details class="screenshot-toggle">
+            <summary>Screenshot</summary>
+            <img src="{screenshot_rel}" alt="Screenshot" class="screenshot" loading="lazy">
+        </details>
         </div>
     </details>
 """)
@@ -1035,69 +1218,61 @@ class ReportGenerator:
 
         f.write("    </div>\n")
 
-    def _write_html_uplift_section(self, f: TextIO, uplift_plan: UpliftPlan) -> None:
-        """Write uplift recommendations section to HTML file."""
+    def _write_html_findings_section(self, f: TextIO, findings_report: FindingsReport) -> None:
+        """Write findings section to HTML file."""
+        total_findings = len(findings_report.findings)
+
         f.write(f"""
-    <div class="uplift-section">
-        <h2>Conversion Uplift Opportunities</h2>
+    <div class="findings-section">
+        <h2>Search Quality Issues</h2>
 
-        <div class="uplift-summary">
-            <div class="uplift-number">{uplift_plan.total_potential_uplift:.1f}%</div>
-            <div>Total Potential Conversion Uplift</div>
-            <p style="margin-top: 15px; font-size: 0.9em;">{escape_html(uplift_plan.summary)}</p>
+        <div class="findings-summary">
+            <div class="findings-number">{total_findings}</div>
+            <div>Issues Identified Across {findings_report.total_queries_analyzed} Queries</div>
+            <p style="margin-top: 15px; font-size: 0.9em;">{escape_html(findings_report.summary)}</p>
+        </div>
+
+        <div class="scope-limitations">
+            <h4>Scope &amp; Limitations</h4>
+            <p>{escape_html(findings_report.scope_limitations)}</p>
         </div>
 """)
 
-        # Quick Wins
-        if uplift_plan.quick_wins:
-            f.write("        <h3>Quick Wins (0-4 weeks)</h3>\n")
-            for rec in uplift_plan.quick_wins:
-                priority_value = escape_html(rec.priority.value)
+        # Group findings by severity
+        for severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]:
+            group = [fi for fi in findings_report.findings if fi.severity == severity]
+            if not group:
+                continue
+
+            severity_value = escape_html(severity.value)
+            f.write(f"        <h3>{severity.value.title()} Severity</h3>\n")
+            for finding in group:
                 f.write(f"""
-        <div class="recommendation-card priority-{priority_value}">
-            <span class="priority-badge priority-{priority_value}">{priority_value}</span>
-            <strong>{escape_html(rec.title)}</strong>
-            <span style="float: right; color: #28a745;">+{rec.expected_uplift_pct:.1f}%</span>
-            <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
-        </div>
-""")
-
-        # Top Recommendations
-        f.write("        <h3>All Recommendations</h3>\n")
-        for rec in uplift_plan.recommendations[:10]:
-            priority_value = escape_html(rec.priority.value)
-            effort_value = escape_html(rec.effort.value)
-            f.write(f"""
-        <div class="recommendation-card priority-{priority_value}">
-            <span class="priority-badge priority-{priority_value}">{priority_value}</span>
-            <strong>{escape_html(rec.title)}</strong>
+        <div class="finding-card severity-{severity_value}">
+            <span class="severity-badge severity-{severity_value}">{severity_value}</span>
+            <strong>{escape_html(finding.observation)}</strong>
             <span style="float: right;">
-                <span style="color: #28a745;">+{rec.expected_uplift_pct:.1f}%</span>
-                | Effort: {effort_value}
+                {finding.affected_queries}/{finding.total_queries} queries
             </span>
-            <p style="margin: 10px 0 0 0; color: #666;">{escape_html(rec.description)}</p>
-        </div>
+            <p style="margin: 10px 0 5px 0; color: #666;">
+                Dimension: {escape_html(finding.affected_dimension)}
+                (avg score: {finding.avg_dimension_score:.1f})
+            </p>
 """)
-
-        # Implementation Phases
-        if uplift_plan.phases:
-            f.write(
-                "        <h3>Implementation Roadmap</h3>\n        <div class='phase-timeline'>\n"
-            )
-            for phase in uplift_plan.phases:
-                phase_name = escape_html(phase.get("name", ""))
-                phase_duration = escape_html(phase.get("duration", ""))
-                phase_uplift = phase.get("expected_uplift", 0)
-                phase_recs = phase.get("recommendations", [])
-                f.write(f"""
-            <div class="phase-item">
-                <strong>{phase_name}</strong> ({phase_duration})
-                <br>
-                <span style="color: #28a745;">Expected uplift: +{phase_uplift:.1f}%</span>
-                | {len(phase_recs)} recommendations
-            </div>
-""")
-            f.write("        </div>\n")
+                if finding.example_queries:
+                    examples = ", ".join(
+                        f"&ldquo;{escape_html(q)}&rdquo;" for q in finding.example_queries
+                    )
+                    f.write(
+                        f'            <p style="font-size: 0.85em; color: #888;">'
+                        f"Examples: {examples}</p>\n"
+                    )
+                if finding.suggestion:
+                    f.write(
+                        f'            <p style="font-size: 0.9em; font-style: italic;">'
+                        f"{escape_html(finding.suggestion)}</p>\n"
+                    )
+                f.write("        </div>\n")
 
         f.write("    </div>\n")
 
@@ -1105,14 +1280,14 @@ class ReportGenerator:
         self,
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
-        uplift_plan: UpliftPlan | None = None,
+        findings_report: FindingsReport | None = None,
     ) -> None:
         """Generate JSON report.
 
         Args:
             records: Audit records
             maturity_report: Maturity assessment report
-            uplift_plan: Uplift recommendations plan
+            findings_report: Findings analysis report
         """
         report_path = self.run_dir / "audit.json"
         logger.info(f"Generating JSON report: {report_path}")
@@ -1146,27 +1321,28 @@ class ReportGenerator:
                 "priority_improvements": maturity_report.priority_improvements,
             }
 
-        # Add uplift recommendations
-        if uplift_plan:
-            data["uplift"] = {
-                "total_potential_uplift": uplift_plan.total_potential_uplift,
-                "summary": uplift_plan.summary,
-                "recommendations": [
+        # Add findings
+        if findings_report:
+            data["findings"] = {
+                "total_queries_analyzed": findings_report.total_queries_analyzed,
+                "summary": findings_report.summary,
+                "scope_limitations": findings_report.scope_limitations,
+                "items": [
                     {
-                        "id": rec.id,
-                        "title": rec.title,
-                        "description": rec.description,
-                        "category": rec.category.value,
-                        "priority": rec.priority.value,
-                        "effort": rec.effort.value,
-                        "expected_uplift_pct": rec.expected_uplift_pct,
-                        "confidence": rec.confidence,
-                        "roi_score": rec.roi_score,
-                        "metrics_to_track": rec.metrics_to_track,
+                        "id": finding.id,
+                        "observation": finding.observation,
+                        "affected_queries": finding.affected_queries,
+                        "total_queries": finding.total_queries,
+                        "affected_pct": round(finding.affected_pct, 1),
+                        "severity": finding.severity.value,
+                        "affected_dimension": finding.affected_dimension,
+                        "avg_dimension_score": finding.avg_dimension_score,
+                        "category": finding.category.value,
+                        "example_queries": finding.example_queries,
+                        "suggestion": finding.suggestion,
                     }
-                    for rec in uplift_plan.recommendations
+                    for finding in findings_report.findings
                 ],
-                "phases": uplift_plan.phases,
             }
 
         with open(report_path, "w", encoding="utf-8") as f:
@@ -1183,61 +1359,112 @@ class ReportGenerator:
         Returns:
             CSS class name
         """
-        if score >= 4:
+        if score >= 4.5:
             return "score-excellent"
-        elif score >= 3:
+        elif score >= 3.5:
             return "score-good"
-        elif score >= 2:
+        elif score >= 2.5:
+            return "score-fair"
+        elif score >= 1.5:
             return "score-fair"
         else:
             return "score-poor"
+
+    def _get_fqi_band(self, score: float) -> str:
+        """Get FQI band label for a score.
+
+        Args:
+            score: FQI score value (0-5)
+
+        Returns:
+            Band label string
+        """
+        return get_fqi_band(score)
+
+    def _get_fill_class(self, score: float) -> str:
+        """Get CSS fill class for dimension bar.
+
+        Args:
+            score: Score value (0-5)
+
+        Returns:
+            CSS fill class name
+        """
+        if score >= 4.5:
+            return "fill-excellent"
+        elif score >= 3.5:
+            return "fill-good"
+        elif score >= 2.5:
+            return "fill-fair"
+        else:
+            return "fill-poor"
+
+    def _get_fqi_band_class(self, band: str) -> str:
+        """Get CSS class for FQI band label.
+
+        Args:
+            band: FQI band label (Excellent, Good, Weak, Critical, Broken)
+
+        Returns:
+            CSS class name
+        """
+        band_lower = band.lower()
+        if band_lower == "excellent":
+            return "fqi-excellent"
+        elif band_lower == "good":
+            return "fqi-good"
+        elif band_lower == "weak":
+            return "fqi-weak"
+        elif band_lower == "critical":
+            return "fqi-critical"
+        else:
+            return "fqi-broken"
 
     def _write_html_score_charts(
         self,
         f: TextIO,
         records: list[AuditRecord],
-        avg_relevance: float,
-        avg_diversity: float,
-        avg_quality: float,
-        avg_nav: float,
+        avg_qu: float,
+        avg_rr: float,
+        avg_rp: float,
+        avg_af: float,
+        avg_eh: float,
     ) -> None:
         """Write Chart.js score visualizations to HTML file.
 
         Args:
             f: File handle
             records: Audit records
-            avg_relevance: Average relevance score
-            avg_diversity: Average diversity score
-            avg_quality: Average result quality score
-            avg_nav: Average navigability score
+            avg_qu: Average query understanding score
+            avg_rr: Average results relevance score
+            avg_rp: Average result presentation score
+            avg_af: Average advanced features score
+            avg_eh: Average error handling score
         """
-        # Calculate score distribution for histogram
-        score_distribution = {"0-1": 0, "1-2": 0, "2-3": 0, "3-4": 0, "4-5": 0}
+        # Calculate FQI band distribution for histogram
+        band_distribution = {
+            "Broken": 0,
+            "Critical": 0,
+            "Weak": 0,
+            "Good": 0,
+            "Excellent": 0,
+        }
         for record in records:
-            score = record.judge.overall
-            if score < 1:
-                score_distribution["0-1"] += 1
-            elif score < 2:
-                score_distribution["1-2"] += 1
-            elif score < 3:
-                score_distribution["2-3"] += 1
-            elif score < 4:
-                score_distribution["3-4"] += 1
-            else:
-                score_distribution["4-5"] += 1
+            band = get_fqi_band(record.judge.fqi)
+            band_distribution[band] += 1
 
         f.write(f"""
     <div class="charts-section">
         <h2>Score Visualizations</h2>
         <div class="charts-grid">
             <div>
-                <h3>Dimension Scores (Radar)</h3>
+                <h3>FQI Dimension Scores (Radar)</h3>
                 <div class="chart-container">
                     <canvas id="radarChart"></canvas>
                 </div>
             </div>
             <div>
-                <h3>Score Distribution (Histogram)</h3>
+                <h3>FQI Band Distribution</h3>
                 <div class="chart-container">
                     <canvas id="histogramChart"></canvas>
                 </div>
@@ -1246,15 +1473,15 @@ class ReportGenerator:
     </div>
 
     <script>
-        // Radar Chart - Dimension Scores
+        // Radar Chart - FQI Dimension Scores
         const radarCtx = document.getElementById('radarChart').getContext('2d');
         new Chart(radarCtx, {{
             type: 'radar',
             data: {{
-                labels: ['Relevance', 'Diversity', 'Result Quality', 'Navigability'],
+                labels: ['Query Understanding', 'Results Relevance', 'Result Presentation', 'Advanced Features', 'Error Handling'],
                 datasets: [{{
                     label: 'Average Scores',
-                    data: [{avg_relevance:.2f}, {avg_diversity:.2f}, {avg_quality:.2f}, {avg_nav:.2f}],
+                    data: [{avg_qu:.2f}, {avg_rr:.2f}, {avg_rp:.2f}, {avg_af:.2f}, {avg_eh:.2f}],
                     backgroundColor: 'rgba(102, 126, 234, 0.2)',
                     borderColor: 'rgba(102, 126, 234, 1)',
                     borderWidth: 2,
@@ -1282,25 +1509,25 @@ class ReportGenerator:
             }}
         }});
 
-        // Histogram Chart - Score Distribution
+        // Histogram Chart - FQI Band Distribution
         const histCtx = document.getElementById('histogramChart').getContext('2d');
         new Chart(histCtx, {{
             type: 'bar',
             data: {{
-                labels: ['0-1 (Poor)', '1-2', '2-3 (Fair)', '3-4 (Good)', '4-5 (Excellent)'],
+                labels: ['Broken', 'Critical', 'Weak', 'Good', 'Excellent'],
                 datasets: [{{
                     label: 'Number of Queries',
-                    data: [{score_distribution["0-1"]}, {score_distribution["1-2"]}, {score_distribution["2-3"]}, {score_distribution["3-4"]}, {score_distribution["4-5"]}],
+                    data: [{band_distribution["Broken"]}, {band_distribution["Critical"]}, {band_distribution["Weak"]}, {band_distribution["Good"]}, {band_distribution["Excellent"]}],
                     backgroundColor: [
                         'rgba(220, 53, 69, 0.7)',
-                        'rgba(255, 193, 7, 0.7)',
+                        'rgba(255, 127, 14, 0.7)',
                         'rgba(255, 193, 7, 0.7)',
                         'rgba(23, 162, 184, 0.7)',
                         'rgba(40, 167, 69, 0.7)'
                     ],
                     borderColor: [
                         'rgba(220, 53, 69, 1)',
-                        'rgba(255, 193, 7, 1)',
+                        'rgba(255, 127, 14, 1)',
                         'rgba(255, 193, 7, 1)',
                         'rgba(23, 162, 184, 1)',
                         'rgba(40, 167, 69, 1)'
@@ -1348,7 +1575,7 @@ class ReportGenerator:
             html.setAttribute('data-theme', newTheme);
 
             const btn = document.querySelector('.theme-toggle');
-            btn.textContent = newTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+            btn.textContent = newTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
 
             // Save preference
             localStorage.setItem('theme', newTheme);
@@ -1360,11 +1587,35 @@ class ReportGenerator:
             if (savedTheme) {
                 document.documentElement.setAttribute('data-theme', savedTheme);
                 const btn = document.querySelector('.theme-toggle');
-                btn.textContent = savedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+                btn.textContent = savedTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
             }
         });
 
-        // Filter queries by score and search text
+        // Sort queries
+        function sortQueries() {
+            var sortBy = document.getElementById('querySort').value;
+            var container = document.getElementById('queryContainer');
+            var queries = Array.from(container.querySelectorAll('.query-details'));
+
+            queries.sort(function(a, b) {
+                if (sortBy === 'alpha-asc') {
+                    return a.getAttribute('data-query').localeCompare(b.getAttribute('data-query'));
+                } else if (sortBy === 'alpha-desc') {
+                    return b.getAttribute('data-query').localeCompare(a.getAttribute('data-query'));
+                } else if (sortBy === 'score-asc') {
+                    return parseFloat(a.getAttribute('data-score')) - parseFloat(b.getAttribute('data-score'));
+                } else if (sortBy === 'score-desc') {
+                    return parseFloat(b.getAttribute('data-score')) - parseFloat(a.getAttribute('data-score'));
+                }
+                // original order
+                return parseInt(a.getAttribute('data-index')) - parseInt(b.getAttribute('data-index'));
+            });
+
+            queries.forEach(function(q) { container.appendChild(q); });
+            filterQueries();
+        }
+
+        // Filter queries by FQI band and search text
         function filterQueries() {
             const scoreFilter = document.getElementById('scoreFilter').value;
             const searchText = document.getElementById('querySearch').value.toLowerCase();
@@ -1378,6 +1629,8 @@ class ReportGenerator:
                 if (scoreFilter !== 'all') {
                     const [min, max] = scoreFilter.split('-').map(Number);
                     showByScore = score >= min && score < max;
+                    // Include score == 5 in the top band
+                    if (max === 5 && score === 5) showByScore = true;
                 }
 
                 let showBySearch = true;

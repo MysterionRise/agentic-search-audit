@@ -62,7 +62,7 @@ run:
 llm:
   provider: "vllm"  # "openai", "anthropic", "vllm", or "openrouter"
   model: "llava-hf/llava-v1.6-mistral-7b-hf"  # Vision model name for vLLM server
-  max_tokens: 1000
+  max_tokens: 2000
   temperature: 0.2
   system_prompt: null  # uses default if null
 

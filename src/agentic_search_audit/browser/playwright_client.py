@@ -73,6 +73,10 @@ class PlaywrightBrowserClient:
 
         self._page = await self._context.new_page()
 
+        # Set higher default timeout for slow sites (60 seconds)
+        self._page.set_default_timeout(60000)
+        self._page.set_default_navigation_timeout(60000)
+
         logger.info("Playwright browser launched")
 
     async def disconnect(self) -> None:
