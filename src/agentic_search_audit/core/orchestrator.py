@@ -3,10 +3,12 @@
 import asyncio
 import json
 import logging
+import random
 from datetime import datetime
 from pathlib import Path
 
-from ..browser import PlaywrightBrowserClient
+from ..browser import classify_error, create_browser_client, is_retryable
+from ..browser.errors import BrowserErrorKind
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
 from ..report import ReportGenerator
@@ -48,12 +50,8 @@ class SearchAuditOrchestrator:
         logger.info(f"Starting audit with {len(self.queries)} queries")
         logger.info(f"Output directory: {self.run_dir}")
 
-        # Initialize components - using Playwright for reliable browser automation
-        self.client = PlaywrightBrowserClient(
-            headless=self.config.run.headless,
-            viewport_width=self.config.run.viewport_width,
-            viewport_height=self.config.run.viewport_height,
-        )
+        # Initialize browser client based on configured backend
+        self.client = create_browser_client(self.config.run)
         self.judge = SearchQualityJudge(self.config.llm)
         self.reporter = ReportGenerator(self.config, self.run_dir)
 
@@ -80,25 +78,56 @@ class SearchAuditOrchestrator:
             # Navigate to homepage
             await self._navigate_to_site()
 
-            # Process each query
+            # Process each query with configurable retry
+            max_attempts = 1 + self.config.run.max_retries
             for i, query in enumerate(self.queries, 1):
                 logger.info(f"Processing query {i}/{len(self.queries)}: {query.text}")
 
-                try:
-                    # Rate limiting
-                    if i > 1:
-                        await self._rate_limit()
+                for attempt in range(max_attempts):
+                    try:
+                        # Check page health and recover if needed
+                        if not self.client.is_page_alive():
+                            logger.warning("Page is dead before query -- recovering")
+                            if self.client.is_browser_alive():
+                                await self.client.recover_page()
+                            else:
+                                await self.client.reconnect()
+                            await self._navigate_to_site()
+                            await asyncio.sleep(random.uniform(1.0, 3.0))
 
-                    # Execute query and evaluate
-                    record = await self._process_query(query)
-                    self.records.append(record)
+                        # Rate limiting on non-first queries or retries
+                        if i > 1 or attempt > 0:
+                            await self._rate_limit()
 
-                    # Save record to JSONL
-                    self._save_record(record)
+                        # Execute query and evaluate
+                        record = await self._process_query(query)
+                        self.records.append(record)
 
-                except Exception as e:
-                    logger.error(f"Failed to process query '{query.text}': {e}", exc_info=True)
-                    continue
+                        # Save record to JSONL
+                        self._save_record(record)
+                        break  # success -- exit retry loop
+
+                    except Exception as e:
+                        error_kind = classify_error(e)
+                        retryable = is_retryable(error_kind)
+                        is_last_attempt = attempt >= max_attempts - 1
+
+                        if retryable and not is_last_attempt:
+                            logger.warning(
+                                f"Query '{query.text}' failed (attempt {attempt + 1}/{max_attempts},"
+                                f" {error_kind.value}): {e} -- retrying"
+                            )
+                            await self._recover_for_retry(error_kind)
+                            backoff = self._compute_backoff(attempt)
+                            await asyncio.sleep(backoff)
+                        else:
+                            logger.error(
+                                f"Failed to process query '{query.text}' "
+                                f"(attempt {attempt + 1}/{max_attempts}, "
+                                f"{error_kind.value}): {e}",
+                                exc_info=True,
+                            )
+                            break  # non-retryable or exhausted attempts
 
         # Generate reports
         if self.records:
@@ -106,6 +135,44 @@ class SearchAuditOrchestrator:
 
         logger.info(f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries")
         return self.records
+
+    async def _recover_for_retry(self, error_kind: BrowserErrorKind) -> None:
+        """Recover the browser/page based on error classification.
+
+        Args:
+            error_kind: The classified error kind.
+        """
+        if not self.client:
+            return
+
+        if error_kind == BrowserErrorKind.BROWSER_DEAD:
+            await self.client.reconnect()
+            await self._navigate_to_site()
+        elif error_kind in (
+            BrowserErrorKind.PAGE_CLOSED,
+            BrowserErrorKind.TIMEOUT,
+            BrowserErrorKind.TRANSIENT,
+        ):
+            if self.client.is_browser_alive():
+                await self.client.recover_page()
+                await self._navigate_to_site()
+            else:
+                await self.client.reconnect()
+                await self._navigate_to_site()
+
+    def _compute_backoff(self, attempt: int) -> float:
+        """Compute exponential backoff with jitter.
+
+        Args:
+            attempt: Zero-based attempt index.
+
+        Returns:
+            Sleep duration in seconds.
+        """
+        base = self.config.run.retry_backoff_base
+        jitter: float = random.uniform(0.7, 1.3)
+        delay: float = base * (2**attempt) * jitter
+        return delay
 
     async def _navigate_to_site(self) -> None:
         """Navigate to the site and handle initial modals."""
@@ -147,21 +214,35 @@ class SearchAuditOrchestrator:
         if not self.judge:
             raise RuntimeError("Judge not initialized")
 
-        # Dismiss any modals that might be blocking the search box
-        modal_handler = ModalHandler(self.client, self.config.site.modals)
-        await modal_handler.dismiss_modals()
+        # Use direct URL navigation if a search_url_template is configured
+        if self.config.site.search.search_url_template:
+            from urllib.parse import quote_plus
 
-        # Find and submit search
-        search_finder = SearchBoxFinder(
-            self.client,
-            self.config.site.search,
-            llm_config=self.config.llm,
-            use_intelligent_fallback=self.config.site.search.use_intelligent_fallback,
-        )
-        success = await search_finder.submit_search(query.text)
+            search_url = self.config.site.search.search_url_template.replace(
+                "{query}", quote_plus(query.text)
+            )
+            logger.info(f"Navigating directly to search URL: {search_url}")
+            await self.client.navigate(search_url, wait_until="domcontentloaded")
+            await asyncio.sleep(2)
+            # Dismiss any modals on the search results page
+            modal_handler = ModalHandler(self.client, self.config.site.modals)
+            await modal_handler.dismiss_modals()
+        else:
+            # Dismiss any modals that might be blocking the search box
+            modal_handler = ModalHandler(self.client, self.config.site.modals)
+            await modal_handler.dismiss_modals()
 
-        if not success:
-            raise RuntimeError(f"Failed to submit search for query: {query.text}")
+            # Find and submit search
+            search_finder = SearchBoxFinder(
+                self.client,
+                self.config.site.search,
+                llm_config=self.config.llm,
+                use_intelligent_fallback=self.config.site.search.use_intelligent_fallback,
+            )
+            success = await search_finder.submit_search(query.text)
+
+            if not success:
+                raise RuntimeError(f"Failed to submit search for query: {query.text}")
 
         # Wait for results
         await asyncio.sleep(self.config.run.post_submit_ms / 1000)
@@ -187,7 +268,7 @@ class SearchAuditOrchestrator:
         else:
             items = await results_extractor.extract_results(top_k=self.config.run.top_k)
 
-        # Capture artifacts
+        # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
         page_artifacts = await self._capture_artifacts(query)
 
         # Get HTML content
@@ -217,6 +298,9 @@ class SearchAuditOrchestrator:
     async def _capture_artifacts(self, query: Query) -> PageArtifacts:
         """Capture page artifacts (screenshot, HTML).
 
+        Wrapped in safety handling so that a failure here does not
+        abort the query.
+
         Args:
             query: Current query
 
@@ -230,17 +314,29 @@ class SearchAuditOrchestrator:
         safe_query = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in query.text)
         safe_query = safe_query.replace(" ", "_")[:50]
 
-        # Screenshot
         screenshot_path = self.run_dir / "screenshots" / f"{query.id}_{safe_query}.png"
-        await self.client.screenshot(screenshot_path, full_page=True)
-
-        # HTML snapshot
         html_path = self.run_dir / "html_snapshots" / f"{query.id}_{safe_query}.html"
-        html_content = await self.client.get_html()
-        html_path.write_text(html_content, encoding="utf-8")
 
-        # Get current URL
-        current_url = await self.client.evaluate("window.location.href")
+        # Screenshot (safe)
+        try:
+            await self.client.screenshot(screenshot_path, full_page=True)
+        except Exception as e:
+            logger.warning(f"Failed to capture screenshot for '{query.text}': {e}")
+            screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # HTML snapshot (safe)
+        try:
+            html_content = await self.client.get_html()
+            html_path.parent.mkdir(parents=True, exist_ok=True)
+            html_path.write_text(html_content, encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to capture HTML for '{query.text}': {e}")
+
+        # Get current URL (safe)
+        try:
+            current_url = await self.client.evaluate("window.location.href")
+        except Exception:
+            current_url = None
 
         return PageArtifacts(
             url=str(self.config.site.url),
@@ -263,11 +359,12 @@ class SearchAuditOrchestrator:
             f.write("\n")
 
     async def _rate_limit(self) -> None:
-        """Apply rate limiting between requests."""
+        """Apply rate limiting with ±30% jitter between requests."""
         if self.config.run.throttle_rps > 0:
             delay = 1.0 / self.config.run.throttle_rps
-            logger.debug(f"Rate limiting: waiting {delay:.2f}s")
-            await asyncio.sleep(delay)
+            jittered = delay * random.uniform(0.7, 1.3)
+            logger.debug(f"Rate limiting: waiting {jittered:.2f}s (base {delay:.2f}s)")
+            await asyncio.sleep(jittered)
 
 
 async def run_audit(

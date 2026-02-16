@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 class BrowserClient(Protocol):
     """Protocol defining the browser client interface.
 
-    Both PlaywrightBrowserClient and MCPBrowserClient implement this interface,
-    allowing them to be used interchangeably.
+    All browser backends (Playwright, CDP, Undetected) implement this
+    interface, allowing them to be used interchangeably.
     """
 
     async def connect(self) -> None:
@@ -25,6 +25,14 @@ class BrowserClient(Protocol):
 
     async def disconnect(self) -> None:
         """Disconnect from the browser."""
+        ...
+
+    async def __aenter__(self) -> "BrowserClient":
+        """Async context manager entry."""
+        ...
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
         ...
 
     async def navigate(self, url: str, wait_until: str = "networkidle") -> str:
@@ -80,6 +88,30 @@ class BrowserClient(Protocol):
     async def get_element_attribute(self, selector: str, attribute: str) -> str | None:
         """Get attribute value of an element."""
         ...
+
+    def is_page_alive(self) -> bool:
+        """Check whether the current page is still usable."""
+        ...
+
+    async def recover_page(self) -> None:
+        """Create a fresh page in the existing browser context."""
+        ...
+
+    def is_browser_alive(self) -> bool:
+        """Check whether the browser process is still running."""
+        ...
+
+    async def reconnect(self) -> None:
+        """Full browser restart: disconnect then connect."""
+        ...
+
+
+class BrowserBackend(str, Enum):
+    """Available browser automation backends."""
+
+    PLAYWRIGHT = "playwright"
+    CDP = "cdp"
+    UNDETECTED = "undetected"
 
 
 class QueryOrigin(str, Enum):
@@ -243,6 +275,14 @@ class SearchConfig(BaseModel):
     submit_selector: str | None = Field(
         default=None, description="Selector for submit button if using clickSelector"
     )
+    trigger_selector: str | None = Field(
+        default=None,
+        description="Selector for search icon/button to click before the input appears (for overlay-style search)",
+    )
+    search_url_template: str | None = Field(
+        default=None,
+        description="URL template for direct search navigation, e.g. 'https://example.com/search?q={query}'. Bypasses search-box detection entirely.",
+    )
     use_intelligent_fallback: bool = Field(
         default=True,
         description="Use LLM-based intelligent detection if CSS selectors fail",
@@ -301,6 +341,33 @@ class RunConfig(BaseModel):
     headless: bool = Field(default=True, description="Run browser in headless mode")
     throttle_rps: float = Field(default=0.5, description="Rate limit in requests per second")
     seed: int | None = Field(default=42, description="Random seed for reproducibility")
+    max_retries: int = Field(
+        default=2, description="Max retry attempts per query on transient failure"
+    )
+    retry_backoff_base: float = Field(
+        default=2.0, description="Exponential backoff base in seconds"
+    )
+    click_timeout_ms: int = Field(default=5000, description="Timeout for click operations in ms")
+    browser_backend: BrowserBackend = Field(
+        default=BrowserBackend.PLAYWRIGHT, description="Browser automation backend"
+    )
+    cdp_endpoint: str | None = Field(
+        default=None, description="CDP WebSocket endpoint (ws://host:port)"
+    )
+    browserbase_api_key: str | None = Field(
+        default=None, description="Browserbase API key for cloud browsers"
+    )
+    browserbase_project_id: str | None = Field(default=None, description="Browserbase project ID")
+
+    @model_validator(mode="after")
+    def _validate_cdp_config(self) -> "RunConfig":
+        """Validate that CDP backend has an endpoint or Browserbase credentials."""
+        if self.browser_backend == BrowserBackend.CDP:
+            if not self.cdp_endpoint and not self.browserbase_api_key:
+                raise ValueError(
+                    "CDP backend requires either 'cdp_endpoint' or 'browserbase_api_key'"
+                )
+        return self
 
 
 class LLMConfig(BaseModel):

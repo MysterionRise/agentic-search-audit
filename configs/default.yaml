@@ -59,6 +59,12 @@ run:
   throttle_rps: 0.5  # requests per second
   seed: 42  # for reproducible LLM outputs
 
+  # Browser backend: "playwright" (default), "cdp", or "undetected"
+  browser_backend: playwright
+  # cdp_endpoint: ws://localhost:9222          # required for "cdp" backend (or use browserbase)
+  # browserbase_api_key: null                  # Browserbase cloud browser API key
+  # browserbase_project_id: null               # Browserbase project ID
+
 llm:
   provider: "vllm"  # "openai", "anthropic", "vllm", or "openrouter"
   model: "llava-hf/llava-v1.6-mistral-7b-hf"  # Vision model name for vLLM server

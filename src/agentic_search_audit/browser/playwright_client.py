@@ -4,7 +4,18 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from playwright.async_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    async_playwright,
+)
+from playwright.async_api import (
+    Error as PlaywrightError,
+)
+from playwright.async_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +32,7 @@ class PlaywrightBrowserClient:
         headless: bool = True,
         viewport_width: int = 1366,
         viewport_height: int = 900,
+        click_timeout_ms: int = 5000,
     ):
         """Initialize Playwright browser client.
 
@@ -28,10 +40,12 @@ class PlaywrightBrowserClient:
             headless: Run browser in headless mode
             viewport_width: Browser viewport width
             viewport_height: Browser viewport height
+            click_timeout_ms: Timeout for click operations in ms
         """
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
+        self.click_timeout_ms = click_timeout_ms
         self._playwright: Any = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -57,21 +71,34 @@ class PlaywrightBrowserClient:
                 "--disable-blink-features=AutomationControlled",
                 "--no-first-run",
                 "--no-default-browser-check",
+                "--disable-dev-shm-usage",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--disable-ipc-flooding-protection",
+                "--metrics-recording-only",
+                "--mute-audio",
+                "--password-store=basic",
+                "--use-mock-keychain",
             ],
         )
         self._context = await self._browser.new_context(
             viewport={"width": self.viewport_width, "height": self.viewport_height},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             locale="en-GB",
             timezone_id="Europe/London",
         )
 
-        # Add stealth script to hide automation detection
-        await self._context.add_init_script(
-            'Object.defineProperty(navigator, "webdriver", { get: () => undefined });'
-        )
+        # Add stealth scripts to hide automation detection
+        try:
+            from playwright_stealth import stealth_async  # type: ignore[import-untyped]
 
-        self._page = await self._context.new_page()
+            self._page = await self._context.new_page()
+            await stealth_async(self._page)
+        except ImportError:
+            logger.warning("playwright-stealth not installed, using built-in stealth JS")
+            await self._context.add_init_script(self._stealth_js())
+            self._page = await self._context.new_page()
 
         # Set higher default timeout for slow sites (60 seconds)
         self._page.set_default_timeout(60000)
@@ -80,13 +107,43 @@ class PlaywrightBrowserClient:
         logger.info("Playwright browser launched")
 
     async def disconnect(self) -> None:
-        """Close browser and cleanup."""
+        """Close browser and cleanup.
+
+        Each resource is closed independently so a failure in one
+        does not prevent cleanup of the others.
+        """
+        if self._page:
+            try:
+                await self._page.close()
+            except Exception as e:
+                logger.warning(f"Failed to close page: {e}")
+            finally:
+                self._page = None
+
         if self._context:
-            await self._context.close()
+            try:
+                await self._context.close()
+            except Exception as e:
+                logger.warning(f"Failed to close context: {e}")
+            finally:
+                self._context = None
+
         if self._browser:
-            await self._browser.close()
+            try:
+                await self._browser.close()
+            except Exception as e:
+                logger.warning(f"Failed to close browser: {e}")
+            finally:
+                self._browser = None
+
         if self._playwright:
-            await self._playwright.stop()
+            try:
+                await self._playwright.stop()
+            except Exception as e:
+                logger.warning(f"Failed to stop playwright: {e}")
+            finally:
+                self._playwright = None
+
         logger.info("Playwright browser closed")
 
     async def navigate(self, url: str, wait_until: str = "networkidle") -> str:
@@ -129,6 +186,8 @@ class PlaywrightBrowserClient:
             if element:
                 return {"exists": True}
             return None
+        except (PlaywrightTimeoutError, PlaywrightError):
+            raise
         except Exception as e:
             logger.debug(f"Selector {selector} not found: {e}")
             return None
@@ -148,6 +207,8 @@ class PlaywrightBrowserClient:
         try:
             elements = await self._page.query_selector_all(selector)
             return [{"index": i} for i in range(len(elements))]
+        except (PlaywrightTimeoutError, PlaywrightError):
+            raise
         except Exception as e:
             logger.debug(f"Selector {selector} returned no results: {e}")
             return []
@@ -170,6 +231,8 @@ class PlaywrightBrowserClient:
             if result is None:
                 return None
             return str(result) if not isinstance(result, str) else result
+        except (PlaywrightTimeoutError, PlaywrightError):
+            raise
         except Exception as e:
             logger.debug(f"Evaluate failed: {e}")
             return None
@@ -184,7 +247,7 @@ class PlaywrightBrowserClient:
             raise RuntimeError("Browser not connected")
 
         logger.debug(f"Clicking {selector}")
-        await self._page.click(selector, timeout=5000)
+        await self._page.click(selector, timeout=self.click_timeout_ms)
 
     async def type_text(self, selector: str, text: str, delay: int = 50) -> None:
         """Type text into an input element.
@@ -198,7 +261,9 @@ class PlaywrightBrowserClient:
             raise RuntimeError("Browser not connected")
 
         logger.debug(f"Typing '{text}' into {selector}")
-        await self._page.fill(selector, text)
+        await self._page.click(selector)
+        await self._page.fill(selector, "")
+        await self._page.type(selector, text, delay=delay)
 
     async def press_key(self, key: str) -> None:
         """Press a keyboard key.
@@ -303,9 +368,131 @@ class PlaywrightBrowserClient:
             if element:
                 return await element.text_content()
             return None
+        except (PlaywrightTimeoutError, PlaywrightError):
+            raise
         except Exception as e:
             logger.debug(f"Failed to get text for {selector}: {e}")
             return None
+
+    def is_page_alive(self) -> bool:
+        """Check whether the current page is still usable."""
+        return self._page is not None and not self._page.is_closed()
+
+    async def recover_page(self) -> None:
+        """Create a fresh page in the existing browser context after a crash.
+
+        Closes the old page first (if it still exists) to prevent memory leaks.
+        """
+        if not self._context:
+            raise RuntimeError("Browser context not available for recovery")
+
+        # Close old page to prevent memory leak
+        if self._page:
+            try:
+                await self._page.close()
+            except Exception as e:
+                logger.debug(f"Old page already closed or failed to close: {e}")
+            finally:
+                self._page = None
+
+        logger.warning("Recovering page -- creating new tab in existing context")
+        self._page = await self._context.new_page()
+        self._page.set_default_timeout(60000)
+        self._page.set_default_navigation_timeout(60000)
+        logger.info("Page recovered successfully")
+
+    def is_browser_alive(self) -> bool:
+        """Check whether the browser process is still running.
+
+        Probes the browser's contexts property; if the process has died,
+        accessing it will raise.
+        """
+        if not self._browser:
+            return False
+        try:
+            _ = self._browser.contexts
+            return True
+        except Exception:
+            return False
+
+    async def reconnect(self) -> None:
+        """Full browser restart: disconnect then connect."""
+        logger.warning("Reconnecting browser -- full restart")
+        await self.disconnect()
+        await self.connect()
+
+    async def wait_for_page_stable(self, timeout: int = 5000) -> None:
+        """Wait for the page to be visually stable.
+
+        Combines network idle waiting with a requestAnimationFrame callback
+        to ensure the page has painted.
+        """
+        if not self._page:
+            raise RuntimeError("Browser not connected")
+
+        try:
+            await self._page.wait_for_load_state("networkidle", timeout=timeout)
+        except Exception:
+            pass
+
+        try:
+            await self._page.evaluate(
+                "new Promise(resolve => requestAnimationFrame(() => resolve()))"
+            )
+        except Exception:
+            pass
+
+    @staticmethod
+    def _stealth_js() -> str:
+        """Return JavaScript that masks common automation fingerprints."""
+        return """
+        // Hide navigator.webdriver
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+        // Fake window.chrome.runtime
+        if (!window.chrome) { window.chrome = {}; }
+        window.chrome.runtime = { connect: function(){}, sendMessage: function(){} };
+
+        // Fake navigator.plugins (3 common plugins)
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+                const arr = [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
+                      description: 'Portable Document Format', length: 1 },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+                      description: '', length: 1 },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin',
+                      description: '', length: 2 },
+                ];
+                arr.item = i => arr[i];
+                arr.namedItem = n => arr.find(p => p.name === n);
+                arr.refresh = () => {};
+                return arr;
+            },
+        });
+
+        // Patch navigator.permissions.query
+        const origQuery = window.navigator.permissions.query.bind(
+            window.navigator.permissions
+        );
+        window.navigator.permissions.query = params =>
+            params.name === 'notifications'
+                ? Promise.resolve({ state: Notification.permission })
+                : origQuery(params);
+
+        // Override WebGL vendor/renderer to look like real hardware
+        const getParameter = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function (param) {
+            if (param === 37445) return 'Intel Inc.';           // UNMASKED_VENDOR
+            if (param === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER
+            return getParameter.call(this, param);
+        };
+
+        // Match navigator.languages to context locale
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['en-GB', 'en'],
+        });
+        """
 
     async def get_element_attribute(self, selector: str, attribute: str) -> str | None:
         """Get attribute value of an element.
@@ -325,6 +512,8 @@ class PlaywrightBrowserClient:
             if element:
                 return await element.get_attribute(attribute)
             return None
+        except (PlaywrightTimeoutError, PlaywrightError):
+            raise
         except Exception as e:
             logger.debug(f"Failed to get attribute {attribute} for {selector}: {e}")
             return None

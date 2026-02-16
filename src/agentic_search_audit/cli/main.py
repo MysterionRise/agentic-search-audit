@@ -278,6 +278,19 @@ Examples:
         help="Allow auditing internal/localhost URLs (security risk - use with caution)",
     )
 
+    parser.add_argument(
+        "--browser",
+        type=str,
+        choices=["playwright", "cdp", "undetected"],
+        help="Browser backend: playwright (default), cdp (connect to real Chrome), undetected",
+    )
+
+    parser.add_argument(
+        "--cdp-endpoint",
+        type=str,
+        help="CDP WebSocket endpoint, e.g. ws://localhost:9222 (requires --browser cdp)",
+    )
+
     return parser.parse_args()
 
 
@@ -342,6 +355,16 @@ async def main_async() -> int:
             if "run" not in overrides:
                 overrides["run"] = {}
             overrides["run"]["seed"] = args.seed
+
+        if args.browser:
+            if "run" not in overrides:
+                overrides["run"] = {}
+            overrides["run"]["browser_backend"] = args.browser
+
+        if args.cdp_endpoint:
+            if "run" not in overrides:
+                overrides["run"] = {}
+            overrides["run"]["cdp_endpoint"] = args.cdp_endpoint
 
         if args.ignore_robots:
             overrides["compliance"] = {"respect_robots_txt": False}
