@@ -83,7 +83,7 @@ async def init_redis() -> None:
     )
 
     # Test connection
-    await _redis_client.ping()
+    await _redis_client.ping()  # type: ignore[misc]
     logger.info("Redis connection initialized")
 
 

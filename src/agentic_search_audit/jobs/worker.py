@@ -136,7 +136,7 @@ class AuditWorker:
                             logger.error(f"Task failed: {task.exception()}")
 
                 # Get next job
-                result = await self._redis.brpop("audit:queue", timeout=1)
+                result = await self._redis.brpop("audit:queue", timeout=1)  # type: ignore[arg-type,misc]
                 if result:
                     _, job_id = result
                     task = asyncio.create_task(self._process_job(job_id))
@@ -176,7 +176,7 @@ class AuditWorker:
         logger.info(f"Processing job: {job_id}")
 
         # Get job data
-        job_data = await self._redis.hgetall(f"job:{job_id}")
+        job_data = await self._redis.hgetall(f"job:{job_id}")  # type: ignore[misc]
         if not job_data:
             logger.error(f"Job not found: {job_id}")
             return
@@ -201,7 +201,7 @@ class AuditWorker:
 
         try:
             # Mark as running
-            await self._redis.hset(
+            await self._redis.hset(  # type: ignore[misc]
                 f"job:{job_id}",
                 mapping={
                     "status": "running",
@@ -221,7 +221,7 @@ class AuditWorker:
             )
 
             # Mark as completed
-            await self._redis.hset(
+            await self._redis.hset(  # type: ignore[misc]
                 f"job:{job_id}",
                 mapping={
                     "status": "completed",
@@ -232,12 +232,12 @@ class AuditWorker:
             logger.info(f"Job completed: {job_id}")
 
         except asyncio.CancelledError:
-            await self._redis.hset(f"job:{job_id}", "status", "cancelled")
+            await self._redis.hset(f"job:{job_id}", "status", "cancelled")  # type: ignore[misc]
             logger.info(f"Job cancelled: {job_id}")
 
         except Exception as e:
             logger.exception(f"Job failed: {job_id}")
-            await self._redis.hset(
+            await self._redis.hset(  # type: ignore[misc]
                 f"job:{job_id}",
                 mapping={
                     "status": "failed",
