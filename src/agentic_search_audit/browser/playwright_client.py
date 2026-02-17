@@ -94,7 +94,11 @@ class PlaywrightBrowserClient:
             from playwright_stealth import stealth_async  # type: ignore[import-untyped]
 
             self._page = await self._context.new_page()
-            await stealth_async(self._page)
+            try:
+                await stealth_async(self._page)
+            except Exception as stealth_err:
+                logger.warning(f"playwright-stealth failed ({stealth_err}), using built-in JS")
+                await self._context.add_init_script(self._stealth_js())
         except ImportError:
             logger.warning("playwright-stealth not installed, using built-in stealth JS")
             await self._context.add_init_script(self._stealth_js())

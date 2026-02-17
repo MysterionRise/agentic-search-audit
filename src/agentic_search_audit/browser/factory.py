@@ -57,12 +57,14 @@ def create_browser_client(config: RunConfig) -> BrowserClient:
 
     if backend == BrowserBackend.UNDETECTED:
         try:
-            from .undetected_client import UndetectedBrowserClient
+            import undetected_chromedriver  # noqa: F401  # type: ignore[import-not-found,import-untyped]
         except ImportError:
             raise ImportError(
                 "undetected-chromedriver not installed. "
                 "Install with: pip install 'agentic-search-audit[undetected]'"
             )
+
+        from .undetected_client import UndetectedBrowserClient
 
         logger.info("Using undetected-chromedriver browser backend")
         return UndetectedBrowserClient(

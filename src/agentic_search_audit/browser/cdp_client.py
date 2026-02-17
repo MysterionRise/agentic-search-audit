@@ -46,6 +46,7 @@ class CDPBrowserClient:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        self._owns_context: bool = False
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -66,29 +67,31 @@ class CDPBrowserClient:
         contexts = self._browser.contexts
         if contexts:
             self._context = contexts[0]
+            self._owns_context = False
             logger.info("Reusing existing browser context")
         else:
             self._context = await self._browser.new_context(
                 viewport={"width": self.viewport_width, "height": self.viewport_height},
             )
+            self._owns_context = True
+
+        # Reuse existing page or create one
+        pages = self._context.pages
+        if pages:
+            self._page = pages[0]
+        else:
+            self._page = await self._context.new_page()
 
         # Apply stealth
         try:
             from playwright_stealth import stealth_async  # type: ignore[import-untyped]
 
-            pages = self._context.pages
-            if pages:
-                self._page = pages[0]
-            else:
-                self._page = await self._context.new_page()
-            await stealth_async(self._page)
+            try:
+                await stealth_async(self._page)
+            except Exception as stealth_err:
+                logger.warning(f"playwright-stealth failed ({stealth_err}), skipping stealth")
         except ImportError:
             logger.warning("playwright-stealth not installed, skipping stealth for CDP")
-            pages = self._context.pages
-            if pages:
-                self._page = pages[0]
-            else:
-                self._page = await self._context.new_page()
 
         self._page.set_default_timeout(60000)
         self._page.set_default_navigation_timeout(60000)
@@ -104,9 +107,15 @@ class CDPBrowserClient:
             finally:
                 self._page = None
 
-        # Do NOT close context/browser — they belong to the external process.
-        # Just disconnect the Playwright transport.
+        # Close context only if we created it; external contexts belong to the browser.
+        if self._context and self._owns_context:
+            try:
+                await self._context.close()
+            except Exception as e:
+                logger.warning(f"Failed to close context: {e}")
+
         self._context = None
+        self._owns_context = False
         self._browser = None
 
         if self._playwright:

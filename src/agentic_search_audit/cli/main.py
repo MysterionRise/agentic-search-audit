@@ -365,6 +365,10 @@ async def main_async() -> int:
             if "run" not in overrides:
                 overrides["run"] = {}
             overrides["run"]["cdp_endpoint"] = args.cdp_endpoint
+            # Auto-switch to CDP backend when endpoint is provided
+            if not args.browser:
+                logger.warning("--cdp-endpoint provided without --browser cdp; switching to CDP")
+                overrides["run"]["browser_backend"] = "cdp"
 
         if args.ignore_robots:
             overrides["compliance"] = {"respect_robots_txt": False}

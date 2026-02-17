@@ -171,7 +171,7 @@ class UndetectedBrowserClient:
             raise RuntimeError("Browser not connected")
 
         def _eval() -> Any:
-            result = self._driver.execute_script(f"return {expression}")
+            result = self._driver.execute_script(f"return {expression.strip()}")
             if result is None:
                 return None
             return str(result) if not isinstance(result, str) else result

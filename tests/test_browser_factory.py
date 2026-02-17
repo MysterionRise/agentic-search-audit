@@ -1,5 +1,6 @@
 """Tests for browser client factory."""
 
+from types import ModuleType
 from unittest.mock import patch
 
 import pytest
@@ -79,10 +80,15 @@ class TestFactoryCDP:
 class TestFactoryUndetected:
     """Factory returns UndetectedBrowserClient for undetected backend."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_uc_module(self) -> None:
+        """Provide a fake undetected_chromedriver module so the probe import passes."""
+        mock_uc = ModuleType("undetected_chromedriver")
+        with patch.dict("sys.modules", {"undetected_chromedriver": mock_uc}):
+            yield  # type: ignore[misc]
+
     def test_undetected_backend(self) -> None:
         config = RunConfig(browser_backend=BrowserBackend.UNDETECTED)
-        # The undetected_client module itself doesn't import uc at module level,
-        # so the import will succeed even without the package installed.
         client = create_browser_client(config)
         from agentic_search_audit.browser.undetected_client import UndetectedBrowserClient
 

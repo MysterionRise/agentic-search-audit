@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 if TYPE_CHECKING:
     pass
@@ -333,6 +333,8 @@ class ModalsConfig(BaseModel):
 class RunConfig(BaseModel):
     """Runtime execution configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     top_k: int = Field(default=10, description="Number of top results to extract")
     viewport_width: int = Field(default=1366, description="Browser viewport width")
     viewport_height: int = Field(default=900, description="Browser viewport height")
@@ -362,6 +364,12 @@ class RunConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_cdp_config(self) -> "RunConfig":
         """Validate that CDP backend has an endpoint or Browserbase credentials."""
+        # Normalise whitespace-only strings to None
+        if self.cdp_endpoint is not None and not self.cdp_endpoint.strip():
+            self.cdp_endpoint = None
+        if self.browserbase_api_key is not None and not self.browserbase_api_key.strip():
+            self.browserbase_api_key = None
+
         if self.browser_backend == BrowserBackend.CDP:
             if not self.cdp_endpoint and not self.browserbase_api_key:
                 raise ValueError(
