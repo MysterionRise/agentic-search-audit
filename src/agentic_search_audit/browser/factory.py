@@ -57,7 +57,7 @@ def create_browser_client(config: RunConfig) -> BrowserClient:
 
     if backend == BrowserBackend.UNDETECTED:
         try:
-            import undetected_chromedriver  # noqa: F401  # type: ignore[import-not-found,import-untyped]
+            import undetected_chromedriver  # type: ignore[import-not-found,import-untyped]  # noqa: F401
         except ImportError:
             raise ImportError(
                 "undetected-chromedriver not installed. "
