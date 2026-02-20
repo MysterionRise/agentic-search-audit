@@ -28,6 +28,7 @@ def random_user_agent() -> str:
 # Human-like typing delay
 # ---------------------------------------------------------------------------
 
+
 def human_typing_delay(base_delay_ms: int = 50) -> int:
     """Generate a per-keystroke delay that mimics human typing.
 
@@ -51,6 +52,7 @@ def human_typing_delay(base_delay_ms: int = 50) -> int:
 # Random micro-delays between actions
 # ---------------------------------------------------------------------------
 
+
 def pre_action_delay() -> float:
     """Return a small random delay (seconds) to insert before an action.
 
@@ -67,6 +69,7 @@ def post_action_delay() -> float:
 # ---------------------------------------------------------------------------
 # Mouse movement JavaScript (for Playwright)
 # ---------------------------------------------------------------------------
+
 
 def mouse_jitter_js(target_x: int, target_y: int, steps: int = 5) -> str:
     """Generate JS that dispatches synthetic mousemove events toward a target.
