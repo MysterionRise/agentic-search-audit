@@ -94,9 +94,17 @@ class ModalHandler:
             close_button = await self._find_close_button()
 
             if close_button:
+                base_selector, index = close_button
                 try:
                     logger.debug(f"Attempting to close modal (attempt {attempt + 1})")
-                    await self.client.click(close_button)
+                    click_script = f"""
+                    (function() {{
+                        var el = document.querySelectorAll('{base_selector}')[{index}];
+                        if (el) {{ el.click(); return true; }}
+                        return false;
+                    }})()
+                    """
+                    await self.client.evaluate(click_script)
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed_count += 1
                 except Exception as e:
@@ -257,11 +265,14 @@ class ModalHandler:
 
         return dismissed
 
-    async def _find_close_button(self) -> str | None:
+    async def _find_close_button(self) -> tuple[str, int] | None:
         """Find a close button for modals.
 
         Returns:
-            CSS selector for close button, or None
+            Tuple of (base_selector, index) for querySelectorAll indexing, or None.
+            Uses querySelectorAll indexing to reliably access the nth match,
+            avoiding nth-of-type which counts siblings of the same tag type
+            rather than matches of the CSS selector.
         """
         # Build regex pattern from close text matches
         pattern = "|".join(self.config.close_text_matches)
@@ -292,7 +303,6 @@ class ModalHandler:
                         // Check if element is visible
                         const rect = el.getBoundingClientRect();
                         if (rect.width > 0 && rect.height > 0) {{
-                            // Return a unique selector
                             return {{
                                 selector: '{base_selector}',
                                 index: i,
@@ -312,10 +322,11 @@ class ModalHandler:
 
                     data = json.loads(result)
                     if data:
-                        # Use nth-of-type selector
-                        selector = f"{data['selector']}:nth-of-type({data['index'] + 1})"
-                        logger.debug(f"Found close button: {selector} with text '{data['text']}'")
-                        return selector
+                        logger.debug(
+                            f"Found close button: {data['selector']}[{data['index']}]"
+                            f" with text '{data['text']}'"
+                        )
+                        return (data["selector"], data["index"])
             except Exception as e:
                 logger.debug(f"Error evaluating script for {base_selector}: {e}")
                 continue
