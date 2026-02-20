@@ -153,6 +153,42 @@ class SearchBoxFinder:
             logger.error(f"Intelligent search box detection failed: {e}")
             return None
 
+    async def _click_trigger(self) -> bool:
+        """Click the trigger selector to reveal the search input (for overlay-style search).
+
+        Returns:
+            True if trigger was clicked and an input appeared, False on failure.
+        """
+        trigger = self.config.trigger_selector
+        if not trigger:
+            return True  # nothing to do
+
+        try:
+            safe_trigger = sanitize_css_selector(trigger)
+        except ValueError as e:
+            logger.error(f"Invalid trigger_selector: {e}")
+            return False
+
+        logger.info(f"Clicking search trigger: {safe_trigger}")
+        try:
+            await self.client.click(safe_trigger)
+        except Exception as e:
+            logger.error(f"Failed to click trigger_selector '{safe_trigger}': {e}")
+            return False
+
+        # Wait for at least one input selector to become visible
+        for selector in self.config.input_selectors:
+            try:
+                appeared = await self.client.wait_for_selector(selector, timeout=5000, visible=True)
+                if appeared:
+                    logger.info(f"Search input appeared after trigger click: {selector}")
+                    return True
+            except Exception:
+                continue
+
+        logger.warning("No search input appeared after clicking trigger_selector")
+        return True  # proceed anyway — find_search_box may still succeed
+
     async def submit_search(self, query_text: str) -> bool:
         """Find search box, enter query, and submit.
 
@@ -162,6 +198,10 @@ class SearchBoxFinder:
         Returns:
             True if successful, False otherwise
         """
+        # Click trigger to reveal overlay search UI if configured
+        if not await self._click_trigger():
+            return False
+
         # Find search box
         search_selector = await self.find_search_box()
         if not search_selector:
