@@ -148,3 +148,24 @@ async def test_submit_search_calls_trigger_before_find():
     assert result is True
     # Trigger was clicked first
     client.click.assert_any_call(".open-search")
+
+
+@pytest.mark.unit
+async def test_submit_search_presses_escape_before_enter():
+    """submit_search presses Escape to dismiss autocomplete before pressing Enter."""
+    finder, client = _make_finder()
+    client.query_selector = AsyncMock(return_value={"nodeId": 1})
+    client.evaluate = AsyncMock(return_value=None)
+    client.type_text = AsyncMock()
+    client.press_key = AsyncMock()
+
+    result = await finder.submit_search("red shoes")
+
+    assert result is True
+    # Escape must be called before Enter
+    key_calls = [call.args[0] for call in client.press_key.call_args_list]
+    assert "Escape" in key_calls, "Escape should be pressed to dismiss autocomplete"
+    assert "Enter" in key_calls, "Enter should be pressed to submit"
+    escape_idx = key_calls.index("Escape")
+    enter_idx = key_calls.index("Enter")
+    assert escape_idx < enter_idx, "Escape must come before Enter"
