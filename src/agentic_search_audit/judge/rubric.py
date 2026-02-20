@@ -98,6 +98,13 @@ JUDGE_USER_PROMPT_TEMPLATE = """Evaluate the search quality for the following qu
 ## Query
 "{query_text}"
 
+## Locale / Language Context
+Target locale: {locale}
+Results and page content should be evaluated in the context of this locale.
+If the locale is non-English, expect product titles, descriptions, prices, and UI
+elements to appear in the locale's language. Results served in the wrong language
+(e.g. English when the locale is fr-FR) should be flagged as a quality issue.
+
 ## Search Results (Top {num_results})
 
 {results_json}

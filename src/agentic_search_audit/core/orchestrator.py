@@ -51,7 +51,7 @@ class SearchAuditOrchestrator:
         logger.info(f"Output directory: {self.run_dir}")
 
         # Initialize browser client based on configured backend
-        self.client = create_browser_client(self.config.run)
+        self.client = create_browser_client(self.config.run, locale=self.config.site.locale)
         self.judge = SearchQualityJudge(self.config.llm)
         self.reporter = ReportGenerator(self.config, self.run_dir)
 
@@ -282,6 +282,7 @@ class SearchAuditOrchestrator:
             page_url=current_url or str(self.config.site.url),
             html_content=html_content,
             site_name=str(self.config.site.url),
+            locale=self.config.site.locale,
         )
 
         # Create audit record

@@ -7,11 +7,12 @@ from ..core.types import BrowserBackend, BrowserClient, RunConfig
 logger = logging.getLogger(__name__)
 
 
-def create_browser_client(config: RunConfig) -> BrowserClient:
+def create_browser_client(config: RunConfig, locale: str = "en-US") -> BrowserClient:
     """Create a browser client based on the configured backend.
 
     Args:
         config: Runtime configuration with browser backend settings.
+        locale: BCP-47 locale code from site config (e.g. 'fr-FR').
 
     Returns:
         A browser client implementing the ``BrowserClient`` protocol.
@@ -25,12 +26,13 @@ def create_browser_client(config: RunConfig) -> BrowserClient:
     if backend == BrowserBackend.PLAYWRIGHT:
         from .playwright_client import PlaywrightBrowserClient
 
-        logger.info("Using Playwright browser backend")
+        logger.info("Using Playwright browser backend (locale=%s)", locale)
         return PlaywrightBrowserClient(
             headless=config.headless,
             viewport_width=config.viewport_width,
             viewport_height=config.viewport_height,
             click_timeout_ms=config.click_timeout_ms,
+            locale=locale,
         )
 
     if backend == BrowserBackend.CDP:
@@ -47,12 +49,13 @@ def create_browser_client(config: RunConfig) -> BrowserClient:
         if not endpoint:
             raise ValueError("CDP backend requires either 'cdp_endpoint' or 'browserbase_api_key'")
 
-        logger.info(f"Using CDP browser backend (endpoint: {endpoint})")
+        logger.info("Using CDP browser backend (endpoint: %s, locale=%s)", endpoint, locale)
         return CDPBrowserClient(
             cdp_endpoint=endpoint,
             viewport_width=config.viewport_width,
             viewport_height=config.viewport_height,
             click_timeout_ms=config.click_timeout_ms,
+            locale=locale,
         )
 
     if backend == BrowserBackend.UNDETECTED:
@@ -66,12 +69,13 @@ def create_browser_client(config: RunConfig) -> BrowserClient:
 
         from .undetected_client import UndetectedBrowserClient
 
-        logger.info("Using undetected-chromedriver browser backend")
+        logger.info("Using undetected-chromedriver browser backend (locale=%s)", locale)
         return UndetectedBrowserClient(
             headless=config.headless,
             viewport_width=config.viewport_width,
             viewport_height=config.viewport_height,
             click_timeout_ms=config.click_timeout_ms,
+            locale=locale,
         )
 
     raise ValueError(f"Unknown browser backend: {backend}")
