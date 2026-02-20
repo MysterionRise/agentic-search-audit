@@ -6,6 +6,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .stealth import (
+    human_typing_delay,
+    pre_action_delay,
+    random_user_agent,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +63,9 @@ class UndetectedBrowserClient:
             options.add_argument("--no-first-run")
             options.add_argument("--no-default-browser-check")
             options.add_argument("--disable-dev-shm-usage")
+            ua = random_user_agent()
+            options.add_argument(f"--user-agent={ua}")
+            logger.debug("Selected user-agent: %s", ua)
             driver = uc.Chrome(options=options)
             driver.set_page_load_timeout(60)
             return driver
@@ -186,6 +195,8 @@ class UndetectedBrowserClient:
         if not self._driver:
             raise RuntimeError("Browser not connected")
 
+        await asyncio.sleep(pre_action_delay())
+
         def _click() -> None:
             from selenium.webdriver.common.by import (  # type: ignore[import-not-found]
                 By,
@@ -209,6 +220,8 @@ class UndetectedBrowserClient:
         if not self._driver:
             raise RuntimeError("Browser not connected")
 
+        await asyncio.sleep(pre_action_delay())
+
         def _type() -> None:
             from selenium.webdriver.common.by import (  # type: ignore[import-not-found]
                 By,
@@ -219,13 +232,15 @@ class UndetectedBrowserClient:
             element.clear()
             for char in text:
                 element.send_keys(char)
-                time.sleep(delay / 1000)
+                time.sleep(human_typing_delay(delay) / 1000)
 
         await asyncio.to_thread(_type)
 
     async def press_key(self, key: str) -> None:
         if not self._driver:
             raise RuntimeError("Browser not connected")
+
+        await asyncio.sleep(pre_action_delay())
 
         def _press() -> None:
             from selenium.webdriver.common.keys import (  # type: ignore[import-not-found]

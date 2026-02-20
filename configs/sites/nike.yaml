@@ -65,6 +65,9 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
+  # Nike uses PerimeterX bot detection; undetected-chromedriver recommended.
+  # Falls back to playwright if undetected-chromedriver is not installed.
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"

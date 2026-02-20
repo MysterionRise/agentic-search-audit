@@ -1,5 +1,6 @@
 """Playwright-based browser client for browser automation."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Literal
@@ -15,6 +16,12 @@ from playwright.async_api import (
 )
 from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
+)
+
+from .stealth import (
+    human_typing_delay,
+    pre_action_delay,
+    random_user_agent,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,11 +89,13 @@ class PlaywrightBrowserClient:
                 "--use-mock-keychain",
             ],
         )
+        ua = random_user_agent()
+        logger.debug("Selected user-agent: %s", ua)
         self._context = await self._browser.new_context(
             viewport={"width": self.viewport_width, "height": self.viewport_height},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            locale="en-GB",
-            timezone_id="Europe/London",
+            user_agent=ua,
+            locale="en-US",
+            timezone_id="America/New_York",
         )
 
         # Add stealth scripts to hide automation detection
@@ -242,7 +251,7 @@ class PlaywrightBrowserClient:
             return None
 
     async def click(self, selector: str) -> None:
-        """Click an element.
+        """Click an element with a small human-like delay beforehand.
 
         Args:
             selector: CSS selector for element to click
@@ -250,27 +259,35 @@ class PlaywrightBrowserClient:
         if not self._page:
             raise RuntimeError("Browser not connected")
 
+        await asyncio.sleep(pre_action_delay())
         logger.debug(f"Clicking {selector}")
         await self._page.click(selector, timeout=self.click_timeout_ms)
 
     async def type_text(self, selector: str, text: str, delay: int = 50) -> None:
-        """Type text into an input element.
+        """Type text into an input element with human-like variable delays.
+
+        Each keystroke uses a slightly different delay to mimic real typing
+        cadence, including occasional longer pauses.
 
         Args:
             selector: CSS selector for input element
             text: Text to type
-            delay: Delay between keystrokes in ms
+            delay: Base delay between keystrokes in ms (actual varies)
         """
         if not self._page:
             raise RuntimeError("Browser not connected")
 
+        await asyncio.sleep(pre_action_delay())
         logger.debug(f"Typing '{text}' into {selector}")
         await self._page.click(selector)
         await self._page.fill(selector, "")
-        await self._page.type(selector, text, delay=delay)
+        # Type character-by-character with variable human-like delays
+        for char in text:
+            await self._page.keyboard.type(char, delay=0)
+            await asyncio.sleep(human_typing_delay(delay) / 1000)
 
     async def press_key(self, key: str) -> None:
-        """Press a keyboard key.
+        """Press a keyboard key with a small human-like delay beforehand.
 
         Args:
             key: Key to press (e.g., 'Enter', 'Escape')
@@ -278,6 +295,7 @@ class PlaywrightBrowserClient:
         if not self._page:
             raise RuntimeError("Browser not connected")
 
+        await asyncio.sleep(pre_action_delay())
         logger.debug(f"Pressing key: {key}")
         await self._page.keyboard.press(key)
 
@@ -494,7 +512,7 @@ class PlaywrightBrowserClient:
 
         // Match navigator.languages to context locale
         Object.defineProperty(navigator, 'languages', {
-            get: () => ['en-GB', 'en'],
+            get: () => ['en-US', 'en'],
         });
         """
 
