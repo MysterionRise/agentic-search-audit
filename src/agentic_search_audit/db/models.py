@@ -45,6 +45,22 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # GDPR consent columns
+    consent_marketing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    consent_analytics: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    consent_third_party: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    consent_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # GDPR deletion columns
+    deletion_scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deletion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Relationships
     organization: Mapped["Organization | None"] = relationship(
         "Organization", back_populates="members"
