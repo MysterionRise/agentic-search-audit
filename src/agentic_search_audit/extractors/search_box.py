@@ -248,6 +248,12 @@ class SearchBoxFinder:
             # Wait for autocomplete to load (many search boxes have autocomplete)
             await asyncio.sleep(1.0)
 
+            # Dismiss autocomplete dropdown with Escape before submitting.
+            # On sites like Sephora, Macys, Target the dropdown captures Enter
+            # and navigates to the first suggestion instead of the typed query.
+            await self.client.press_key("Escape")
+            await asyncio.sleep(0.3)
+
             # Submit based on strategy
             if self.config.submit_strategy == "enter":
                 logger.debug("Submitting search with Enter key")
