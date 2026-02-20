@@ -60,6 +60,16 @@ run:
   seed: 42  # for reproducible LLM outputs
 
   # Browser backend: "playwright" (default), "cdp", or "undetected"
+  #
+  # Backend selection guide:
+  #   playwright   – Fast, good for sites with light or no bot detection.
+  #                  Built-in stealth JS + playwright-stealth library.
+  #   undetected   – Best for sites with aggressive bot detection (Akamai,
+  #                  PerimeterX, DataDome). Uses undetected-chromedriver which
+  #                  patches Chrome to bypass detection. Recommended for:
+  #                  Macys, Sephora, Nordstrom, Target, Walmart, Best Buy.
+  #   cdp          – Connects to an external Chrome / cloud browser instance.
+  #                  Good when you need a real browser profile or Browserbase.
   browser_backend: playwright
   # cdp_endpoint: ws://localhost:9222          # required for "cdp" backend (or use browserbase)
   # browserbase_api_key: null                  # Browserbase cloud browser API key
