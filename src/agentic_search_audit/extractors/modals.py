@@ -52,6 +52,17 @@ COOKIE_CONSENT_SELECTORS = [
     "[data-testid='uc-deny-all-button']",
     "button[data-testid*='accept']",
     "button[data-testid*='deny']",
+    # Didomi (Le Monde, 20 Minutes, and other French/EU sites)
+    "#didomi-notice-agree-button",
+    ".didomi-popup-notice-buttons button",
+    ".didomi-consent-popup-actions button.didomi-components-button--color",
+    # Axeptio (French sites)
+    "#axeptio_btn_acceptAll",
+    ".axeptio-widget button[aria-label*='accept' i]",
+    # Iubenda (Italian sites)
+    ".iubenda-cs-accept-btn",
+    "#iubenda-cs-banner .iubenda-cs-accept-btn",
+    ".iubenda-cs-reject-btn",
     # Common aria labels
     "[aria-label*='Accept all' i]",
     "[aria-label*='Accept cookies' i]",
@@ -158,6 +169,29 @@ class ModalHandler:
                         if (window.__ucCmp && window.__ucCmp.acceptAllConsents) {
                             window.__ucCmp.acceptAllConsents();
                             return 'uc_cmp';
+                        }
+                        // Try Didomi API
+                        if (typeof Didomi !== 'undefined' && Didomi.setUserAgreeToAll) {
+                            Didomi.setUserAgreeToAll();
+                            return 'didomi_api';
+                        }
+                        if (window.didomiOnReady) {
+                            window.didomiOnReady.push(function(Didomi) {
+                                Didomi.setUserAgreeToAll();
+                            });
+                            return 'didomi_ready';
+                        }
+                        // Try Axeptio API
+                        if (window._axcb) {
+                            window._axcb.push(function(axeptio) {
+                                axeptio.acceptAll();
+                            });
+                            return 'axeptio_api';
+                        }
+                        // Try Iubenda API
+                        if (typeof _iub !== 'undefined' && _iub.cs && _iub.cs.api) {
+                            _iub.cs.api.acceptAll();
+                            return 'iubenda_api';
                         }
                         return false;
                     })()
