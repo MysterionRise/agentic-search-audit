@@ -44,9 +44,9 @@ class ResultsExtractor:
 
         # Extract details for each item
         results: list[ResultItem] = []
-        for rank, item_selector in enumerate(items[:top_k], start=1):
+        for rank, (base_selector, index) in enumerate(items[:top_k], start=1):
             try:
-                result = await self._extract_result_details(rank, item_selector)
+                result = await self._extract_result_details(rank, base_selector, index)
                 if result:
                     results.append(result)
             except Exception as e:
@@ -56,11 +56,14 @@ class ResultsExtractor:
         logger.info(f"Successfully extracted {len(results)} results")
         return results
 
-    async def _find_result_items(self) -> list[str]:
+    async def _find_result_items(self) -> list[tuple[str, int]]:
         """Find all result item elements.
 
         Returns:
-            List of CSS selectors for result items
+            List of (base_selector, index) tuples for result items.
+            Uses querySelectorAll indexing to reliably access the nth match,
+            avoiding nth-of-type which counts siblings of the same tag type
+            rather than matches of the CSS selector.
         """
         for selector in self.config.item_selectors:
             logger.debug(f"Trying item selector: {selector}")
@@ -85,8 +88,7 @@ class ResultsExtractor:
 
                 if count > 0:
                     logger.info(f"Found {count} items with selector: {selector}")
-                    # Return list of nth-child selectors
-                    return [f"{selector}:nth-of-type({i + 1})" for i in range(count)]
+                    return [(selector, i) for i in range(count)]
                 else:
                     logger.debug(f"Selector {selector} found 0 items")
             except (ValueError, TypeError) as e:
@@ -98,34 +100,41 @@ class ResultsExtractor:
 
         return []
 
-    async def _extract_result_details(self, rank: int, item_selector: str) -> ResultItem | None:
+    async def _extract_result_details(
+        self, rank: int, base_selector: str, index: int
+    ) -> ResultItem | None:
         """Extract details from a single result item.
 
         Args:
             rank: Result rank (1-indexed)
-            item_selector: CSS selector for the result item
+            base_selector: CSS selector matching all result items
+            index: Zero-based index into querySelectorAll results
 
         Returns:
             ResultItem or None if extraction failed
         """
-        logger.debug(f"Extracting details for result {rank}: {item_selector}")
+        logger.debug(f"Extracting details for result {rank}: {base_selector}[{index}]")
 
         # Extract title
-        title = await self._extract_text_from_selectors(item_selector, self.config.title_selectors)
+        title = await self._extract_text_from_selectors(
+            base_selector, index, self.config.title_selectors
+        )
 
         # Extract URL
-        url = await self._extract_url(item_selector)
+        url = await self._extract_url(base_selector, index)
 
         # Extract snippet
         snippet = await self._extract_text_from_selectors(
-            item_selector, self.config.snippet_selectors
+            base_selector, index, self.config.snippet_selectors
         )
 
         # Extract price (optional)
-        price = await self._extract_text_from_selectors(item_selector, self.config.price_selectors)
+        price = await self._extract_text_from_selectors(
+            base_selector, index, self.config.price_selectors
+        )
 
         # Extract image (optional)
-        image = await self._extract_image_url(item_selector)
+        image = await self._extract_image_url(base_selector, index)
 
         # Additional attributes
         attributes: dict[str, str] = {}
@@ -141,69 +150,90 @@ class ResultsExtractor:
         )
 
     async def _extract_text_from_selectors(
-        self, parent_selector: str, selectors: list[str]
+        self, base_selector: str, index: int, selectors: list[str]
     ) -> str | None:
-        """Extract text from first matching selector within parent.
+        """Extract text from first matching child selector within a result item.
+
+        Uses querySelectorAll indexing to reliably access the parent element.
 
         Args:
-            parent_selector: Parent element selector
+            base_selector: CSS selector matching all result items
+            index: Zero-based index into querySelectorAll results
             selectors: List of child selectors to try
 
         Returns:
             Extracted text or None
         """
         for selector in selectors:
-            combined = f"{parent_selector} {selector}"
-            text = await self.client.get_element_text(combined)
-            if text:
-                return text.strip()
+            script = f"""
+            (function() {{
+                var parent = document.querySelectorAll('{base_selector}')[{index}];
+                if (!parent) return null;
+                var el = parent.querySelector('{selector}');
+                if (!el) return null;
+                return (el.textContent || '').trim();
+            }})()
+            """
+            text = await self.client.evaluate(script)
+            if text and text not in ("null", "undefined", ""):
+                return str(text).strip()
 
         return None
 
-    async def _extract_url(self, item_selector: str) -> str | None:
+    async def _extract_url(self, base_selector: str, index: int) -> str | None:
         """Extract URL from result item.
 
+        Uses querySelectorAll indexing to reliably access the element.
+
         Args:
-            item_selector: Result item selector
+            base_selector: CSS selector matching all result items
+            index: Zero-based index into querySelectorAll results
 
         Returns:
             Absolute URL or None
         """
-        # Try to get href from the item itself
-        url = await self.client.get_element_attribute(item_selector, self.config.url_attr)
-
-        if not url:
-            # Try to find an anchor tag within the item
-            a_selector = f"{item_selector} a"
-            url = await self.client.get_element_attribute(a_selector, "href")
-
-        if url:
-            # Convert to absolute URL
+        script = f"""
+        (function() {{
+            var parent = document.querySelectorAll('{base_selector}')[{index}];
+            if (!parent) return null;
+            var url = parent.getAttribute('{self.config.url_attr}');
+            if (url) return url;
+            var a = parent.querySelector('a');
+            if (a) return a.getAttribute('href');
+            return null;
+        }})()
+        """
+        url = await self.client.evaluate(script)
+        if url and url not in ("null", "undefined"):
             return urljoin(self.base_url, url)
 
         return None
 
-    async def _extract_image_url(self, item_selector: str) -> str | None:
+    async def _extract_image_url(self, base_selector: str, index: int) -> str | None:
         """Extract image URL from result item.
 
+        Uses querySelectorAll indexing to reliably access the element.
+
         Args:
-            item_selector: Result item selector
+            base_selector: CSS selector matching all result items
+            index: Zero-based index into querySelectorAll results
 
         Returns:
             Absolute image URL or None
         """
         for selector in self.config.image_selectors:
-            combined = f"{item_selector} {selector}"
-
-            # Try src attribute
-            src = await self.client.get_element_attribute(combined, "src")
-            if src:
+            script = f"""
+            (function() {{
+                var parent = document.querySelectorAll('{base_selector}')[{index}];
+                if (!parent) return null;
+                var el = parent.querySelector('{selector}');
+                if (!el) return null;
+                return el.getAttribute('src') || el.getAttribute('data-src') || null;
+            }})()
+            """
+            src = await self.client.evaluate(script)
+            if src and src not in ("null", "undefined"):
                 return urljoin(self.base_url, src)
-
-            # Try data-src (lazy loading)
-            data_src = await self.client.get_element_attribute(combined, "data-src")
-            if data_src:
-                return urljoin(self.base_url, data_src)
 
         return None
 

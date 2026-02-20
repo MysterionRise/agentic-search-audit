@@ -128,9 +128,9 @@ class MockMCPClient:
         if "window.location.href" in script:
             return "https://example.com/search"
 
-        # Handle counting elements with querySelectorAll
+        # Handle counting elements with querySelectorAll(...).length
         match = re.search(r"querySelectorAll\('([^']+)'\)", script)
-        if match and "length" in script:
+        if match and "length" in script and "querySelector(" not in script.split("length")[0]:
             selector = match.group(1)
             # Check for exact match
             if selector in self._element_count:
@@ -140,6 +140,55 @@ class MockMCPClient:
                 if selector in key or key in selector:
                     return str(count)
             return "0"
+
+        # Handle querySelectorAll(base)[index].querySelector(child) patterns
+        idx_match = re.search(r"querySelectorAll\('([^']+)'\)\[(\d+)\]", script)
+        if idx_match:
+            base_selector = idx_match.group(1)
+            index = int(idx_match.group(2))
+
+            # Find matching elements
+            elements = self._elements.get(base_selector)
+            if not elements:
+                for key, elems in self._elements.items():
+                    if base_selector in key or key in base_selector:
+                        elements = elems
+                        break
+            if not elements or index >= len(elements):
+                return None
+
+            element = elements[index]
+
+            # Check for child querySelector
+            child_match = re.search(r"\.querySelector\('([^']+)'\)", script)
+            if child_match:
+                child_selector = child_match.group(1)
+
+                # Check for getAttribute call
+                attr_match = re.search(r"getAttribute\('([^']+)'\)", script)
+                if attr_match:
+                    attr = attr_match.group(1)
+                    if attr in ("src", "data-src"):
+                        return element.get("image")
+                    if attr == "href":
+                        return element.get("url")
+                    return None
+
+                # textContent extraction
+                if "textContent" in script:
+                    if "h3" in child_selector:
+                        return element.get("title")
+                    if "price" in child_selector.lower():
+                        return element.get("price")
+                    return None
+
+            # No child selector — getAttribute on parent
+            attr_match = re.search(r"getAttribute\('([^']+)'\)", script)
+            if attr_match:
+                attr = attr_match.group(1)
+                if attr == "href":
+                    return element.get("url")
+                return None
 
         return None
 
