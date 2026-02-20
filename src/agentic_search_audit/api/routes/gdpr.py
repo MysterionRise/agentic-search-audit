@@ -340,12 +340,11 @@ async def get_consent_status(
                 detail="User not found",
             )
 
-        # Default consent values (would be stored in DB)
         return ConsentStatus(
-            marketing_emails=getattr(user_data, "consent_marketing", False),
-            analytics=getattr(user_data, "consent_analytics", True),
-            third_party_sharing=getattr(user_data, "consent_third_party", False),
-            updated_at=getattr(user_data, "consent_updated_at", user_data.created_at),
+            marketing_emails=user_data.consent_marketing,
+            analytics=user_data.consent_analytics,
+            third_party_sharing=user_data.consent_third_party,
+            updated_at=user_data.consent_updated_at or user_data.created_at,
         )
 
     raise HTTPException(
@@ -388,12 +387,17 @@ async def update_consent(
         logger.info(f"Consent updated for user {user.id}: {updates}")
 
         user_data = await repo.get_by_id(user.id)
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
 
         return ConsentStatus(
-            marketing_emails=getattr(user_data, "consent_marketing", False),
-            analytics=getattr(user_data, "consent_analytics", True),
-            third_party_sharing=getattr(user_data, "consent_third_party", False),
-            updated_at=getattr(user_data, "consent_updated_at", datetime.utcnow()),
+            marketing_emails=user_data.consent_marketing,
+            analytics=user_data.consent_analytics,
+            third_party_sharing=user_data.consent_third_party,
+            updated_at=user_data.consent_updated_at or datetime.utcnow(),
         )
 
     raise HTTPException(
