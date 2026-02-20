@@ -1,0 +1,90 @@
+# Zara (Inditex) specific configuration
+
+site:
+  url: "https://www.zara.com"
+  locale: "en-GB"
+
+  search:
+    input_selectors:
+      # Zara search input
+      - 'input[class*="search-bar__input"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[name="searchTerm"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[placeholder*="SEARCH" i]'
+    trigger_selector: 'button[class*="layout-search"]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.zara.com/uk/en/search?searchTerm={query}"
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      - '[class*="product-grid-product"]'
+      - 'li[class*="product"]'
+      - 'article[class*="product"]'
+      - 'a[class*="product-link"]'
+    title_selectors:
+      - '[class*="product-grid-product-info__name"]'
+      - 'h3'
+      - 'h2'
+      - 'a[class*="name"]'
+      - 'span[class*="name"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="product-description"]'
+      - 'p[class*="description"]'
+      - 'span'
+    price_selectors:
+      - '[class*="price__amount"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - 'img[class*="product"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "accept all"
+      - "allow all"
+      - "accept all cookies"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2500
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Zara uses aggressive bot detection (DataDome); undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

@@ -1,0 +1,89 @@
+# Fnac.com specific configuration
+
+site:
+  url: "https://www.fnac.com"
+  locale: "fr-FR"
+
+  search:
+    input_selectors:
+      # Fnac search input
+      - 'input[id="Fnac_Search"]'
+      - 'input[name="Search"]'
+      - 'input[class*="Header-search"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Rechercher" i]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Rechercher" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.fnac.com/SearchResult/ResultList.aspx?Search={query}"
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      - 'article[class*="Article"]'
+      - 'div[class*="Article-item"]'
+      - 'div[class*="product"]'
+      - 'article'
+    title_selectors:
+      - 'a[class*="Article-title"]'
+      - 'h2[class*="Article-title"]'
+      - 'h3'
+      - 'a[class*="title"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="Article-desc"]'
+      - 'p[class*="description"]'
+      - 'span'
+    price_selectors:
+      - 'span[class*="Article-price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+      - 'strong[class*="price"]'
+    image_selectors:
+      - 'img[class*="Article-image"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accepter"
+      - "tout accepter"
+      - "accept"
+      - "agree"
+      - "continuer"
+      - "continue"
+      - "fermer"
+      - "close"
+      - "refuser"
+      - "reject"
+      - "tout refuser"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Fnac uses Akamai bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

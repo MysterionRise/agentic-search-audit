@@ -1,0 +1,87 @@
+# ASOS.com specific configuration
+
+site:
+  url: "https://www.asos.com"
+  locale: "en-GB"
+
+  search:
+    input_selectors:
+      # ASOS search input
+      - 'input[id="chrome-search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[name="q"]'
+      - 'input[placeholder*="Search" i]'
+    trigger_selector: 'button[data-testid="search-button-inline"]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.asos.com/search/?q={query}"
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      - 'article[data-auto-id="productTile"]'
+      - 'div[data-auto-id="productTile"]'
+      - 'article'
+      - 'div[class*="productTile"]'
+    title_selectors:
+      - 'h2'
+      - 'h3'
+      - 'a[data-auto-id="productTile-link"]'
+      - 'div[class*="productDescription"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="brand"]'
+      - 'p'
+      - 'span'
+    price_selectors:
+      - 'span[data-auto-id="productTilePrice"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - 'img[data-auto-id="productTileImage"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "allow all"
+      - "accept all"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # ASOS uses DataDome bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

@@ -1,0 +1,87 @@
+# Marks & Spencer specific configuration
+
+site:
+  url: "https://www.marksandspencer.com"
+  locale: "en-GB"
+
+  search:
+    input_selectors:
+      # M&S search input
+      - 'input[id="search-input"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[type="search"]'
+      - 'input[name="q"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    trigger_selector: 'button[data-testid="search-icon"]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.marksandspencer.com/search?q={query}"
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      - '[data-testid="product-card"]'
+      - 'div[class*="product-card"]'
+      - 'article[class*="product"]'
+      - 'li[class*="product"]'
+    title_selectors:
+      - '[data-testid="product-card-title"]'
+      - 'h3'
+      - 'h2'
+      - 'a[class*="product-name"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="brand"]'
+      - 'p[class*="description"]'
+      - 'span'
+    price_selectors:
+      - '[data-testid="product-price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - 'img[class*="product"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "accept all"
+      - "allow all"
+      - "accept all cookies"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  browser_backend: playwright
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

@@ -1,0 +1,92 @@
+# MediaMarkt.de specific configuration
+
+site:
+  url: "https://www.mediamarkt.de"
+  locale: "de-DE"
+
+  search:
+    input_selectors:
+      # MediaMarkt search input
+      - 'input[id="search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[name="query"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Suche" i]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Suche" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.mediamarkt.de/de/search.html?query={query}"
+    use_intelligent_fallback: true
+    intelligent_detection_model: "gpt-4o-mini"
+
+  results:
+    item_selectors:
+      - '[data-testid="product-card"]'
+      - 'div[class*="product-card"]'
+      - 'article[class*="product"]'
+      - 'div[class*="StyledProductTile"]'
+    title_selectors:
+      - '[data-testid="product-title"]'
+      - 'h3'
+      - 'h2'
+      - 'p[class*="title"]'
+      - 'a[class*="product-title"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="brand"]'
+      - 'p[class*="description"]'
+      - 'span[class*="subtitle"]'
+      - 'span'
+    price_selectors:
+      - '[data-testid="product-price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - 'img[class*="product"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "akzeptieren"
+      - "alle akzeptieren"
+      - "accept"
+      - "agree"
+      - "weiter"
+      - "continue"
+      - "schliessen"
+      - "close"
+      - "ablehnen"
+      - "reject"
+      - "alle ablehnen"
+      - "nur notwendige"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # MediaMarkt uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"
