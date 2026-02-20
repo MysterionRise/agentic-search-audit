@@ -1,0 +1,78 @@
+# Amazon.com specific configuration
+
+site:
+  url: "https://www.amazon.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - '#twotabsearchtextbox'
+      - 'input[name="field-keywords"]'
+      - 'input[id="twotabsearchtextbox"]'
+      - 'input[type="text"][aria-label*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.amazon.com/s?k={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - '[data-component-type="s-search-result"]'
+      - 'div[data-asin]'
+      - 'div[class*="s-result-item"]'
+    title_selectors:
+      - 'h2 a span'
+      - 'h2 span'
+      - 'span[class*="a-text-normal"]'
+      - 'h2'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="a-text-bold"]'
+      - 'span[class*="a-badge-text"]'
+      - 'span[class*="a-size-base"]'
+    price_selectors:
+      - 'span[class="a-price"] span[class="a-offscreen"]'
+      - 'span[class*="a-price"]'
+      - 'span[class="a-price-whole"]'
+    image_selectors:
+      - 'img[class="s-image"]'
+      - 'img[data-image-latency="s-product-image"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "dismiss"
+      - "close"
+      - "no thanks"
+      - "not now"
+      - "skip"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.3
+  seed: 42
+  # Amazon has aggressive bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

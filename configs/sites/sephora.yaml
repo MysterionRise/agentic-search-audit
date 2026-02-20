@@ -1,0 +1,85 @@
+# Sephora.com specific configuration
+
+site:
+  url: "https://www.sephora.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - 'input[data-at="search_input"]'
+      - 'input[aria-label="Search"]'
+      - 'input[type="search"]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[name="keyword"]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.sephora.com/search?keyword={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - '[data-comp="ProductTile"]'
+      - 'div[data-at="sku_item"]'
+      - 'div[class*="ProductTile"]'
+      - 'div[class*="product-tile"]'
+    title_selectors:
+      - '[data-at="sku_item_name"]'
+      - 'span[class*="ProductTitle"]'
+      - 'a[class*="product-name"]'
+      - 'h3'
+    url_attr: 'href'
+    snippet_selectors:
+      - '[data-at="sku_item_brand"]'
+      - 'span[class*="Brand"]'
+      - 'span[class*="brand"]'
+    price_selectors:
+      - '[data-at="sku_item_price_list"]'
+      - 'span[class*="Price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - '[data-at="sku_item_image"] img'
+      - 'img[class*="ProductImage"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "not now"
+      - "✕"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 3000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Sephora uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

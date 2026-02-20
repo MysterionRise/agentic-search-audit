@@ -1,0 +1,80 @@
+# Nordstrom.com specific configuration
+
+site:
+  url: "https://www.nordstrom.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - 'input[name="keyword"]'
+      - 'input[id="keyword-search-input"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.nordstrom.com/sr?keyword={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - 'article[class*="product"]'
+      - 'div[class*="FlexItem"]'
+      - 'article'
+    title_selectors:
+      - 'a[class*="product-title"]'
+      - 'h3'
+      - 'a[class*="ProductTitle"]'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="BrandName"]'
+      - 'span[class*="brand"]'
+      - 'p'
+    price_selectors:
+      - 'span[class*="Price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="price"]'
+    image_selectors:
+      - 'img[class*="product"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "not now"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 3000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Nordstrom uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

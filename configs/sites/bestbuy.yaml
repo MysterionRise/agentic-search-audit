@@ -1,0 +1,79 @@
+# BestBuy.com specific configuration
+
+site:
+  url: "https://www.bestbuy.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - '#gh-search-input'
+      - 'input[class*="search-input"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.bestbuy.com/site/searchpage.jsp?st={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - 'li[class*="sku-item"]'
+      - 'div[class*="list-item"]'
+      - 'ol[class*="sku-item-list"] li'
+    title_selectors:
+      - 'h4[class*="sku-title"] a'
+      - 'h4[class*="sku-header"] a'
+      - 'a[class*="sku-title"]'
+      - 'h4'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'div[class*="sku-model"]'
+      - 'span[class*="sku-value"]'
+      - 'p'
+    price_selectors:
+      - 'div[class*="priceView-hero-price"] span'
+      - 'span[class*="pricing-price"]'
+      - 'div[class*="price-block"] span'
+    image_selectors:
+      - 'img[class*="product-image"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "got it"
+      - "not now"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 2000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Best Buy uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

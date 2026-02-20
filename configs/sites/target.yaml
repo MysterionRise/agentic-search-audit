@@ -1,0 +1,82 @@
+# Target.com specific configuration
+
+site:
+  url: "https://www.target.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - '#search'
+      - 'input[data-test="@web/Search/SearchInput"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.target.com/s?searchTerm={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - '[data-test="@web/site-top-of-funnel/ProductCardWrapper"]'
+      - 'div[data-test*="product-card"]'
+      - 'section[class*="ProductCard"]'
+      - 'li[class*="Col"]'
+    title_selectors:
+      - '[data-test="product-title"] a'
+      - 'a[class*="Link"]'
+      - 'h3'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="TruncateDescription"]'
+      - 'span[class*="subtitle"]'
+      - 'p'
+    price_selectors:
+      - '[data-test="current-price"] span'
+      - 'span[data-test="current-price"]'
+      - 'span[class*="Price"]'
+    image_selectors:
+      - '[data-test="product-image"] img'
+      - 'img[class*="ProductCard"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "not now"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 3000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Target uses Akamai bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

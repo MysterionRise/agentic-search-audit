@@ -1,0 +1,85 @@
+# Macys.com specific configuration
+
+site:
+  url: "https://www.macys.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - '#searchInput'
+      - 'input[data-auto="searchInput"]'
+      - 'input[name="keyword"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.macys.com/shop/featured/{query}?keyword={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - '[data-auto="productCard"]'
+      - 'div[class*="productThumbnail"]'
+      - 'li[class*="cell"]'
+      - 'div[class*="product-thumbnail"]'
+    title_selectors:
+      - '[data-auto="productName"]'
+      - 'a[class*="productDescLink"]'
+      - 'div[class*="productDescription"] a'
+      - 'h3'
+    url_attr: 'href'
+    snippet_selectors:
+      - '[data-auto="productBrand"]'
+      - 'div[class*="brand"]'
+      - 'span[class*="brand"]'
+    price_selectors:
+      - '[data-auto="productPrice"]'
+      - 'span[class*="price"]'
+      - 'div[class*="pricing"]'
+      - 'span[class*="discount"]'
+    image_selectors:
+      - '[data-auto="productImage"] img'
+      - 'img[class*="thumbnailImage"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "maybe later"
+      - "not now"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 3000
+  headless: true
+  throttle_rps: 0.5
+  seed: 42
+  # Macys uses Akamai bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

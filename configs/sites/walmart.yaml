@@ -1,0 +1,80 @@
+# Walmart.com specific configuration
+
+site:
+  url: "https://www.walmart.com"
+  locale: "en-US"
+
+  search:
+    input_selectors:
+      - 'input[data-automation-id="search-input"]'
+      - 'input[name="q"]'
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://www.walmart.com/search?q={query}"
+    use_intelligent_fallback: true
+
+  results:
+    item_selectors:
+      - '[data-testid="list-view"]'
+      - 'div[data-item-id]'
+      - 'div[class*="search-result-gridview-item"]'
+      - 'section[class*="FlexItem"]'
+    title_selectors:
+      - '[data-automation-id="product-title"]'
+      - 'span[class*="product-title"]'
+      - 'a[class*="product-title-link"]'
+      - 'h3'
+    url_attr: 'href'
+    snippet_selectors:
+      - 'span[class*="product-brand"]'
+      - 'span[class*="brand"]'
+      - 'span[class*="description"]'
+    price_selectors:
+      - '[data-automation-id="product-price"]'
+      - 'div[class*="price-main"]'
+      - 'span[class*="price"]'
+      - 'span[class*="Price"]'
+    image_selectors:
+      - '[data-testid="productTileImage"] img'
+      - 'img[data-automation-id="product-image"]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "dismiss"
+      - "close"
+      - "no thanks"
+      - "not now"
+      - "skip"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 3000
+  post_submit_ms: 3000
+  headless: true
+  throttle_rps: 0.3
+  seed: 42
+  # Walmart uses aggressive bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"
