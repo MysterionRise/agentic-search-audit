@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -35,6 +36,8 @@ class SearchQualityJudge:
             config: LLM configuration
         """
         self.config = config
+        self.client: Any = None
+        self._anthropic_client: Any = None
 
         # Initialize LLM client
         if config.provider == "openai":
@@ -54,6 +57,31 @@ class SearchQualityJudge:
                 api_key=api_key,
                 base_url=base_url,
             )
+        elif config.provider == "anthropic":
+            try:
+                import anthropic
+            except ImportError:
+                raise ImportError(
+                    "anthropic package is required for Anthropic provider. "
+                    "Install with: pip install anthropic"
+                )
+            api_key = config.api_key or os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "ANTHROPIC_API_KEY environment variable not set and no api_key in config"
+                )
+            self._anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
+        elif config.provider == "vllm":
+            if not config.base_url:
+                raise ValueError("base_url must be specified in config for vLLM provider")
+            api_key = config.api_key or os.getenv("VLLM_API_KEY")
+            if not api_key:
+                logger.warning(
+                    "No API key configured for vLLM provider. "
+                    "Set VLLM_API_KEY or api_key in config if your deployment requires auth."
+                )
+                api_key = "not-required"
+            self.client = AsyncOpenAI(base_url=config.base_url, api_key=api_key)
         else:
             raise ValueError(f"Unsupported LLM provider: {config.provider}")
 
@@ -155,7 +183,7 @@ class SearchQualityJudge:
 
         timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_LLM_TIMEOUT_SECONDS
 
-        if self.config.provider in ["openai", "openrouter"]:
+        if self.config.provider in ["openai", "openrouter", "vllm"]:
             try:
                 response = await asyncio.wait_for(
                     self.client.chat.completions.create(
@@ -182,6 +210,33 @@ class SearchQualityJudge:
                 )
 
             return response.choices[0].message.content or ""
+
+        if self.config.provider == "anthropic":
+            system_prompt = self.config.system_prompt or JUDGE_SYSTEM_PROMPT
+            try:
+                response = await asyncio.wait_for(
+                    self._anthropic_client.messages.create(
+                        model=self.config.model,
+                        max_tokens=self.config.max_tokens,
+                        system=system_prompt,
+                        messages=[
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=self.config.temperature,
+                    ),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Anthropic API call timed out after {timeout_seconds}s")
+                raise TimeoutError(
+                    f"LLM evaluation timed out after {timeout_seconds} seconds. "
+                    "The API may be overloaded or experiencing issues."
+                )
+
+            for block in response.content:
+                if block.type == "text":
+                    return str(block.text)
+            return ""
 
         raise ValueError(f"Unsupported provider: {self.config.provider}")
 
