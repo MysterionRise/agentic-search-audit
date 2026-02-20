@@ -12,6 +12,7 @@ site:
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
+    trigger_selector: '[data-auto="searchButton"]'
     submit_strategy: "enter"
     submit_selector: null
     search_url_template: "https://www.macys.com/shop/featured/{query}?keyword={query}"

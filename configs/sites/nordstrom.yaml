@@ -11,6 +11,7 @@ site:
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
+    trigger_selector: 'button[aria-label="Search"]'
     submit_strategy: "enter"
     submit_selector: null
     search_url_template: "https://www.nordstrom.com/sr?keyword={query}"

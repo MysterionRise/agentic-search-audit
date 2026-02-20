@@ -11,6 +11,7 @@ site:
       - 'input[type="search"]'
       - 'input[placeholder*="Search" i]'
       - 'input[name="keyword"]'
+    trigger_selector: 'button[data-at="search_button"]'
     submit_strategy: "enter"
     submit_selector: null
     search_url_template: "https://www.sephora.com/search?keyword={query}"
