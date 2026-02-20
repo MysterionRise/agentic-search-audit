@@ -291,6 +291,104 @@ class TestSearchQualityJudgeInit:
             SearchQualityJudge(config)
 
     @pytest.mark.unit
+    def test_judge_init_anthropic_provider_with_env_var(self, monkeypatch):
+        """Test initialization with Anthropic provider using environment variable."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-12345")
+
+        mock_anthropic_module = MagicMock()
+        mock_client = MagicMock()
+        mock_anthropic_module.AsyncAnthropic.return_value = mock_client
+
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022")
+            judge = SearchQualityJudge(config)
+
+            mock_anthropic_module.AsyncAnthropic.assert_called_once_with(
+                api_key="sk-ant-test-key-12345"
+            )
+            assert judge._anthropic_client == mock_client
+
+    @pytest.mark.unit
+    def test_judge_init_anthropic_provider_with_config_key(self):
+        """Test initialization with Anthropic provider using config API key."""
+        mock_anthropic_module = MagicMock()
+        mock_client = MagicMock()
+        mock_anthropic_module.AsyncAnthropic.return_value = mock_client
+
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(
+                provider="anthropic",
+                model="claude-3-5-sonnet-20241022",
+                api_key="sk-ant-config-key",
+            )
+            judge = SearchQualityJudge(config)
+
+            mock_anthropic_module.AsyncAnthropic.assert_called_once_with(
+                api_key="sk-ant-config-key"
+            )
+            assert judge._anthropic_client == mock_client
+
+    @pytest.mark.unit
+    def test_judge_init_anthropic_missing_api_key(self, monkeypatch):
+        """Test that missing Anthropic API key raises ValueError."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        mock_anthropic_module = MagicMock()
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022")
+
+            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+                SearchQualityJudge(config)
+
+    @pytest.mark.unit
+    def test_judge_init_vllm_provider(self):
+        """Test initialization with vLLM provider."""
+        with patch("agentic_search_audit.judge.judge.AsyncOpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+
+            config = LLMConfig(
+                provider="vllm",
+                model="meta-llama/Llama-3-8b",
+                base_url="http://localhost:8000/v1",
+                api_key="test-key",
+            )
+            judge = SearchQualityJudge(config)
+
+            mock_openai.assert_called_once_with(
+                base_url="http://localhost:8000/v1",
+                api_key="test-key",
+            )
+            assert judge.client == mock_client
+
+    @pytest.mark.unit
+    def test_judge_init_vllm_no_api_key(self):
+        """Test vLLM provider uses placeholder when no API key set."""
+        with patch("agentic_search_audit.judge.judge.AsyncOpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+
+            config = LLMConfig(
+                provider="vllm",
+                model="meta-llama/Llama-3-8b",
+                base_url="http://localhost:8000/v1",
+            )
+            SearchQualityJudge(config)
+
+            mock_openai.assert_called_once_with(
+                base_url="http://localhost:8000/v1",
+                api_key="not-required",
+            )
+
+    @pytest.mark.unit
+    def test_judge_init_vllm_missing_base_url(self):
+        """Test that vLLM without base_url raises ValueError."""
+        config = LLMConfig(provider="vllm", model="meta-llama/Llama-3-8b")
+
+        with pytest.raises(ValueError, match="base_url"):
+            SearchQualityJudge(config)
+
+    @pytest.mark.unit
     def test_judge_init_unsupported_provider(self, monkeypatch):
         """Test that unsupported provider raises ValueError."""
         # We need to bypass Pydantic validation to test the judge's own validation
@@ -529,6 +627,105 @@ class TestSearchQualityJudgeCallLLM:
         call_args = mock_create.call_args
         system_message = call_args.kwargs["messages"][0]
         assert system_message["content"] == "Custom system prompt"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_call_llm_anthropic_success(self, monkeypatch):
+        """Test successful Anthropic LLM API call."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+
+        mock_anthropic_module = MagicMock()
+        mock_client = MagicMock()
+        mock_anthropic_module.AsyncAnthropic.return_value = mock_client
+
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022")
+            judge = SearchQualityJudge(config)
+
+        # Mock the response
+        mock_text_block = MagicMock()
+        mock_text_block.type = "text"
+        mock_text_block.text = '{"test": true}'
+        mock_response = MagicMock()
+        mock_response.content = [mock_text_block]
+
+        judge._anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await judge._call_llm("Test prompt")
+
+        assert result == '{"test": true}'
+        judge._anthropic_client.messages.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_call_llm_anthropic_timeout(self, monkeypatch):
+        """Test Anthropic API call timeout handling."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+
+        mock_anthropic_module = MagicMock()
+        mock_client = MagicMock()
+        mock_anthropic_module.AsyncAnthropic.return_value = mock_client
+
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022")
+            judge = SearchQualityJudge(config)
+
+        with patch("agentic_search_audit.judge.judge.asyncio.wait_for") as mock_wait_for:
+            mock_wait_for.side_effect = asyncio.TimeoutError()
+
+            with pytest.raises(TimeoutError, match="timed out"):
+                await judge._call_llm("Test prompt")
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_call_llm_anthropic_empty_response(self, monkeypatch):
+        """Test Anthropic API call with no text blocks returns empty string."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+
+        mock_anthropic_module = MagicMock()
+        mock_client = MagicMock()
+        mock_anthropic_module.AsyncAnthropic.return_value = mock_client
+
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic_module}):
+            config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022")
+            judge = SearchQualityJudge(config)
+
+        # Response with no text blocks
+        mock_block = MagicMock()
+        mock_block.type = "tool_use"
+        mock_response = MagicMock()
+        mock_response.content = [mock_block]
+
+        judge._anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await judge._call_llm("Test prompt")
+        assert result == ""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_call_llm_vllm_success(self):
+        """Test successful vLLM API call (uses OpenAI-compatible client)."""
+        with patch("agentic_search_audit.judge.judge.AsyncOpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+
+            config = LLMConfig(
+                provider="vllm",
+                model="meta-llama/Llama-3-8b",
+                base_url="http://localhost:8000/v1",
+            )
+            judge = SearchQualityJudge(config)
+
+        expected_response = '{"overall": 4.0}'
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = expected_response
+
+        judge.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await judge._call_llm("Test prompt")
+
+        assert result == expected_response
 
     @pytest.mark.asyncio
     @pytest.mark.unit
