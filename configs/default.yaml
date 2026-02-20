@@ -75,6 +75,13 @@ run:
   # browserbase_api_key: null                  # Browserbase cloud browser API key
   # browserbase_project_id: null               # Browserbase project ID
 
+  # Proxy / IP rotation:
+  #   proxy_url: http://user:pass@host:port    # Single proxy (used when strategy is "none")
+  #   proxy_rotation_strategy: none            # "none", "per-site", or "per-query"
+  #   proxy_list:                              # Pool of proxies for rotation
+  #     - http://proxy1:8080
+  #     - http://proxy2:8080
+
 llm:
   provider: "vllm"  # "openai", "anthropic", "vllm", or "openrouter"
   model: "llava-hf/llava-v1.6-mistral-7b-hf"  # Vision model name for vLLM server

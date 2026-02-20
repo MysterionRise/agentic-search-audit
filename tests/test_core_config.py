@@ -1,5 +1,7 @@
 """Tests for core configuration module."""
 
+import pytest
+
 
 class TestRunConfig:
     """Test suite for RunConfig."""
@@ -25,6 +27,52 @@ class TestRunConfig:
         assert config.headless is False
         assert config.top_k == 5
         assert config.network_idle_ms == 2000
+
+
+class TestRunConfigProxy:
+    """Test suite for RunConfig proxy fields."""
+
+    def test_proxy_defaults_are_none(self):
+        from agentic_search_audit.core.types import ProxyRotationStrategy, RunConfig
+
+        config = RunConfig()
+        assert config.proxy_url is None
+        assert config.proxy_rotation_strategy == ProxyRotationStrategy.NONE
+        assert config.proxy_list is None
+
+    def test_proxy_url_accepted(self):
+        from agentic_search_audit.core.types import RunConfig
+
+        config = RunConfig(proxy_url="http://proxy:8080")
+        assert config.proxy_url == "http://proxy:8080"
+
+    def test_rotation_per_site_requires_proxy_list(self):
+        from agentic_search_audit.core.types import RunConfig
+
+        with pytest.raises(ValueError, match="proxy_list.*at least 2"):
+            RunConfig(proxy_rotation_strategy="per-site")
+
+    def test_rotation_per_query_requires_proxy_list(self):
+        from agentic_search_audit.core.types import RunConfig
+
+        with pytest.raises(ValueError, match="proxy_list.*at least 2"):
+            RunConfig(proxy_rotation_strategy="per-query", proxy_list=["http://one:8080"])
+
+    def test_rotation_per_site_with_valid_list(self):
+        from agentic_search_audit.core.types import ProxyRotationStrategy, RunConfig
+
+        config = RunConfig(
+            proxy_rotation_strategy="per-site",
+            proxy_list=["http://a:8080", "http://b:8080"],
+        )
+        assert config.proxy_rotation_strategy == ProxyRotationStrategy.PER_SITE
+        assert len(config.proxy_list) == 2
+
+    def test_rotation_none_allows_no_list(self):
+        from agentic_search_audit.core.types import ProxyRotationStrategy, RunConfig
+
+        config = RunConfig(proxy_rotation_strategy="none")
+        assert config.proxy_rotation_strategy == ProxyRotationStrategy.NONE
 
 
 class TestSiteConfig:

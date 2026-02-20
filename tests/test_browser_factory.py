@@ -112,6 +112,41 @@ class TestFactoryUndetected:
         assert client.click_timeout_ms == 8000
 
 
+class TestFactoryProxyWiring:
+    """Factory passes proxy_url through to clients."""
+
+    def test_playwright_receives_proxy(self) -> None:
+        config = RunConfig(proxy_url="http://proxy:8080")
+        client = create_browser_client(config)
+        assert isinstance(client, PlaywrightBrowserClient)
+        assert client.proxy_url == "http://proxy:8080"
+
+    def test_playwright_no_proxy_by_default(self) -> None:
+        config = RunConfig()
+        client = create_browser_client(config)
+        assert isinstance(client, PlaywrightBrowserClient)
+        assert client.proxy_url is None
+
+    @pytest.fixture(autouse=True)
+    def _mock_uc_module(self) -> None:
+        from types import ModuleType
+
+        mock_uc = ModuleType("undetected_chromedriver")
+        with patch.dict("sys.modules", {"undetected_chromedriver": mock_uc}):
+            yield  # type: ignore[misc]
+
+    def test_undetected_receives_proxy(self) -> None:
+        config = RunConfig(
+            browser_backend=BrowserBackend.UNDETECTED,
+            proxy_url="socks5://proxy:1080",
+        )
+        client = create_browser_client(config)
+        from agentic_search_audit.browser.undetected_client import UndetectedBrowserClient
+
+        assert isinstance(client, UndetectedBrowserClient)
+        assert client.proxy_url == "socks5://proxy:1080"
+
+
 class TestFactoryUnknownBackend:
     """Factory raises on unknown backend."""
 

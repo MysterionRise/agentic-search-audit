@@ -81,6 +81,7 @@ class PlaywrightBrowserClient:
         viewport_height: int = 900,
         click_timeout_ms: int = 5000,
         locale: str = "en-US",
+        proxy_url: str | None = None,
     ):
         """Initialize Playwright browser client.
 
@@ -90,12 +91,14 @@ class PlaywrightBrowserClient:
             viewport_height: Browser viewport height
             click_timeout_ms: Timeout for click operations in ms
             locale: BCP-47 locale code (e.g. 'fr-FR', 'de-DE')
+            proxy_url: Optional proxy URL (e.g. http://user:pass@host:port)
         """
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.click_timeout_ms = click_timeout_ms
         self.locale = locale
+        self.proxy_url = proxy_url
         self._playwright: Any = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -115,9 +118,10 @@ class PlaywrightBrowserClient:
         logger.info("Launching Playwright browser...")
 
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
-            args=[
+
+        launch_kwargs: dict[str, Any] = {
+            "headless": self.headless,
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--no-first-run",
                 "--no-default-browser-check",
@@ -131,7 +135,12 @@ class PlaywrightBrowserClient:
                 "--password-store=basic",
                 "--use-mock-keychain",
             ],
-        )
+        }
+        if self.proxy_url:
+            launch_kwargs["proxy"] = {"server": self.proxy_url}
+            logger.info("Using proxy: %s", self.proxy_url)
+
+        self._browser = await self._playwright.chromium.launch(**launch_kwargs)
         ua = random_user_agent()
         logger.debug("Selected user-agent: %s", ua)
         self._context = await self._browser.new_context(

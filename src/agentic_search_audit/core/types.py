@@ -106,6 +106,14 @@ class BrowserClient(Protocol):
         ...
 
 
+class ProxyRotationStrategy(str, Enum):
+    """Proxy rotation strategies for IP rotation."""
+
+    NONE = "none"
+    PER_SITE = "per-site"
+    PER_QUERY = "per-query"
+
+
 class BrowserBackend(str, Enum):
     """Available browser automation backends."""
 
@@ -360,6 +368,31 @@ class RunConfig(BaseModel):
         default=None, description="Browserbase API key for cloud browsers"
     )
     browserbase_project_id: str | None = Field(default=None, description="Browserbase project ID")
+
+    # Proxy / IP rotation
+    proxy_url: str | None = Field(
+        default=None,
+        description="Proxy URL (e.g. http://user:pass@host:port or socks5://host:port)",
+    )
+    proxy_rotation_strategy: ProxyRotationStrategy = Field(
+        default=ProxyRotationStrategy.NONE,
+        description="When to rotate proxies: none, per-site, or per-query",
+    )
+    proxy_list: list[str] | None = Field(
+        default=None,
+        description="Pool of proxy URLs for rotation (used when strategy is not 'none')",
+    )
+
+    @model_validator(mode="after")
+    def _validate_proxy_config(self) -> "RunConfig":
+        """Validate proxy configuration consistency."""
+        if self.proxy_rotation_strategy != ProxyRotationStrategy.NONE:
+            if not self.proxy_list or len(self.proxy_list) < 2:
+                raise ValueError(
+                    f"proxy_rotation_strategy '{self.proxy_rotation_strategy.value}' "
+                    "requires 'proxy_list' with at least 2 entries"
+                )
+        return self
 
     @model_validator(mode="after")
     def _validate_cdp_config(self) -> "RunConfig":

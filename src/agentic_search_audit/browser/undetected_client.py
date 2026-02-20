@@ -30,12 +30,14 @@ class UndetectedBrowserClient:
         viewport_height: int = 900,
         click_timeout_ms: int = 5000,
         locale: str = "en-US",
+        proxy_url: str | None = None,
     ):
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.click_timeout_ms = click_timeout_ms
         self.locale = locale
+        self.proxy_url = proxy_url
         self._driver: Any = None
 
     # -- lifecycle -----------------------------------------------------------
@@ -75,6 +77,9 @@ class UndetectedBrowserClient:
             if lang != "en":
                 accept_langs += ",en;q=0.8"
             options.add_experimental_option("prefs", {"intl.accept_languages": accept_langs})
+            if self.proxy_url:
+                options.add_argument(f"--proxy-server={self.proxy_url}")
+                logger.info("Using proxy: %s", self.proxy_url)
             ua = random_user_agent()
             options.add_argument(f"--user-agent={ua}")
             logger.debug("Selected user-agent: %s", ua)

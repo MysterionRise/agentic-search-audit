@@ -33,6 +33,7 @@ def create_browser_client(config: RunConfig, locale: str = "en-US") -> BrowserCl
             viewport_height=config.viewport_height,
             click_timeout_ms=config.click_timeout_ms,
             locale=locale,
+            proxy_url=config.proxy_url,
         )
 
     if backend == BrowserBackend.CDP:
@@ -49,6 +50,11 @@ def create_browser_client(config: RunConfig, locale: str = "en-US") -> BrowserCl
         if not endpoint:
             raise ValueError("CDP backend requires either 'cdp_endpoint' or 'browserbase_api_key'")
 
+        if config.proxy_url:
+            logger.warning(
+                "Proxy URL is set but CDP backend connects to an external browser. "
+                "Ensure the external browser was launched with proxy settings."
+            )
         logger.info("Using CDP browser backend (endpoint: %s, locale=%s)", endpoint, locale)
         return CDPBrowserClient(
             cdp_endpoint=endpoint,
@@ -76,6 +82,7 @@ def create_browser_client(config: RunConfig, locale: str = "en-US") -> BrowserCl
             viewport_height=config.viewport_height,
             click_timeout_ms=config.click_timeout_ms,
             locale=locale,
+            proxy_url=config.proxy_url,
         )
 
     raise ValueError(f"Unknown browser backend: {backend}")
