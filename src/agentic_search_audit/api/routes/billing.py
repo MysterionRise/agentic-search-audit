@@ -162,7 +162,7 @@ async def get_subscription(
 
         # Get user's Stripe customer ID
         user_data = await repo.get_by_id(user.id)
-        stripe_customer_id = getattr(user_data, "stripe_customer_id", None)
+        stripe_customer_id = user_data.stripe_customer_id if user_data else None
 
         if not stripe_customer_id:
             # Return free plan for users without subscription
@@ -250,7 +250,7 @@ async def create_checkout_session(
             )
 
         # Get or create Stripe customer
-        stripe_customer_id = getattr(user_data, "stripe_customer_id", None)
+        stripe_customer_id = user_data.stripe_customer_id
         if not stripe_customer_id:
             customer = stripe.Customer.create(
                 email=user_data.email,
@@ -304,7 +304,13 @@ async def create_portal_session(
         repo = UserRepository(session)
         user_data = await repo.get_by_id(user.id)
 
-        stripe_customer_id = getattr(user_data, "stripe_customer_id", None)
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        stripe_customer_id = user_data.stripe_customer_id
         if not stripe_customer_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
