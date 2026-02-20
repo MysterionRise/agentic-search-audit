@@ -37,11 +37,13 @@ class CDPBrowserClient:
         viewport_width: int = 1366,
         viewport_height: int = 900,
         click_timeout_ms: int = 5000,
+        locale: str = "en-US",
     ):
         self.cdp_endpoint = cdp_endpoint
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.click_timeout_ms = click_timeout_ms
+        self.locale = locale
         self._playwright: Any = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -72,6 +74,7 @@ class CDPBrowserClient:
         else:
             self._context = await self._browser.new_context(
                 viewport={"width": self.viewport_width, "height": self.viewport_height},
+                locale=self.locale,
             )
             self._owns_context = True
 

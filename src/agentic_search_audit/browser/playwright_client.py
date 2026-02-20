@@ -1,6 +1,7 @@
 """Playwright-based browser client for browser automation."""
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any, Literal
@@ -26,6 +27,45 @@ from .stealth import (
 
 logger = logging.getLogger(__name__)
 
+# Mapping from locale region to a representative timezone.
+_LOCALE_TIMEZONE_MAP: dict[str, str] = {
+    "en-US": "America/New_York",
+    "en-GB": "Europe/London",
+    "fr-FR": "Europe/Paris",
+    "de-DE": "Europe/Berlin",
+    "es-ES": "Europe/Madrid",
+    "it-IT": "Europe/Rome",
+    "nl-NL": "Europe/Amsterdam",
+    "pt-PT": "Europe/Lisbon",
+    "pt-BR": "America/Sao_Paulo",
+    "sv-SE": "Europe/Stockholm",
+    "da-DK": "Europe/Copenhagen",
+    "nb-NO": "Europe/Oslo",
+    "fi-FI": "Europe/Helsinki",
+    "pl-PL": "Europe/Warsaw",
+    "ja-JP": "Asia/Tokyo",
+    "ko-KR": "Asia/Seoul",
+    "zh-CN": "Asia/Shanghai",
+    "zh-TW": "Asia/Taipei",
+}
+
+
+def _timezone_for_locale(locale: str) -> str:
+    """Return a plausible timezone for the given BCP-47 locale."""
+    return _LOCALE_TIMEZONE_MAP.get(locale, "America/New_York")
+
+
+def _locale_to_languages(locale: str) -> list[str]:
+    """Derive a ``navigator.languages`` list from a BCP-47 locale string."""
+    languages = [locale]
+    if "-" in locale:
+        lang = locale.split("-")[0]
+        if lang not in languages:
+            languages.append(lang)
+    if "en" not in languages:
+        languages.append("en")
+    return languages
+
 
 class PlaywrightBrowserClient:
     """Client for browser automation using Playwright.
@@ -40,6 +80,7 @@ class PlaywrightBrowserClient:
         viewport_width: int = 1366,
         viewport_height: int = 900,
         click_timeout_ms: int = 5000,
+        locale: str = "en-US",
     ):
         """Initialize Playwright browser client.
 
@@ -48,11 +89,13 @@ class PlaywrightBrowserClient:
             viewport_width: Browser viewport width
             viewport_height: Browser viewport height
             click_timeout_ms: Timeout for click operations in ms
+            locale: BCP-47 locale code (e.g. 'fr-FR', 'de-DE')
         """
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.click_timeout_ms = click_timeout_ms
+        self.locale = locale
         self._playwright: Any = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -94,8 +137,8 @@ class PlaywrightBrowserClient:
         self._context = await self._browser.new_context(
             viewport={"width": self.viewport_width, "height": self.viewport_height},
             user_agent=ua,
-            locale="en-US",
-            timezone_id="America/New_York",
+            locale=self.locale,
+            timezone_id=_timezone_for_locale(self.locale),
         )
 
         # Add stealth scripts to hide automation detection
@@ -107,10 +150,10 @@ class PlaywrightBrowserClient:
                 await stealth_async(self._page)
             except Exception as stealth_err:
                 logger.warning(f"playwright-stealth failed ({stealth_err}), using built-in JS")
-                await self._context.add_init_script(self._stealth_js())
+                await self._context.add_init_script(self._stealth_js(self.locale))
         except ImportError:
             logger.warning("playwright-stealth not installed, using built-in stealth JS")
-            await self._context.add_init_script(self._stealth_js())
+            await self._context.add_init_script(self._stealth_js(self.locale))
             self._page = await self._context.new_page()
 
         # Set higher default timeout for slow sites (60 seconds)
@@ -465,33 +508,39 @@ class PlaywrightBrowserClient:
             pass
 
     @staticmethod
-    def _stealth_js() -> str:
-        """Return JavaScript that masks common automation fingerprints."""
-        return """
+    def _stealth_js(locale: str = "en-US") -> str:
+        """Return JavaScript that masks common automation fingerprints.
+
+        Args:
+            locale: BCP-47 locale code used to set navigator.language(s).
+        """
+        languages = _locale_to_languages(locale)
+        languages_js = json.dumps(languages)
+        return f"""
         // Hide navigator.webdriver
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
 
         // Fake window.chrome.runtime
-        if (!window.chrome) { window.chrome = {}; }
-        window.chrome.runtime = { connect: function(){}, sendMessage: function(){} };
+        if (!window.chrome) {{ window.chrome = {{}}; }}
+        window.chrome.runtime = {{ connect: function(){{}}, sendMessage: function(){{}} }};
 
         // Fake navigator.plugins (3 common plugins)
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => {
+        Object.defineProperty(navigator, 'plugins', {{
+            get: () => {{
                 const arr = [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
-                      description: 'Portable Document Format', length: 1 },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
-                      description: '', length: 1 },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin',
-                      description: '', length: 2 },
+                    {{ name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
+                      description: 'Portable Document Format', length: 1 }},
+                    {{ name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+                      description: '', length: 1 }},
+                    {{ name: 'Native Client', filename: 'internal-nacl-plugin',
+                      description: '', length: 2 }},
                 ];
                 arr.item = i => arr[i];
                 arr.namedItem = n => arr.find(p => p.name === n);
-                arr.refresh = () => {};
+                arr.refresh = () => {{}};
                 return arr;
-            },
-        });
+            }},
+        }});
 
         // Patch navigator.permissions.query
         const origQuery = window.navigator.permissions.query.bind(
@@ -499,21 +548,24 @@ class PlaywrightBrowserClient:
         );
         window.navigator.permissions.query = params =>
             params.name === 'notifications'
-                ? Promise.resolve({ state: Notification.permission })
+                ? Promise.resolve({{ state: Notification.permission }})
                 : origQuery(params);
 
         // Override WebGL vendor/renderer to look like real hardware
         const getParameter = WebGLRenderingContext.prototype.getParameter;
-        WebGLRenderingContext.prototype.getParameter = function (param) {
+        WebGLRenderingContext.prototype.getParameter = function (param) {{
             if (param === 37445) return 'Intel Inc.';           // UNMASKED_VENDOR
             if (param === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER
             return getParameter.call(this, param);
-        };
+        }};
 
-        // Match navigator.languages to context locale
-        Object.defineProperty(navigator, 'languages', {
-            get: () => ['en-US', 'en'],
-        });
+        // Match navigator.language and navigator.languages to context locale
+        Object.defineProperty(navigator, 'language', {{
+            get: () => {json.dumps(locale)},
+        }});
+        Object.defineProperty(navigator, 'languages', {{
+            get: () => {languages_js},
+        }});
         """
 
     async def get_element_attribute(self, selector: str, attribute: str) -> str | None:

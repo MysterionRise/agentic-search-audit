@@ -94,6 +94,7 @@ class SearchQualityJudge:
         page_url: str,
         html_content: str,
         site_name: str,
+        locale: str = "en-US",
     ) -> JudgeScore:
         """Evaluate search quality for a query.
 
@@ -103,6 +104,7 @@ class SearchQualityJudge:
             page_url: URL of search results page
             html_content: HTML content of page
             site_name: Name of site being evaluated
+            locale: BCP-47 locale code for the target site
 
         Returns:
             Judge scores and evidence
@@ -116,6 +118,7 @@ class SearchQualityJudge:
             page_url=page_url,
             html_content=html_content,
             site_name=site_name,
+            locale=locale,
         )
 
         # Call LLM
@@ -135,6 +138,7 @@ class SearchQualityJudge:
         page_url: str,
         html_content: str,
         site_name: str,
+        locale: str = "en-US",
     ) -> str:
         """Build user prompt for judge.
 
@@ -144,6 +148,7 @@ class SearchQualityJudge:
             page_url: Results page URL
             html_content: Page HTML
             site_name: Site name
+            locale: BCP-47 locale code for the target site
 
         Returns:
             Formatted prompt
@@ -162,6 +167,7 @@ class SearchQualityJudge:
             results_json=results_json,
             page_url=page_url,
             html_snippet=html_snippet,
+            locale=locale,
         )
 
         return prompt

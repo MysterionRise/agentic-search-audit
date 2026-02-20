@@ -1,6 +1,7 @@
 """Undetected-chromedriver browser client (Selenium-based, async-wrapped)."""
 
 import asyncio
+import json
 import logging
 import time
 from pathlib import Path
@@ -28,11 +29,13 @@ class UndetectedBrowserClient:
         viewport_width: int = 1366,
         viewport_height: int = 900,
         click_timeout_ms: int = 5000,
+        locale: str = "en-US",
     ):
         self.headless = headless
         self.viewport_width = viewport_width
         self.viewport_height = viewport_height
         self.click_timeout_ms = click_timeout_ms
+        self.locale = locale
         self._driver: Any = None
 
     # -- lifecycle -----------------------------------------------------------
@@ -54,6 +57,8 @@ class UndetectedBrowserClient:
                 "Install with: pip install 'agentic-search-audit[undetected]'"
             )
 
+        locale = self.locale
+
         def _create_driver() -> Any:
             options = uc.ChromeOptions()
             if self.headless:
@@ -63,11 +68,30 @@ class UndetectedBrowserClient:
             options.add_argument("--no-first-run")
             options.add_argument("--no-default-browser-check")
             options.add_argument("--disable-dev-shm-usage")
+            # Set browser language / Accept-Language header
+            options.add_argument(f"--lang={locale}")
+            lang = locale.split("-")[0] if "-" in locale else locale
+            accept_langs = f"{locale},{lang};q=0.9"
+            if lang != "en":
+                accept_langs += ",en;q=0.8"
+            options.add_experimental_option("prefs", {"intl.accept_languages": accept_langs})
             ua = random_user_agent()
             options.add_argument(f"--user-agent={ua}")
             logger.debug("Selected user-agent: %s", ua)
             driver = uc.Chrome(options=options)
             driver.set_page_load_timeout(60)
+            # Inject navigator.language overrides
+            languages_js = json.dumps(
+                [locale] + ([lang] if lang != locale else []) + (["en"] if lang != "en" else [])
+            )
+            driver.execute_script(f"""
+                Object.defineProperty(navigator, 'language', {{
+                    get: () => {json.dumps(locale)}
+                }});
+                Object.defineProperty(navigator, 'languages', {{
+                    get: () => {languages_js}
+                }});
+            """)
             return driver
 
         logger.info("Launching undetected Chrome...")
