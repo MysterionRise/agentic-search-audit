@@ -325,6 +325,12 @@ class ResultsConfig(BaseModel):
     image_selectors: list[str] = Field(
         default=["img", '[data-testid="product-image"]'], description="Selectors for images"
     )
+    no_results_selectors: list[str] = Field(
+        default=[],
+        description="CSS selectors for no-results message elements. When set, only these "
+        "elements are checked. When empty, falls back to heuristic text search "
+        "scoped to the main content area (excludes header/footer/nav).",
+    )
 
 
 class ModalsConfig(BaseModel):

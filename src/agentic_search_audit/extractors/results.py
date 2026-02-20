@@ -238,11 +238,36 @@ class ResultsExtractor:
         return None
 
     async def check_for_no_results(self) -> bool:
-        """Check if page shows 'no results' message.
+        """Check if page shows a 'no results' message.
+
+        Uses site-specific ``no_results_selectors`` when configured.
+        Otherwise falls back to a heuristic text search scoped to the
+        main content area (``main``, ``[role=main]``, ``#content``,
+        ``.content``) to avoid false positives from footer / FAQ text.
+        If no content container is found, searches ``document.body`` but
+        excludes ``<header>``, ``<footer>``, and ``<nav>`` elements.
 
         Returns:
-            True if no results found
+            True if a no-results indicator is detected.
         """
+        # --- Strategy 1: explicit selectors from config ---
+        if self.config.no_results_selectors:
+            for selector in self.config.no_results_selectors:
+                script = f"""
+                (function() {{
+                    var el = document.querySelector('{selector}');
+                    if (!el) return false;
+                    var style = window.getComputedStyle(el);
+                    return style.display !== 'none' && style.visibility !== 'hidden';
+                }})()
+                """
+                result = await self.client.evaluate(script)
+                if result and str(result).lower() == "true":
+                    logger.info(f"Detected no-results element via selector: '{selector}'")
+                    return True
+            return False
+
+        # --- Strategy 2: heuristic text search, scoped to content area ---
         no_results_patterns = [
             "no results",
             "no items found",
@@ -251,16 +276,27 @@ class ResultsExtractor:
             "try a different search",
         ]
 
-        for pattern in no_results_patterns:
-            script = f"""
-            (function() {{
-                const text = document.body.textContent.toLowerCase();
-                return text.includes('{pattern}');
-            }})()
-            """
+        # Build a JS snippet that extracts text only from the main
+        # content area, excluding header/footer/nav.
+        scope_script = """
+        (function() {
+            var container = document.querySelector('main, [role="main"], #content, .content');
+            if (container) return container.textContent.toLowerCase();
+            // Fallback: body text minus header/footer/nav
+            var clone = document.body.cloneNode(true);
+            var exclude = clone.querySelectorAll('header, footer, nav, [role="banner"], [role="contentinfo"], [role="navigation"]');
+            for (var i = 0; i < exclude.length; i++) exclude[i].remove();
+            return clone.textContent.toLowerCase();
+        })()
+        """
 
-            result = await self.client.evaluate(script)
-            if result and result.lower() == "true":
+        scoped_text = await self.client.evaluate(scope_script)
+        if not scoped_text or scoped_text in ("null", "undefined"):
+            return False
+
+        scoped_text_lower = str(scoped_text).lower()
+        for pattern in no_results_patterns:
+            if pattern in scoped_text_lower:
                 logger.info(f"Detected no results message: '{pattern}'")
                 return True
 

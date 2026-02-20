@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agentic_search_audit.core.types import LLMConfig, ModalsConfig, ResultsConfig, SearchConfig
+from agentic_search_audit.extractors.results import ResultsExtractor
 from agentic_search_audit.extractors.search_box import SearchBoxFinder
 
 
@@ -148,3 +149,94 @@ async def test_submit_search_calls_trigger_before_find():
     assert result is True
     # Trigger was clicked first
     client.click.assert_any_call(".open-search")
+
+
+# --- check_for_no_results tests ---
+
+
+def _make_results_extractor(
+    no_results_selectors: list[str] | None = None,
+) -> tuple[ResultsExtractor, AsyncMock]:
+    """Create a ResultsExtractor with a mock browser client."""
+    client = AsyncMock()
+    config = ResultsConfig(
+        no_results_selectors=no_results_selectors or [],
+    )
+    return ResultsExtractor(client, config, "https://example.com"), client
+
+
+@pytest.mark.unit
+async def test_no_results_explicit_selector_visible():
+    """Explicit no_results_selectors: returns True when element is visible."""
+    ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
+    client.evaluate = AsyncMock(return_value="true")
+
+    assert await ext.check_for_no_results() is True
+
+
+@pytest.mark.unit
+async def test_no_results_explicit_selector_hidden():
+    """Explicit no_results_selectors: returns False when element is hidden."""
+    ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
+    client.evaluate = AsyncMock(return_value="false")
+
+    assert await ext.check_for_no_results() is False
+
+
+@pytest.mark.unit
+async def test_no_results_explicit_selector_missing():
+    """Explicit no_results_selectors: returns False when element doesn't exist."""
+    ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
+    client.evaluate = AsyncMock(return_value="false")
+
+    assert await ext.check_for_no_results() is False
+
+
+@pytest.mark.unit
+async def test_no_results_heuristic_detects_pattern():
+    """Heuristic fallback: detects 'no results' in scoped content area."""
+    ext, client = _make_results_extractor()
+    client.evaluate = AsyncMock(
+        return_value="showing no results for your search. try something else."
+    )
+
+    assert await ext.check_for_no_results() is True
+
+
+@pytest.mark.unit
+async def test_no_results_heuristic_ignores_footer_text():
+    """Heuristic fallback: the JS scope excludes footer/nav text.
+
+    The mock returns scoped text that does NOT contain a no-results
+    pattern, simulating the fix where footer text is excluded.
+    """
+    ext, client = _make_results_extractor()
+    # Scoped text only has product content, no 'no results' phrase
+    client.evaluate = AsyncMock(return_value="nike air max running shoes best sellers")
+
+    assert await ext.check_for_no_results() is False
+
+
+@pytest.mark.unit
+async def test_no_results_heuristic_null_text():
+    """Heuristic fallback: returns False when evaluate returns null."""
+    ext, client = _make_results_extractor()
+    client.evaluate = AsyncMock(return_value="null")
+
+    assert await ext.check_for_no_results() is False
+
+
+@pytest.mark.unit
+async def test_no_results_config_field_defaults_empty():
+    """no_results_selectors defaults to empty list."""
+    config = ResultsConfig()
+    assert config.no_results_selectors == []
+
+
+@pytest.mark.unit
+async def test_no_results_config_field_accepts_selectors():
+    """no_results_selectors accepts custom selectors."""
+    config = ResultsConfig(
+        no_results_selectors=[".empty-state", "#no-results-banner"],
+    )
+    assert config.no_results_selectors == [".empty-state", "#no-results-banner"]
