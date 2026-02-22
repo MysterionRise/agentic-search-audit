@@ -48,6 +48,10 @@ site:
       - "dismiss"
     max_auto_clicks: 3
     wait_after_close_ms: 500
+    location:
+      default_country: "United States"
+      default_zip_code: null  # Set to e.g. "10001" to auto-fill ZIP prompts
+      enabled: true
 
 run:
   top_k: 10

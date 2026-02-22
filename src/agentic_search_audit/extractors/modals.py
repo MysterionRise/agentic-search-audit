@@ -3,9 +3,53 @@
 import asyncio
 import logging
 
-from ..core.types import BrowserClient, ModalsConfig
+from ..core.types import BrowserClient, LocationConfig, ModalsConfig
 
 logger = logging.getLogger(__name__)
+
+# Common location/region/shipping modal selectors for US retailers
+LOCATION_MODAL_SELECTORS = [
+    # Generic location/shipping modals
+    '[data-testid="location-modal"]',
+    '[data-testid="ship-to-modal"]',
+    '[data-testid="geo-modal"]',
+    '[data-testid="store-selector-modal"]',
+    '[data-test="locationModal"]',
+    '[data-test="geoModal"]',
+    # Common class patterns
+    '[class*="location-modal"]',
+    '[class*="ship-to"]',
+    '[class*="geo-restriction"]',
+    '[class*="geo-modal"]',
+    '[class*="country-selector"]',
+    '[class*="region-selector"]',
+    '[class*="store-selector"]',
+    '[class*="zipcode-modal"]',
+    # Aria patterns
+    '[aria-label*="location" i]',
+    '[aria-label*="ship to" i]',
+    '[aria-label*="choose your country" i]',
+    '[aria-label*="select country" i]',
+    '[aria-label*="select your location" i]',
+    # Common id patterns
+    '[id*="location-modal"]',
+    '[id*="ship-to"]',
+    '[id*="geo-modal"]',
+    '[id*="country-select"]',
+    '[id*="zipcode-modal"]',
+    '[id*="store-locator-modal"]',
+    # Walmart-specific
+    '[data-automation-id="fulfillment-modal"]',
+    '[data-tl-id="GlobalLocationSelector"]',
+    # Target-specific
+    '[data-test="@web/ZipCodeModalContent"]',
+    '[data-test="storeIdModal"]',
+    # Nike-specific
+    '[data-testid="geolocation-modal"]',
+    # Best Buy-specific
+    '[class*="change-store"]',
+    '[data-testid="store-selector"]',
+]
 
 # Common cookie consent selectors for popular consent management platforms
 COOKIE_CONSENT_SELECTORS = [
@@ -98,6 +142,11 @@ class ModalHandler:
         # First, try common cookie consent selectors (most reliable)
         consent_dismissed = await self._try_cookie_consent_selectors()
         dismissed_count += consent_dismissed
+
+        # Try location/region modals (common on US retailers)
+        if self.config.location.enabled:
+            location_dismissed = await self._try_location_modals()
+            dismissed_count += location_dismissed
 
         # Then try text-based matching for other modals
         for attempt in range(self.config.max_auto_clicks):
@@ -298,6 +347,180 @@ class ModalHandler:
                 logger.debug(f"Shadow DOM consent search failed: {e}")
 
         return dismissed
+
+    async def _try_location_modals(self) -> int:
+        """Try to dismiss location/region/shipping modals.
+
+        Looks for common location prompt patterns (country selectors,
+        ZIP code inputs, "Ship to" dialogs) and dismisses them by
+        clicking confirm/close or entering a default ZIP code.
+
+        Returns:
+            Number of location modals dismissed
+        """
+        dismissed = 0
+        location_config = self.config.location
+
+        # Step 1: Try known CSS selectors for location modals
+        for selector in LOCATION_MODAL_SELECTORS:
+            try:
+                result = await self.client.query_selector(selector)
+                if result:
+                    logger.info(f"Found location modal element: {selector}")
+                    # Found a location modal container — try to dismiss it
+                    dismissed += await self._dismiss_location_dialog(location_config)
+                    if dismissed > 0:
+                        return dismissed
+            except Exception as e:
+                logger.debug(f"Location selector {selector} not found or failed: {e}")
+                continue
+
+        # Step 2: Text-based detection for location prompts
+        try:
+            result = await self.client.evaluate("""
+                (function() {
+                    const locationPatterns = /ship\\s*to|your\\s*location|choose\\s*(?:your\\s*)?country|select\\s*(?:your\\s*)?(?:country|region|location)|enter\\s*(?:your\\s*)?(?:zip|postal)\\s*code|where\\s*do\\s*you\\s*want\\s*(?:items|your\\s*order)\\s*(?:delivered|shipped)|deliver(?:y)?\\s*(?:to|location)|set\\s*(?:your\\s*)?store|find\\s*(?:a\\s*)?store|update\\s*(?:your\\s*)?location|confirm\\s*(?:your\\s*)?location/i;
+
+                    // Check visible text in overlay/modal containers
+                    const containers = document.querySelectorAll(
+                        '[role="dialog"], [role="alertdialog"], [class*="modal"], ' +
+                        '[class*="overlay"], [class*="popup"], [class*="drawer"]'
+                    );
+
+                    for (const container of containers) {
+                        const rect = container.getBoundingClientRect();
+                        if (rect.width === 0 || rect.height === 0) continue;
+
+                        const text = (container.textContent || '').substring(0, 500);
+                        if (locationPatterns.test(text)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })()
+            """)
+            if result and result not in ["false", "undefined", "null"]:
+                logger.info("Detected location modal via text pattern matching")
+                dismissed += await self._dismiss_location_dialog(location_config)
+        except Exception as e:
+            logger.debug(f"Location text pattern detection failed: {e}")
+
+        return dismissed
+
+    async def _dismiss_location_dialog(self, location_config: LocationConfig) -> int:
+        """Dismiss a detected location/region dialog.
+
+        Tries multiple strategies:
+        1. Fill ZIP code input if configured and present
+        2. Click confirm/continue/close buttons
+        3. Click country/region selection if visible
+
+        Returns:
+            1 if dismissed, 0 otherwise
+        """
+
+        # Strategy 1: If a ZIP code input is visible and we have a default, fill it
+        if location_config.default_zip_code:
+            try:
+                result = await self.client.evaluate(f"""
+                    (function() {{
+                        const zipPatterns = /zip|postal|postcode/i;
+                        const inputs = document.querySelectorAll(
+                            'input[type="text"], input[type="tel"], input[type="number"], ' +
+                            'input:not([type])'
+                        );
+                        for (const input of inputs) {{
+                            const rect = input.getBoundingClientRect();
+                            if (rect.width === 0 || rect.height === 0) continue;
+
+                            const label = input.getAttribute('aria-label') || '';
+                            const placeholder = input.getAttribute('placeholder') || '';
+                            const name = input.getAttribute('name') || '';
+                            const id = input.getAttribute('id') || '';
+                            const combined = label + ' ' + placeholder + ' ' + name + ' ' + id;
+
+                            if (zipPatterns.test(combined)) {{
+                                input.focus();
+                                input.value = '{location_config.default_zip_code}';
+                                input.dispatchEvent(new Event('input', {{bubbles: true}}));
+                                input.dispatchEvent(new Event('change', {{bubbles: true}}));
+                                return true;
+                            }}
+                        }}
+                        return false;
+                    }})()
+                """)
+                if result and result not in ["false", "undefined", "null"]:
+                    logger.info(
+                        f"Entered ZIP code: {location_config.default_zip_code}"
+                    )
+                    await asyncio.sleep(0.3)
+            except Exception as e:
+                logger.debug(f"ZIP code entry failed: {e}")
+
+        # Strategy 2: Click confirm/continue/submit/close button in the dialog
+        try:
+            result = await self.client.evaluate("""
+                (function() {
+                    const confirmPatterns = /^(confirm|continue|save|submit|update|apply|done|ok|yes|shop now|start shopping|got it|close|×|✕)$/i;
+                    const broadPatterns = /confirm|continue|save|submit|update|apply|done|shop\\s*now|start\\s*shopping/i;
+
+                    // Search within modal/dialog containers first
+                    const containers = document.querySelectorAll(
+                        '[role="dialog"], [role="alertdialog"], [class*="modal"], ' +
+                        '[class*="overlay"], [class*="popup"], [class*="drawer"]'
+                    );
+
+                    for (const container of containers) {
+                        const rect = container.getBoundingClientRect();
+                        if (rect.width === 0 || rect.height === 0) continue;
+
+                        const buttons = container.querySelectorAll(
+                            'button, [role="button"], a[href="#"], input[type="submit"]'
+                        );
+
+                        // First pass: exact text match
+                        for (const btn of buttons) {
+                            const text = (btn.textContent || btn.innerText || '').trim();
+                            const btnRect = btn.getBoundingClientRect();
+                            if (btnRect.width === 0 || btnRect.height === 0) continue;
+                            if (confirmPatterns.test(text)) {
+                                btn.click();
+                                return text.substring(0, 50);
+                            }
+                        }
+                        // Second pass: broader match
+                        for (const btn of buttons) {
+                            const text = (btn.textContent || btn.innerText || '').trim();
+                            const btnRect = btn.getBoundingClientRect();
+                            if (btnRect.width === 0 || btnRect.height === 0) continue;
+                            if (broadPatterns.test(text)) {
+                                btn.click();
+                                return text.substring(0, 50);
+                            }
+                        }
+
+                        // Third pass: close/dismiss button (X icon, aria-label)
+                        const closeBtn = container.querySelector(
+                            '[aria-label*="close" i], [aria-label*="dismiss" i], ' +
+                            'button[class*="close"], .close, .modal-close'
+                        );
+                        if (closeBtn) {
+                            closeBtn.click();
+                            return 'close-button';
+                        }
+                    }
+                    return false;
+                })()
+            """)
+            if result and result not in ["false", "undefined", "null"]:
+                logger.info(f"Dismissed location modal by clicking: {result}")
+                await asyncio.sleep(self.config.wait_after_close_ms / 1000)
+                return 1
+        except Exception as e:
+            logger.debug(f"Location modal confirm click failed: {e}")
+
+        return 0
 
     async def _find_close_button(self) -> tuple[str, int] | None:
         """Find a close button for modals.

@@ -4,7 +4,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentic_search_audit.core.types import LLMConfig, ModalsConfig, ResultsConfig, SearchConfig
+from agentic_search_audit.core.types import (
+    LLMConfig,
+    LocationConfig,
+    ModalsConfig,
+    ResultsConfig,
+    SearchConfig,
+)
+from agentic_search_audit.extractors.modals import LOCATION_MODAL_SELECTORS, ModalHandler
 from agentic_search_audit.extractors.results import ResultsExtractor
 from agentic_search_audit.extractors.search_box import SearchBoxFinder
 
@@ -261,3 +268,136 @@ async def test_submit_search_presses_escape_before_enter():
     escape_idx = key_calls.index("Escape")
     enter_idx = key_calls.index("Enter")
     assert escape_idx < enter_idx, "Escape must come before Enter"
+
+
+# --- Location modal tests ---
+
+
+@pytest.mark.unit
+def test_location_config_defaults():
+    """Test LocationConfig default values."""
+    config = LocationConfig()
+
+    assert config.default_country == "United States"
+    assert config.default_zip_code is None
+    assert config.enabled is True
+
+
+@pytest.mark.unit
+def test_location_config_custom():
+    """Test LocationConfig with custom values."""
+    config = LocationConfig(
+        default_country="United Kingdom",
+        default_zip_code="SW1A 1AA",
+        enabled=False,
+    )
+
+    assert config.default_country == "United Kingdom"
+    assert config.default_zip_code == "SW1A 1AA"
+    assert config.enabled is False
+
+
+@pytest.mark.unit
+def test_modals_config_has_location():
+    """Test ModalsConfig includes location sub-config with defaults."""
+    config = ModalsConfig()
+
+    assert hasattr(config, "location")
+    assert config.location.default_country == "United States"
+    assert config.location.enabled is True
+
+
+@pytest.mark.unit
+def test_modals_config_custom_location():
+    """Test ModalsConfig with custom location settings."""
+    config = ModalsConfig(
+        location=LocationConfig(default_zip_code="90210", enabled=True),
+    )
+
+    assert config.location.default_zip_code == "90210"
+
+
+@pytest.mark.unit
+def test_location_modal_selectors_exist():
+    """Test that location modal selectors list is populated."""
+    assert len(LOCATION_MODAL_SELECTORS) > 0
+    # Verify some key selectors are present
+    assert any("location" in s for s in LOCATION_MODAL_SELECTORS)
+    assert any("ship-to" in s for s in LOCATION_MODAL_SELECTORS)
+    assert any("country" in s for s in LOCATION_MODAL_SELECTORS)
+
+
+@pytest.mark.unit
+async def test_location_modal_skipped_when_disabled():
+    """Location modals are not attempted when location.enabled is False."""
+    client = AsyncMock()
+    config = ModalsConfig(location=LocationConfig(enabled=False))
+    handler = ModalHandler(client, config)
+
+    # No cookie consent found, no close buttons found
+    client.query_selector = AsyncMock(return_value=None)
+    client.evaluate = AsyncMock(return_value=None)
+
+    result = await handler.dismiss_modals()
+
+    # Should not have tried any location selectors
+    # (evaluate is called only for cookie consent text-based, not location)
+    assert result == 0
+
+
+@pytest.mark.unit
+async def test_location_modal_dismissed_via_selector():
+    """Location modal found via CSS selector is dismissed."""
+    client = AsyncMock()
+    config = ModalsConfig(location=LocationConfig(enabled=True))
+    handler = ModalHandler(client, config)
+
+    # Cookie consent: nothing found
+    call_count = 0
+
+    async def mock_query_selector(selector: str) -> dict | None:
+        nonlocal call_count
+        # Return None for cookie selectors, match for first location selector
+        if selector == LOCATION_MODAL_SELECTORS[0]:
+            return {"nodeId": 1}
+        return None
+
+    client.query_selector = AsyncMock(side_effect=mock_query_selector)
+
+    # _dismiss_location_dialog will try to click confirm button
+    client.evaluate = AsyncMock(return_value="Continue")
+
+    result = await handler.dismiss_modals()
+    assert result >= 1
+
+
+@pytest.mark.unit
+async def test_location_modal_dismissed_via_text_pattern():
+    """Location modal found via text matching is dismissed."""
+    client = AsyncMock()
+    config = ModalsConfig(location=LocationConfig(enabled=True))
+    handler = ModalHandler(client, config)
+
+    # Nothing found via CSS selectors
+    client.query_selector = AsyncMock(return_value=None)
+
+    call_index = 0
+
+    async def mock_evaluate(script: str) -> str | None:
+        nonlocal call_index
+        call_index += 1
+        # Cookie consent API calls return false
+        if call_index <= 3:
+            return "false"
+        # Location text pattern detection returns true
+        if "locationPatterns" in script:
+            return "true"
+        # Confirm button click
+        if "confirmPatterns" in script:
+            return "Continue"
+        return "false"
+
+    client.evaluate = AsyncMock(side_effect=mock_evaluate)
+
+    result = await handler.dismiss_modals()
+    assert result >= 1
