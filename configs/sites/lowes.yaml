@@ -1,63 +1,54 @@
-# Primark specific configuration
+# Lowes.com specific configuration
 
 site:
-  url: "https://www.primark.com"
-  locale: "en-GB"
+  url: "https://www.lowes.com"
+  locale: "en-US"
 
   search:
     input_selectors:
-      # Primark search input
-      - 'input[data-testid="search-input"]'
-      - 'input[id="search"]'
-      - 'input[name="q"]'
+      - '#search-query'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
-    trigger_selector: 'button[data-testid="search-button"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.primark.com/en-gb/search?q={query}"
+    search_url_template: "https://www.lowes.com/search?searchTerm={query}"
     use_intelligent_fallback: true
-    intelligent_detection_model: "gpt-4o-mini"
 
   results:
     item_selectors:
-      - '[data-testid="product-card"]'
+      - '[data-selector="prd-card"]'
       - 'div[class*="product-card"]'
-      - 'article[class*="product"]'
-      - 'div[class*="ProductCard"]'
+      - '[data-testid*="product"]'
+      - '.plp-card'
     title_selectors:
-      - '[data-testid="product-title"]'
-      - 'h3'
-      - 'h2'
-      - 'a[class*="product-name"]'
-      - 'span[class*="name"]'
+      - 'a[data-selector="prd-ttl"]'
+      - '[data-selector="prd-ttl"]'
+      - '.product-title a'
+      - 'h3 a'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p[class*="description"]'
-      - 'span'
+      - '[data-selector="prd-desc"]'
+      - '.product-description'
+      - 'p'
     price_selectors:
-      - '[data-testid="product-price"]'
-      - 'span[class*="price"]'
+      - '[data-selector="prd-prc"]'
       - 'div[class*="price"]'
+      - 'span[class*="price"]'
     image_selectors:
-      - 'img[class*="product"]'
+      - '[data-selector="prd-img"] img'
+      - '.product-image img'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
       - "agree"
-      - "continue"
-      - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
-      - "maybe later"
-      - "accept all"
-      - "allow all"
-      - "accept all cookies"
+      - "got it"
+      - "not now"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -70,7 +61,8 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  browser_backend: playwright
+  # Lowe's uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"

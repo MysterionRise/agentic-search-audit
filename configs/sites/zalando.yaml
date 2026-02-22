@@ -62,10 +62,11 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"
-  model: "openai/gpt-4o-mini"
+  model: "openai/gpt-4o"
   max_tokens: 2000
   temperature: 0.2
   system_prompt: null

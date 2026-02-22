@@ -19,28 +19,20 @@ site:
 
   results:
     item_selectors:
-      - '[data-comp="ProductTile"]'
-      - 'div[data-at="sku_item"]'
-      - 'div[class*="ProductTile"]'
-      - 'div[class*="product-tile"]'
+      - '[data-comp*="ProductTile"][data-comp*="BaseComponent"]'
+      - '[data-comp^="ProductTile"]'
+      - '[data-comp^="LazyLoad ProductTile"]'
     title_selectors:
-      - '[data-at="sku_item_name"]'
-      - 'span[class*="ProductTitle"]'
-      - 'a[class*="product-name"]'
-      - 'h3'
+      - '.ProductTile-content > span:nth-child(2)'
     url_attr: 'href'
     snippet_selectors:
-      - '[data-at="sku_item_brand"]'
-      - 'span[class*="Brand"]'
-      - 'span[class*="brand"]'
+      - '.ProductTile-content > span:first-child'
     price_selectors:
-      - '[data-at="sku_item_price_list"]'
-      - 'span[class*="Price"]'
-      - 'span[class*="price"]'
-      - 'div[class*="price"]'
+      - '.ProductTile-content b span'
+      - '.ProductTile-content b'
     image_selectors:
-      - '[data-at="sku_item_image"] img'
-      - 'img[class*="ProductImage"]'
+      - '[data-comp^="ProductImage"] img'
+      - 'picture img'
       - 'img'
 
   modals:
@@ -72,7 +64,7 @@ run:
 
 llm:
   provider: "openrouter"
-  model: "qwen/qwen3-vl-30b-a3b-instruct"
+  model: "openai/gpt-4o"
   max_tokens: 2000
   temperature: 0.2
   system_prompt: null

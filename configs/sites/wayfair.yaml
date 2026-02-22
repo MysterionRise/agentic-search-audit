@@ -1,63 +1,56 @@
-# Primark specific configuration
+# Wayfair.com specific configuration
 
 site:
-  url: "https://www.primark.com"
-  locale: "en-GB"
+  url: "https://www.wayfair.com"
+  locale: "en-US"
 
   search:
     input_selectors:
-      # Primark search input
-      - 'input[data-testid="search-input"]'
-      - 'input[id="search"]'
-      - 'input[name="q"]'
+      - '#wf-search-input'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
-    trigger_selector: 'button[data-testid="search-button"]'
+      - 'input[data-testid="SearchInput"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.primark.com/en-gb/search?q={query}"
+    search_url_template: "https://www.wayfair.com/keyword.php?keyword={query}"
     use_intelligent_fallback: true
-    intelligent_detection_model: "gpt-4o-mini"
 
   results:
     item_selectors:
-      - '[data-testid="product-card"]'
-      - 'div[class*="product-card"]'
-      - 'article[class*="product"]'
+      - '[data-testid="ProductCard"]'
       - 'div[class*="ProductCard"]'
+      - '.ProductCard'
+      - 'a[data-testid="ProductCard-link"]'
     title_selectors:
-      - '[data-testid="product-title"]'
-      - 'h3'
-      - 'h2'
-      - 'a[class*="product-name"]'
-      - 'span[class*="name"]'
+      - 'a[data-testid="ProductCard-link"]'
+      - '[data-testid="ProductCard-title"]'
+      - '.ProductCard__title'
+      - 'h2 a'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p[class*="description"]'
-      - 'span'
+      - '[data-testid="ProductCard-description"]'
+      - '.ProductCard__description'
+      - 'p'
     price_selectors:
-      - '[data-testid="product-price"]'
+      - '[data-testid="PriceDisplay"]'
+      - 'div[class*="PriceDisplay"]'
       - 'span[class*="price"]'
-      - 'div[class*="price"]'
     image_selectors:
-      - 'img[class*="product"]'
+      - '[data-testid="ProductCard-image"] img'
+      - '.ProductCard__image img'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
       - "agree"
-      - "continue"
-      - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
+      - "got it"
+      - "not now"
       - "maybe later"
-      - "accept all"
-      - "allow all"
-      - "accept all cookies"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -70,6 +63,7 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
+  # Wayfair has lenient bot detection; playwright is sufficient.
   browser_backend: playwright
 
 llm:

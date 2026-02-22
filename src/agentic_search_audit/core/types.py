@@ -371,6 +371,10 @@ class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     top_k: int = Field(default=10, description="Number of top results to extract")
+    use_vision_extraction: bool = Field(
+        default=False,
+        description="Use LLM vision to extract results from screenshots instead of CSS selectors",
+    )
     viewport_width: int = Field(default=1366, description="Browser viewport width")
     viewport_height: int = Field(default=900, description="Browser viewport height")
     network_idle_ms: int = Field(default=1200, description="Network idle timeout in milliseconds")

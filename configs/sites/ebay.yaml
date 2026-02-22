@@ -1,52 +1,56 @@
-# Amazon.com specific configuration
+# eBay.com specific configuration
 
 site:
-  url: "https://www.amazon.com"
+  url: "https://www.ebay.com"
   locale: "en-US"
 
   search:
     input_selectors:
-      - '#twotabsearchtextbox'
-      - 'input[name="field-keywords"]'
-      - 'input[id="twotabsearchtextbox"]'
+      - '#gh-ac-box2 input'
+      - '#gh-ac'
       - 'input[type="text"][aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[name="_nkw"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.amazon.com/s?k={query}"
+    search_url_template: "https://www.ebay.com/sch/i.html?_nkw={query}"
     use_intelligent_fallback: true
 
   results:
     item_selectors:
-      - '[data-component-type="s-search-result"]'
-      - 'div[data-asin]'
-      - 'div[class*="s-result-item"]'
+      - '.s-item'
+      - 'li[class*="s-item"]'
+      - 'div[class*="s-item__wrapper"]'
+      - '.srp-results .s-item'
     title_selectors:
-      - 'h2 a span'
-      - 'h2 span'
-      - 'span[class*="a-text-normal"]'
-      - 'h2'
+      - '.s-item__title'
+      - '.s-item__title span'
+      - 'h3[class*="s-item__title"]'
+      - 'h3'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="a-text-bold"]'
-      - 'span[class*="a-badge-text"]'
-      - 'span[class*="a-size-base"]'
+      - '.s-item__subtitle'
+      - '.s-item__dynamic'
+      - '.s-item__caption'
+      - 'p'
     price_selectors:
-      - 'span[class="a-price"] span[class="a-offscreen"]'
-      - 'span[class*="a-price"]'
-      - 'span[class="a-price-whole"]'
+      - '.s-item__price'
+      - 'span[class*="s-item__price"]'
+      - 'span[class*="price"]'
     image_selectors:
-      - 'img[class="s-image"]'
-      - 'img[data-image-latency="s-product-image"]'
+      - '.s-item__image img'
+      - 'img[class*="s-item__image"]'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
-      - "dismiss"
+      - "agree"
       - "close"
+      - "dismiss"
       - "no thanks"
+      - "got it"
       - "not now"
-      - "skip"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -57,9 +61,9 @@ run:
   network_idle_ms: 3000
   post_submit_ms: 2000
   headless: true
-  throttle_rps: 0.3
+  throttle_rps: 0.5
   seed: 42
-  # Amazon has aggressive bot detection; undetected-chromedriver recommended.
+  # eBay has bot detection; undetected-chromedriver recommended.
   browser_backend: undetected
 
 llm:

@@ -1,63 +1,55 @@
-# Primark specific configuration
+# JCPenney.com specific configuration
 
 site:
-  url: "https://www.primark.com"
-  locale: "en-GB"
+  url: "https://www.jcpenney.com"
+  locale: "en-US"
 
   search:
     input_selectors:
-      # Primark search input
-      - 'input[data-testid="search-input"]'
-      - 'input[id="search"]'
-      - 'input[name="q"]'
+      - 'input[data-automation-id="search-input"]'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
-    trigger_selector: 'button[data-testid="search-button"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.primark.com/en-gb/search?q={query}"
+    search_url_template: "https://www.jcpenney.com/s/{query}"
     use_intelligent_fallback: true
-    intelligent_detection_model: "gpt-4o-mini"
 
   results:
     item_selectors:
-      - '[data-testid="product-card"]'
-      - 'div[class*="product-card"]'
-      - 'article[class*="product"]'
-      - 'div[class*="ProductCard"]'
+      - '[data-automation-id="product-tile"]'
+      - 'div[class*="product-tile"]'
+      - '.product-card'
+      - 'div[data-automation-id*="product"]'
     title_selectors:
-      - '[data-testid="product-title"]'
-      - 'h3'
-      - 'h2'
-      - 'a[class*="product-name"]'
-      - 'span[class*="name"]'
+      - 'a[data-automation-id="product-title"]'
+      - '[data-automation-id="product-title"]'
+      - '.product-title a'
+      - 'h2 a'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p[class*="description"]'
-      - 'span'
+      - '[data-automation-id="product-brand"]'
+      - '.product-brand'
+      - 'p'
     price_selectors:
-      - '[data-testid="product-price"]'
-      - 'span[class*="price"]'
+      - '[data-automation-id="product-price"]'
       - 'div[class*="price"]'
+      - 'span[class*="price"]'
     image_selectors:
-      - 'img[class*="product"]'
+      - '[data-automation-id="product-image"] img'
+      - '.product-image img'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
       - "agree"
-      - "continue"
-      - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
+      - "got it"
+      - "not now"
       - "maybe later"
-      - "accept all"
-      - "allow all"
-      - "accept all cookies"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -70,7 +62,8 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  browser_backend: playwright
+  # JCPenney uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"

@@ -1,0 +1,3004 @@
+{
+  "queries": [
+    {
+      "id": "q0001",
+      "text": "Laufschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0002",
+      "text": "Fußballschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0003",
+      "text": "Sneaker",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0004",
+      "text": "Trainingsanzug",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0005",
+      "text": "T-Shirt",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0006",
+      "text": "Jogginghose",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0007",
+      "text": "Sportschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0008",
+      "text": "Jacke",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0009",
+      "text": "Shorts",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0010",
+      "text": "Hoodie",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0011",
+      "text": "Rucksack",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0012",
+      "text": "Socken",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0013",
+      "text": "Leggings",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0014",
+      "text": "Badehose",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0015",
+      "text": "Sandalen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0016",
+      "text": "schwarze Laufschuhe Herren Größe 43",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0017",
+      "text": "Adidas Ultraboost 23 weiß Damen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0018",
+      "text": "Kinder Fußballschuhe Kunstrasen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0019",
+      "text": "Damen Yoga Leggings hohe Taille schwarz",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0020",
+      "text": "Herren Winterjacke wasserdicht",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0021",
+      "text": "Mädchen Trainingsanzug rosa 140",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0022",
+      "text": "leichte Laufschuhe Marathon Training",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0023",
+      "text": "Adidas Originals Retro Sneaker",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0024",
+      "text": "Torwarthandschuhe Predator Pro",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0025",
+      "text": "Wanderschuhe Gore-Tex wasserdicht",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0026",
+      "text": "Tennisschuhe Sandplatz Herren",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0027",
+      "text": "Sportbeutel Kinder Schule blau",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0028",
+      "text": "kurze Sporthose Damen mit Taschen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0029",
+      "text": "Adidas Gazelle schwarz gold Herren",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0030",
+      "text": "Fußball Trikot Deutschland Heim 2024",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0031",
+      "text": "Laufschue",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0032",
+      "text": "Fussballschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0033",
+      "text": "Ultrabost",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0034",
+      "text": "Trainingsanzg",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0035",
+      "text": "Adidass Sneaker",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0036",
+      "text": "Joginghose",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0037",
+      "text": "Sportscuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0038",
+      "text": "Hokdie",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0039",
+      "text": "Sandalem",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0040",
+      "text": "Leggins Damen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0041",
+      "text": "Turnschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0042",
+      "text": "Sportkleidung",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0043",
+      "text": "Freizeitschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0044",
+      "text": "Trainingsjacke",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0045",
+      "text": "Fitnesshose",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0046",
+      "text": "Sporthose kurz",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0047",
+      "text": "Regenjacke Sport",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0048",
+      "text": "Gymnastikschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0049",
+      "text": "Hallenschuhe Indoor",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0050",
+      "text": "Badesandalen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0051",
+      "text": "rote Schuhe Herren",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0052",
+      "text": "Schuhe unter 100 Euro",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0053",
+      "text": "weiße Sneaker Damen",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0054",
+      "text": "Größe 46 Sportschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0055",
+      "text": "blaue Jacke Kinder",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0056",
+      "text": "vegane Schuhe Adidas",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0057",
+      "text": "recycelte Materialien Kollektion",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0058",
+      "text": "Schuhe breit",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0059",
+      "text": "Sale Sneaker Herren",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0060",
+      "text": "gelbe Laufschuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0061",
+      "text": "reflektierende Laufjacke",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0062",
+      "text": "Mesh Sportschuhe leicht",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0063",
+      "text": "Boost Dämpfung Schuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0064",
+      "text": "Primeknit Sneaker",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0065",
+      "text": "Continental Sohle Schuhe",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0066",
+      "text": "Adidas Samba OG",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0067",
+      "text": "Adidas Superstar",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0068",
+      "text": "Adidas Stan Smith",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0069",
+      "text": "Adidas NMD R1",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0070",
+      "text": "Adidas Forum Low",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0071",
+      "text": "Adidas Predator",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0072",
+      "text": "Adidas Copa Pure",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0073",
+      "text": "Adidas Terrex",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0074",
+      "text": "Adidas Adizero",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0075",
+      "text": "Adidas Spezial",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0076",
+      "text": "asdfghjkl",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0077",
+      "text": "!!!???",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0078",
+      "text": "Produkt 12345678",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0079",
+      "text": "Nike Air Max",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0080",
+      "text": "Puma Suede",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0081",
+      "text": "",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0082",
+      "text": "     ",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0083",
+      "text": "SELECT * FROM products",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0084",
+      "text": "<script>alert(1)</script>",
+      "lang": "de",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0085",
+      "text": "running shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0086",
+      "text": "football boots",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0087",
+      "text": "sneakers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0088",
+      "text": "tracksuit",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0089",
+      "text": "t-shirt",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0090",
+      "text": "joggers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0091",
+      "text": "trainers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0092",
+      "text": "jacket",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0093",
+      "text": "shorts",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0094",
+      "text": "hoodie",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0095",
+      "text": "backpack",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0096",
+      "text": "socks",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0097",
+      "text": "leggings",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0098",
+      "text": "swim trunks",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0099",
+      "text": "slides",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0100",
+      "text": "black running shoes men size 10",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0101",
+      "text": "Adidas Ultraboost 23 white women",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0102",
+      "text": "kids football boots artificial grass",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0103",
+      "text": "women yoga leggings high waist black",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0104",
+      "text": "mens winter jacket waterproof",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0105",
+      "text": "girls tracksuit pink age 10",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0106",
+      "text": "lightweight running shoes marathon training",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0107",
+      "text": "Adidas Originals retro sneakers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0108",
+      "text": "goalkeeper gloves Predator Pro",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0109",
+      "text": "hiking shoes Gore-Tex waterproof",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0110",
+      "text": "tennis shoes clay court men",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0111",
+      "text": "gym bag kids school blue",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0112",
+      "text": "running shorts women with pockets",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0113",
+      "text": "Adidas Gazelle black gold men",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0114",
+      "text": "football jersey Germany home 2024",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0115",
+      "text": "runing shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0116",
+      "text": "addidas sneakers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0117",
+      "text": "ultraboost mens",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0118",
+      "text": "tracksut",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0119",
+      "text": "footbal boots",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0120",
+      "text": "hoody women",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0121",
+      "text": "joggin pants",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0122",
+      "text": "sandels",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0123",
+      "text": "leggins women",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0124",
+      "text": "samba og whte",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0125",
+      "text": "gym shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0126",
+      "text": "athletic wear",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0127",
+      "text": "casual sneakers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0128",
+      "text": "sports jacket",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0129",
+      "text": "workout pants",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0130",
+      "text": "exercise shorts",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0131",
+      "text": "rain jacket running",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0132",
+      "text": "indoor court shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0133",
+      "text": "flip flops",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0134",
+      "text": "athletic socks",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0135",
+      "text": "red shoes men",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0136",
+      "text": "shoes under 100",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0137",
+      "text": "white sneakers women",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0138",
+      "text": "size 12 trainers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0139",
+      "text": "blue jacket kids",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0140",
+      "text": "vegan shoes Adidas",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0141",
+      "text": "recycled collection",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0142",
+      "text": "wide fit shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0143",
+      "text": "sale sneakers men",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0144",
+      "text": "yellow running shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0145",
+      "text": "reflective running jacket",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0146",
+      "text": "mesh trainers lightweight",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0147",
+      "text": "Boost cushion shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0148",
+      "text": "Primeknit sneakers",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0149",
+      "text": "Continental sole shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0150",
+      "text": "Adidas Samba OG",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0151",
+      "text": "Adidas Superstar",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0152",
+      "text": "Adidas Stan Smith",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0153",
+      "text": "Adidas NMD R1",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0154",
+      "text": "Adidas Forum Low",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0155",
+      "text": "Adidas Predator Edge",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0156",
+      "text": "Adidas Copa Pure",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0157",
+      "text": "Adidas Terrex Free Hiker",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0158",
+      "text": "Adidas Adizero SL",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0159",
+      "text": "Adidas Handball Spezial",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0160",
+      "text": "xyznonexistent",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0161",
+      "text": "shoes for running in the rain and snow and mud",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0162",
+      "text": "best shoes 2024",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0163",
+      "text": "what are the most comfortable Adidas",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0164",
+      "text": "compare ultraboost vs solarglide",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0165",
+      "text": "gift ideas for runners",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0166",
+      "text": "new arrivals this week",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0167",
+      "text": "outlet clearance sale",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0168",
+      "text": "size guide shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0169",
+      "text": "chaussures de course",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0170",
+      "text": "chaussures de football",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0171",
+      "text": "baskets",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0172",
+      "text": "survêtement",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0173",
+      "text": "t-shirt",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0174",
+      "text": "pantalon de jogging",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0175",
+      "text": "chaussures de sport",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0176",
+      "text": "veste",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0177",
+      "text": "short",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0178",
+      "text": "sweat à capuche",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0179",
+      "text": "sac à dos",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0180",
+      "text": "chaussettes",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0181",
+      "text": "leggings",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0182",
+      "text": "maillot de bain",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0183",
+      "text": "sandales",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0184",
+      "text": "chaussures de course noires homme taille 43",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0185",
+      "text": "Adidas Ultraboost 23 blanches femme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0186",
+      "text": "chaussures de football enfant gazon synthétique",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0187",
+      "text": "leggings yoga femme taille haute noir",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0188",
+      "text": "veste hiver homme imperméable",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0189",
+      "text": "survêtement fille rose 140",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0190",
+      "text": "chaussures légères marathon entraînement",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0191",
+      "text": "Adidas Originals baskets rétro",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0192",
+      "text": "gants de gardien Predator Pro",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0193",
+      "text": "chaussures randonnée Gore-Tex",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0194",
+      "text": "chaussures tennis terre battue homme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0195",
+      "text": "sac de sport enfant école bleu",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0196",
+      "text": "short sport femme avec poches",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0197",
+      "text": "maillot football Allemagne domicile 2024",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0198",
+      "text": "chausures de course",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0199",
+      "text": "adiddas baskets",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0200",
+      "text": "ultrboost",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0201",
+      "text": "survetement",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0202",
+      "text": "pantallon jogging",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0203",
+      "text": "swet à capuche",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0204",
+      "text": "chausettes sport",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0205",
+      "text": "sandales adidass",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0206",
+      "text": "leggins femme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0207",
+      "text": "samba og blanche",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0208",
+      "text": "tennis",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0209",
+      "text": "tenue de sport",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0210",
+      "text": "chaussures décontractées",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0211",
+      "text": "blouson sport",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0212",
+      "text": "pantalon entraînement",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0213",
+      "text": "bermuda",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0214",
+      "text": "imperméable course",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0215",
+      "text": "chaussures salle",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0216",
+      "text": "tongs",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0217",
+      "text": "chaussettes de sport",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0218",
+      "text": "chaussures rouges homme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0219",
+      "text": "chaussures moins de 100 euros",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0220",
+      "text": "baskets blanches femme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0221",
+      "text": "pointure 46",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0222",
+      "text": "veste bleue enfant",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0223",
+      "text": "chaussures vegan Adidas",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0224",
+      "text": "collection recyclée",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0225",
+      "text": "chaussures large",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0226",
+      "text": "soldes baskets homme",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0227",
+      "text": "chaussures de course jaunes",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0228",
+      "text": "veste réfléchissante course",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0229",
+      "text": "baskets mesh légères",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0230",
+      "text": "chaussures amorti Boost",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0231",
+      "text": "baskets Primeknit",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0232",
+      "text": "Adidas Samba OG",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0233",
+      "text": "Adidas Superstar",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0234",
+      "text": "Adidas Stan Smith",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0235",
+      "text": "Adidas NMD R1",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0236",
+      "text": "Adidas Forum Low",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0237",
+      "text": "Adidas Predator",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0238",
+      "text": "Adidas Copa Pure",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0239",
+      "text": "Adidas Terrex",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0240",
+      "text": "Adidas Adizero",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0241",
+      "text": "Adidas Spezial",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0242",
+      "text": "rien du tout xyz",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0243",
+      "text": "meilleures chaussures 2024",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0244",
+      "text": "quelles sont les chaussures les plus confortables",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0245",
+      "text": "nouveautés cette semaine",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0246",
+      "text": "promotions déstockage",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0247",
+      "text": "guide des tailles",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0248",
+      "text": "chaussures pour courir sous la pluie",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0249",
+      "text": "comparer ultraboost et solarglide",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0250",
+      "text": "idées cadeaux coureur",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0251",
+      "text": "chaussures pour pieds plats",
+      "lang": "fr",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0252",
+      "text": "zapatillas para correr",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0253",
+      "text": "botas de fútbol",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0254",
+      "text": "zapatillas deportivas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0255",
+      "text": "chándal",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0256",
+      "text": "camiseta",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0257",
+      "text": "pantalón de chándal",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0258",
+      "text": "zapatillas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0259",
+      "text": "chaqueta",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0260",
+      "text": "pantalón corto",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0261",
+      "text": "sudadera con capucha",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0262",
+      "text": "mochila",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0263",
+      "text": "calcetines",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0264",
+      "text": "mallas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0265",
+      "text": "bañador",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0266",
+      "text": "sandalias",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0267",
+      "text": "zapatillas de correr negras hombre talla 43",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0268",
+      "text": "Adidas Ultraboost 23 blancas mujer",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0269",
+      "text": "botas de fútbol niño césped artificial",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0270",
+      "text": "mallas yoga mujer cintura alta negro",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0271",
+      "text": "chaqueta invierno hombre impermeable",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0272",
+      "text": "chándal niña rosa talla 140",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0273",
+      "text": "zapatillas ligeras maratón entrenamiento",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0274",
+      "text": "Adidas Originals zapatillas retro",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0275",
+      "text": "guantes de portero Predator Pro",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0276",
+      "text": "zapatillas senderismo Gore-Tex",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0277",
+      "text": "zapatillas tenis tierra batida hombre",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0278",
+      "text": "bolsa deporte niño escuela azul",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0279",
+      "text": "pantalón corto deporte mujer con bolsillos",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0280",
+      "text": "camiseta fútbol Alemania casa 2024",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0281",
+      "text": "zapatillas para corer",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0282",
+      "text": "adiddas deportivas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0283",
+      "text": "ultrabost",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0284",
+      "text": "chandal",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0285",
+      "text": "pantalon corto deporte",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0286",
+      "text": "sudadra capucha",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0287",
+      "text": "calcetnes deporte",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0288",
+      "text": "sandalais adidas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0289",
+      "text": "mallas muger",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0290",
+      "text": "samba og blanca",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0291",
+      "text": "tenis deportivos",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0292",
+      "text": "ropa deportiva",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0293",
+      "text": "playeras",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0294",
+      "text": "cazadora deportiva",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0295",
+      "text": "pantalón entrenamiento",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0296",
+      "text": "bermudas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0297",
+      "text": "chubasquero running",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0298",
+      "text": "zapatillas indoor",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0299",
+      "text": "chanclas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0300",
+      "text": "medias deportivas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0301",
+      "text": "zapatillas rojas hombre",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0302",
+      "text": "zapatillas menos de 100 euros",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0303",
+      "text": "zapatillas blancas mujer",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0304",
+      "text": "talla 46 zapatillas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0305",
+      "text": "chaqueta azul niño",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0306",
+      "text": "zapatillas veganas Adidas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0307",
+      "text": "colección reciclada",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0308",
+      "text": "zapatillas anchas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0309",
+      "text": "rebajas zapatillas hombre",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0310",
+      "text": "zapatillas amarillas running",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0311",
+      "text": "chaqueta reflectante correr",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0312",
+      "text": "zapatillas mesh ligeras",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0313",
+      "text": "zapatillas amortiguación Boost",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0314",
+      "text": "zapatillas Primeknit",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0315",
+      "text": "Adidas Samba OG",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0316",
+      "text": "Adidas Superstar",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0317",
+      "text": "Adidas Stan Smith",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0318",
+      "text": "Adidas NMD R1",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0319",
+      "text": "Adidas Forum Low",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0320",
+      "text": "Adidas Predator",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0321",
+      "text": "Adidas Copa Pure",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0322",
+      "text": "Adidas Terrex",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0323",
+      "text": "Adidas Adizero",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0324",
+      "text": "Adidas Spezial",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0325",
+      "text": "nada xyz producto",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0326",
+      "text": "mejores zapatillas 2024",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0327",
+      "text": "cuáles son las zapatillas más cómodas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0328",
+      "text": "novedades esta semana",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0329",
+      "text": "ofertas liquidación",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0330",
+      "text": "guía de tallas",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0331",
+      "text": "zapatillas para correr bajo lluvia",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0332",
+      "text": "comparar ultraboost y solarglide",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0333",
+      "text": "ideas regalo corredor",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0334",
+      "text": "zapatillas para pies planos",
+      "lang": "es",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0335",
+      "text": "scarpe da corsa",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0336",
+      "text": "scarpe da calcio",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0337",
+      "text": "sneaker",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0338",
+      "text": "tuta sportiva",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0339",
+      "text": "t-shirt",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0340",
+      "text": "pantaloni da jogging",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0341",
+      "text": "scarpe sportive",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0342",
+      "text": "giacca",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0343",
+      "text": "pantaloncini",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0344",
+      "text": "felpa con cappuccio",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0345",
+      "text": "zaino",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0346",
+      "text": "calzini",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0347",
+      "text": "leggings",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0348",
+      "text": "costume da bagno",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0349",
+      "text": "sandali",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0350",
+      "text": "scarpe da corsa nere uomo taglia 43",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0351",
+      "text": "Adidas Ultraboost 23 bianche donna",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0352",
+      "text": "scarpe da calcio bambino erba sintetica",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0353",
+      "text": "leggings yoga donna vita alta nero",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0354",
+      "text": "giacca invernale uomo impermeabile",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0355",
+      "text": "tuta sportiva ragazza rosa 140",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0356",
+      "text": "scarpe leggere maratona allenamento",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0357",
+      "text": "Adidas Originals sneaker retrò",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0358",
+      "text": "guanti da portiere Predator Pro",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0359",
+      "text": "scarpe trekking Gore-Tex impermeabili",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0360",
+      "text": "scarpe tennis terra battuta uomo",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0361",
+      "text": "borsa sportiva bambino scuola blu",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0362",
+      "text": "pantaloncini sport donna con tasche",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0363",
+      "text": "maglia calcio Germania casa 2024",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0364",
+      "text": "scarpe da corssa",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0365",
+      "text": "addidas sneaker",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0366",
+      "text": "ultrabost",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0367",
+      "text": "tuta sportva",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0368",
+      "text": "pantaloni joggin",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0369",
+      "text": "felpa capuccio",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0370",
+      "text": "calzni sportivi",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0371",
+      "text": "sandalli adidas",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0372",
+      "text": "leggins donna",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0373",
+      "text": "samba og bianca",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0374",
+      "text": "scarpe da ginnastica",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0375",
+      "text": "abbigliamento sportivo",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0376",
+      "text": "scarpe casual",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0377",
+      "text": "giubbotto sportivo",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0378",
+      "text": "pantaloni allenamento",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0379",
+      "text": "bermuda",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0380",
+      "text": "impermeabile corsa",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0381",
+      "text": "scarpe indoor palestra",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0382",
+      "text": "infradito",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0383",
+      "text": "calze sportive",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0384",
+      "text": "scarpe rosse uomo",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0385",
+      "text": "scarpe meno di 100 euro",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0386",
+      "text": "sneaker bianche donna",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0387",
+      "text": "taglia 46 scarpe sportive",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0388",
+      "text": "giacca blu bambino",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0389",
+      "text": "scarpe vegane Adidas",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0390",
+      "text": "collezione riciclata",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0391",
+      "text": "scarpe pianta larga",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0392",
+      "text": "saldi sneaker uomo",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0393",
+      "text": "scarpe da corsa gialle",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0394",
+      "text": "giacca riflettente corsa",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0395",
+      "text": "sneaker mesh leggere",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0396",
+      "text": "scarpe ammortizzazione Boost",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0397",
+      "text": "sneaker Primeknit",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0398",
+      "text": "Adidas Samba OG",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0399",
+      "text": "Adidas Superstar",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0400",
+      "text": "Adidas Stan Smith",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0401",
+      "text": "Adidas NMD R1",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0402",
+      "text": "Adidas Forum Low",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0403",
+      "text": "Adidas Predator",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0404",
+      "text": "Adidas Copa Pure",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0405",
+      "text": "Adidas Terrex",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0406",
+      "text": "Adidas Adizero",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0407",
+      "text": "Adidas Spezial",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0408",
+      "text": "niente xyz prodotto",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0409",
+      "text": "migliori scarpe 2024",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0410",
+      "text": "quali sono le scarpe più comode",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0411",
+      "text": "novità questa settimana",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0412",
+      "text": "saldi liquidazione",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0413",
+      "text": "guida taglie",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0414",
+      "text": "scarpe per correre sotto la pioggia",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0415",
+      "text": "confronto ultraboost e solarglide",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0416",
+      "text": "idee regalo corridore",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0417",
+      "text": "scarpe per piedi piatti",
+      "lang": "it",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0418",
+      "text": "tênis de corrida",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0419",
+      "text": "chuteiras",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0420",
+      "text": "tênis casual",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0421",
+      "text": "agasalho",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0422",
+      "text": "camiseta",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0423",
+      "text": "calça de moletom",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0424",
+      "text": "tênis esportivo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0425",
+      "text": "jaqueta",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0426",
+      "text": "bermuda",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0427",
+      "text": "moletom com capuz",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0428",
+      "text": "mochila",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0429",
+      "text": "meias",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0430",
+      "text": "leggings",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0431",
+      "text": "sunga",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0432",
+      "text": "sandálias",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0433",
+      "text": "tênis de corrida preto masculino tamanho 43",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0434",
+      "text": "Adidas Ultraboost 23 branco feminino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0435",
+      "text": "chuteiras infantil grama sintética",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0436",
+      "text": "leggings yoga feminino cintura alta preto",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0437",
+      "text": "jaqueta inverno masculino impermeável",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0438",
+      "text": "agasalho menina rosa tamanho 140",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0439",
+      "text": "tênis leve maratona treino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0440",
+      "text": "Adidas Originals tênis retrô",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0441",
+      "text": "luvas goleiro Predator Pro",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0442",
+      "text": "botas trilha Gore-Tex impermeável",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0443",
+      "text": "tênis tênis saibro masculino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0444",
+      "text": "bolsa esportiva criança escola azul",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0445",
+      "text": "bermuda esportiva feminino com bolsos",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0446",
+      "text": "camisa futebol Alemanha casa 2024",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0447",
+      "text": "tenis de corrda",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0448",
+      "text": "addidas tênis",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0449",
+      "text": "ultrabost",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0450",
+      "text": "agasalhu",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0451",
+      "text": "calsa de moletom",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0452",
+      "text": "moleton capuz",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0453",
+      "text": "meyas esportivas",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0454",
+      "text": "sandalias adidass",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0455",
+      "text": "leggins feminino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0456",
+      "text": "samba og branca",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0457",
+      "text": "calçado esportivo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0458",
+      "text": "roupa esportiva",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0459",
+      "text": "sapatilhas",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0460",
+      "text": "jaqueta esportiva",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0461",
+      "text": "calça treino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0462",
+      "text": "shorts esportivo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0463",
+      "text": "capa de chuva corrida",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0464",
+      "text": "tênis indoor academia",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0465",
+      "text": "chinelo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0466",
+      "text": "meias esportivas",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0467",
+      "text": "tênis vermelho masculino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0468",
+      "text": "tênis menos de 100 euros",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0469",
+      "text": "tênis branco feminino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0470",
+      "text": "tamanho 46 tênis esportivo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0471",
+      "text": "jaqueta azul infantil",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0472",
+      "text": "tênis vegano Adidas",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0473",
+      "text": "coleção reciclada",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0474",
+      "text": "tênis largura ampla",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0475",
+      "text": "promoção tênis masculino",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0476",
+      "text": "tênis corrida amarelo",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0477",
+      "text": "jaqueta refletiva corrida",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0478",
+      "text": "tênis mesh leve",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0479",
+      "text": "tênis amortecimento Boost",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0480",
+      "text": "tênis Primeknit",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0481",
+      "text": "Adidas Samba OG",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0482",
+      "text": "Adidas Superstar",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0483",
+      "text": "Adidas Stan Smith",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0484",
+      "text": "Adidas NMD R1",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0485",
+      "text": "Adidas Forum Low",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0486",
+      "text": "Adidas Predator",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0487",
+      "text": "Adidas Copa Pure",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0488",
+      "text": "Adidas Terrex",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0489",
+      "text": "Adidas Adizero",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0490",
+      "text": "Adidas Spezial",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0491",
+      "text": "nada xyz produto",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0492",
+      "text": "melhores tênis 2024",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0493",
+      "text": "quais são os tênis mais confortáveis",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0494",
+      "text": "novidades esta semana",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0495",
+      "text": "liquidação promoções",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0496",
+      "text": "guia de tamanhos",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0497",
+      "text": "tênis para correr na chuva",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0498",
+      "text": "comparar ultraboost e solarglide",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0499",
+      "text": "ideias presente corredor",
+      "lang": "pt",
+      "origin": "predefined"
+    },
+    {
+      "id": "q0500",
+      "text": "tênis para pés chatos",
+      "lang": "pt",
+      "origin": "predefined"
+    }
+  ]
+}

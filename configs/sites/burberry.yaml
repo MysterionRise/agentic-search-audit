@@ -1,0 +1,104 @@
+# Burberry.com specific configuration
+# NOTE: Burberry uses locale-specific subdomains (us., uk., etc.).
+# The bare www.burberry.com domain shows a full-page region selector
+# that blocks all navigation. We target uk.burberry.com directly.
+
+site:
+  url: "https://uk.burberry.com"
+  locale: "en-GB"
+
+  search:
+    input_selectors:
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[name="q"]'
+    submit_strategy: "enter"
+    submit_selector: null
+    search_url_template: "https://uk.burberry.com/search/?query={query}"
+    use_intelligent_fallback: true
+
+  results:
+    # Burberry uses Emotion CSS-in-JS with hashed class names (e.g. css-xxxxx),
+    # so class-based selectors are unreliable. Product links follow the URL
+    # pattern /{product-name}-p{id} (e.g. /long-waterloo-trench-coat-p80458451).
+    # We match product containers using structural and href-based selectors.
+    item_selectors:
+      # Product links matching Burberry URL pattern (product-name-pID)
+      - '#main a[href*="-p"]'
+      - '#application a[href*="-p"]'
+      - 'a[href*="-p"][href$="1"]'
+      - 'a[href*="-p"][href*="burberry.com"]'
+      # Structural patterns common in React product grids
+      - '[role="listitem"]'
+      - '#main article'
+      - '#main [role="list"] > *'
+      - '#main li > a[href]'
+    title_selectors:
+      # Within each product card, the title is typically a heading or styled span
+      - 'h3'
+      - 'h2'
+      - 'span:first-child'
+      - 'p:first-of-type'
+      - '[aria-label]'
+    url_attr: 'href'
+    snippet_selectors:
+      # Product subtitle / category label
+      - 'p'
+      - 'span'
+    price_selectors:
+      # Price text, often in a span or div
+      - 'span[aria-label*="price" i]'
+      - 'span[aria-label*="Price" i]'
+      - 'p:last-of-type'
+      - 'span:last-child'
+    image_selectors:
+      - 'picture img'
+      - 'img[src*="assets.burberry"]'
+      - 'img[srcset]'
+      - 'img'
+
+  modals:
+    close_text_matches:
+      - "accept"
+      - "accept all"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "no thanks"
+      - "not now"
+      - "shop"
+    max_auto_clicks: 3
+    wait_after_close_ms: 500
+    location:
+      enabled: true
+      default_country: "United Kingdom"
+
+run:
+  top_k: 10
+  viewport_width: 1366
+  viewport_height: 900
+  network_idle_ms: 5000
+  post_submit_ms: 5000
+  headless: true
+  throttle_rps: 0.3
+  seed: 42
+  # Burberry uses bot detection; undetected-chromedriver recommended.
+  browser_backend: undetected
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o"
+  max_tokens: 2000
+  temperature: 0.2
+  system_prompt: null
+  base_url: "https://openrouter.ai/api/v1"
+  api_key: null  # Set in .env as OPENROUTER_API_KEY
+
+report:
+  formats:
+    - "md"
+    - "html"
+  out_dir: "./runs"

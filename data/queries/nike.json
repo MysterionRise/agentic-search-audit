@@ -59,6 +59,66 @@
       "text": "hoodie",
       "lang": "en",
       "origin": "predefined"
+    },
+    {
+      "id": "q011",
+      "text": "air force 1",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q012",
+      "text": "kids shoes",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q013",
+      "text": "tennis skirt",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q014",
+      "text": "waterproof jacket",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q015",
+      "text": "gym bag",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q016",
+      "text": "compression shorts",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q017",
+      "text": "football gloves",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q018",
+      "text": "trail running",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q019",
+      "text": "slides",
+      "lang": "en",
+      "origin": "predefined"
+    },
+    {
+      "id": "q020",
+      "text": "sweatpants",
+      "lang": "en",
+      "origin": "predefined"
     }
   ]
 }

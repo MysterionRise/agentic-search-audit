@@ -1,22 +1,23 @@
-# Primark specific configuration
+# Adidas.de specific configuration
+# Multi-lingual holistic audit (EN, DE, FR, ES, IT, PT)
 
 site:
-  url: "https://www.primark.com"
-  locale: "en-GB"
+  url: "https://www.adidas.com"
+  locale: "en-US"
 
   search:
+    search_url_template: "https://www.adidas.com/search?q={query}"
     input_selectors:
-      # Primark search input
-      - 'input[data-testid="search-input"]'
-      - 'input[id="search"]'
-      - 'input[name="q"]'
       - 'input[type="search"]'
+      - 'input[data-testid="search-input"]'
+      - 'input[name="q"]'
+      - 'input[aria-label*="Suche" i]'
       - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Suche" i]'
       - 'input[placeholder*="Search" i]'
-    trigger_selector: 'button[data-testid="search-button"]'
+      - 'input[class*="search"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.primark.com/en-gb/search?q={query}"
     use_intelligent_fallback: true
     intelligent_detection_model: "gpt-4o-mini"
 
@@ -24,53 +25,66 @@ site:
     item_selectors:
       - '[data-testid="product-card"]'
       - 'div[class*="product-card"]'
+      - 'div[class*="glass-product-card"]'
       - 'article[class*="product"]'
-      - 'div[class*="ProductCard"]'
+      - 'a[href*="/model/"]'
+      - 'a[href*="/-/"]'
     title_selectors:
-      - '[data-testid="product-title"]'
+      - '[data-testid="product-card-title"]'
       - 'h3'
       - 'h2'
-      - 'a[class*="product-name"]'
+      - 'p[class*="title"]'
+      - 'div[class*="product-card__title"]'
       - 'span[class*="name"]'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p[class*="description"]'
-      - 'span'
+      - '[data-testid="product-card-subtitle"]'
+      - 'p[class*="subtitle"]'
+      - 'span[class*="category"]'
+      - 'p'
     price_selectors:
-      - '[data-testid="product-price"]'
-      - 'span[class*="price"]'
+      - '[data-testid="product-card-price"]'
       - 'div[class*="price"]'
+      - 'span[class*="price"]'
+      - 'div[class*="gl-price"]'
     image_selectors:
+      - '[data-testid="product-card-image"]'
       - 'img[class*="product"]'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
+      - "akzeptieren"
+      - "alle akzeptieren"
+      - "alle zulassen"
       - "agree"
+      - "zustimmen"
       - "continue"
+      - "weiter"
       - "got it"
       - "close"
+      - "schließen"
       - "dismiss"
       - "no thanks"
+      - "nein danke"
       - "maybe later"
-      - "accept all"
+      - "reject"
+      - "ablehnen"
       - "allow all"
-      - "accept all cookies"
-    max_auto_clicks: 3
-    wait_after_close_ms: 500
+      - "accept all"
+    max_auto_clicks: 5
+    wait_after_close_ms: 800
 
 run:
   top_k: 10
   viewport_width: 1366
   viewport_height: 900
   network_idle_ms: 3000
-  post_submit_ms: 2000
-  headless: true
-  throttle_rps: 0.5
+  post_submit_ms: 3000
+  headless: false
+  throttle_rps: 0.4
   seed: 42
-  browser_backend: playwright
 
 llm:
   provider: "openrouter"
@@ -85,4 +99,10 @@ report:
   formats:
     - "md"
     - "html"
+    - "json"
   out_dir: "./runs"
+
+compliance:
+  respect_robots_txt: true
+  user_agent: "AgenticSearchAudit/1.0"
+  robots_timeout: 10.0

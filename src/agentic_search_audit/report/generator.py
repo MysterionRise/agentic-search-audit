@@ -927,6 +927,21 @@ class ReportGenerator:
         <p><strong>Total Queries:</strong> {len(records)}</p>
     </div>
 """)
+            # FQI Hero Score
+            if records:
+                fqi_band = get_fqi_band(avg_fqi)
+                fqi_band_class = self._get_fqi_band_class(fqi_band)
+                f.write(f"""
+    <div class="summary" style="text-align: center; padding: 30px;">
+        <div style="font-size: 3.5em; font-weight: bold; margin-bottom: 5px;">{avg_fqi:.2f}</div>
+        <div style="font-size: 1.2em; margin-bottom: 10px;">Overall Findability Quality Index</div>
+        <span class="fqi-badge {fqi_band_class}" style="font-size: 1.1em; padding: 8px 20px;">{escape_html(fqi_band)}</span>
+        <div style="margin-top: 15px; color: var(--text-secondary); font-size: 0.9em;">
+            Based on {len(records)} queries across 5 quality dimensions
+        </div>
+    </div>
+""")
+
             # Filter controls (only show if there are records)
             if records:
                 f.write("""

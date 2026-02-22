@@ -14,7 +14,7 @@ from ..judge import SearchQualityJudge
 from ..report import ReportGenerator
 from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
-from .types import AuditConfig, AuditRecord, BrowserClient, PageArtifacts, Query
+from .types import AuditConfig, AuditRecord, BrowserClient, PageArtifacts, Query, ResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +100,22 @@ class SearchAuditOrchestrator:
                             await self._rate_limit()
 
                         # Execute query and evaluate
-                        record = await self._process_query(query)
+                        record = await asyncio.wait_for(
+                            self._process_query(query),
+                            timeout=90,
+                        )
                         self.records.append(record)
 
                         # Save record to JSONL
                         self._save_record(record)
                         break  # success -- exit retry loop
+
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"Query '{query.text}' timed out after 90s "
+                            f"(attempt {attempt + 1}/{max_attempts}) -- skipping"
+                        )
+                        break  # Don't retry timeouts -- move to next query
 
                     except Exception as e:
                         error_kind = classify_error(e)
@@ -248,20 +258,39 @@ class SearchAuditOrchestrator:
         await asyncio.sleep(self.config.run.post_submit_ms / 1000)
         await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
-        # Extract results with incremental scrolling / "Load More" support
-        results_extractor = ResultsExtractor(
-            self.client,
-            self.config.site.results,
-            str(self.config.site.url),
-        )
+        # Extract results -- vision-based or CSS-based with vision fallback
+        items: list[ResultItem] = []
+        if self.config.run.use_vision_extraction:
+            # Vision-first: use LLM to extract results from screenshot
+            from ..extractors.vision_results import VisionResultsExtractor
 
-        # Check for no results
-        if await results_extractor.check_for_no_results():
-            logger.warning(f"No results found for query: {query.text}")
-            items = []
+            vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
+            items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
         else:
-            await self._scroll_for_results(results_extractor, self.config.run.top_k)
-            items = await results_extractor.extract_results(top_k=self.config.run.top_k)
+            # CSS-first: use DOM selectors with vision fallback
+            results_extractor = ResultsExtractor(
+                self.client,
+                self.config.site.results,
+                str(self.config.site.url),
+            )
+
+            if await results_extractor.check_for_no_results():
+                logger.warning(f"No results found for query: {query.text}")
+            else:
+                await self._scroll_for_results(results_extractor, self.config.run.top_k)
+                items = await results_extractor.extract_results(top_k=self.config.run.top_k)
+
+                # Vision fallback: if CSS extracted empty/null items, try vision
+                has_content = any(item.title or item.price for item in items)
+                if items and not has_content:
+                    logger.warning(
+                        "CSS extraction returned items with no content -- "
+                        "falling back to vision extraction"
+                    )
+                    from ..extractors.vision_results import VisionResultsExtractor
+
+                    vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
+                    items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
 
         # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
         page_artifacts = await self._capture_artifacts(query)

@@ -19,7 +19,7 @@ from .rubric import (
 logger = logging.getLogger(__name__)
 
 # Default timeout for LLM API calls (in seconds)
-DEFAULT_LLM_TIMEOUT_SECONDS = 60
+DEFAULT_LLM_TIMEOUT_SECONDS = 30
 
 # Maximum characters of HTML content to include in judge prompt
 # Longer content would exceed token limits and increase costs
@@ -122,10 +122,24 @@ class SearchQualityJudge:
         )
 
         # Call LLM
-        response = await self._call_llm(user_prompt)
+        try:
+            response = await self._call_llm(user_prompt)
+            # Parse and validate response
+            judge_score = self._parse_response(response)
+        except Exception as e:
+            logger.error(f"LLM evaluation failed for query '{query.text}': {e}")
+            # Return degraded score so the audit can continue
+            from ..core.types import DimensionDiagnosis
 
-        # Parse and validate response
-        judge_score = self._parse_response(response)
+            judge_score = JudgeScore(
+                query_understanding=DimensionDiagnosis(score=0, diagnosis="LLM evaluation failed"),
+                results_relevance=DimensionDiagnosis(score=0, diagnosis="LLM evaluation failed"),
+                result_presentation=DimensionDiagnosis(score=0, diagnosis="LLM evaluation failed"),
+                advanced_features=DimensionDiagnosis(score=0, diagnosis="LLM evaluation failed"),
+                error_handling=DimensionDiagnosis(score=0, diagnosis="LLM evaluation failed"),
+                rationale=f"LLM evaluation failed: {e}",
+                issues=["LLM evaluation failed -- scores are degraded"],
+            )
 
         logger.info(f"Evaluation complete. FQI score: {judge_score.fqi:.2f}")
 

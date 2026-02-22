@@ -291,6 +291,19 @@ Examples:
         help="CDP WebSocket endpoint, e.g. ws://localhost:9222 (requires --browser cdp)",
     )
 
+    parser.add_argument(
+        "--max-queries",
+        type=int,
+        default=None,
+        help="Maximum number of queries to run (useful for demos/testing)",
+    )
+
+    parser.add_argument(
+        "--vision",
+        action="store_true",
+        help="Use LLM vision to extract results from screenshots (no CSS selectors needed)",
+    )
+
     return parser.parse_args()
 
 
@@ -374,6 +387,11 @@ async def main_async() -> int:
             overrides["compliance"] = {"respect_robots_txt": False}
             logger.warning("robots.txt compliance disabled by --ignore-robots flag")
 
+        if args.vision:
+            if "run" not in overrides:
+                overrides["run"] = {}
+            overrides["run"]["use_vision_extraction"] = True
+
         # Load config
         config = load_config(
             config_path=config_path,
@@ -420,6 +438,11 @@ async def main_async() -> int:
 
             logger.info(f"Generated {len(queries)} queries")
 
+            # Limit queries if --max-queries is set
+            if args.max_queries is not None and args.max_queries > 0:
+                queries = queries[: args.max_queries]
+                logger.info(f"Limited to {len(queries)} queries (--max-queries {args.max_queries})")
+
             # Save generated queries
             output_dir = args.output or Path(config.report.out_dir)
             output_dir = Path(output_dir)
@@ -458,6 +481,11 @@ async def main_async() -> int:
                 return 1
 
             logger.info(f"Loaded {len(queries)} queries")
+
+            # Limit queries if --max-queries is set
+            if args.max_queries is not None and args.max_queries > 0:
+                queries = queries[: args.max_queries]
+                logger.info(f"Limited to {len(queries)} queries (--max-queries {args.max_queries})")
 
         # Run audit
         records = await run_audit(
