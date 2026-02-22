@@ -451,9 +451,7 @@ class ModalHandler:
                     }})()
                 """)
                 if result and result not in ["false", "undefined", "null"]:
-                    logger.info(
-                        f"Entered ZIP code: {location_config.default_zip_code}"
-                    )
+                    logger.info(f"Entered ZIP code: {location_config.default_zip_code}")
                     await asyncio.sleep(0.3)
             except Exception as e:
                 logger.debug(f"ZIP code entry failed: {e}")
