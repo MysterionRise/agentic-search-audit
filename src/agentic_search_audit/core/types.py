@@ -358,6 +358,38 @@ class RunConfig(BaseModel):
         default=2.0, description="Exponential backoff base in seconds"
     )
     click_timeout_ms: int = Field(default=5000, description="Timeout for click operations in ms")
+    max_scroll_attempts: int = Field(
+        default=5, description="Max scroll attempts to load more results"
+    )
+    scroll_step_px: int = Field(
+        default=800, description="Pixels to scroll per step when loading more results"
+    )
+    scroll_pause_ms: int = Field(
+        default=1500,
+        description="Pause in ms between scroll steps to allow content to load",
+    )
+    load_more_selectors: list[str] = Field(
+        default_factory=lambda: [
+            'button[class*="load-more" i]',
+            'button[class*="show-more" i]',
+            'a[class*="load-more" i]',
+            'a[class*="show-more" i]',
+            '[data-testid*="load-more" i]',
+            '[data-testid*="show-more" i]',
+        ],
+        description="CSS selectors for 'Load More' / 'Show More' buttons",
+    )
+    load_more_text_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "load more",
+            "show more",
+            "view more",
+            "see more",
+            "more results",
+            "next page",
+        ],
+        description="Text patterns to identify 'Load More' buttons via textContent",
+    )
     browser_backend: BrowserBackend = Field(
         default=BrowserBackend.PLAYWRIGHT, description="Browser automation backend"
     )

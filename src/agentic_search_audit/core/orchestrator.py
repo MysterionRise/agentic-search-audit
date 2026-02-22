@@ -248,13 +248,7 @@ class SearchAuditOrchestrator:
         await asyncio.sleep(self.config.run.post_submit_ms / 1000)
         await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
-        # Scroll down to trigger lazy loading of product cards
-        await self.client.evaluate("window.scrollBy(0, 500)")
-        await asyncio.sleep(1)
-        await self.client.evaluate("window.scrollTo(0, 0)")
-        await asyncio.sleep(0.5)
-
-        # Extract results
+        # Extract results with incremental scrolling / "Load More" support
         results_extractor = ResultsExtractor(
             self.client,
             self.config.site.results,
@@ -266,6 +260,7 @@ class SearchAuditOrchestrator:
             logger.warning(f"No results found for query: {query.text}")
             items = []
         else:
+            await self._scroll_for_results(results_extractor, self.config.run.top_k)
             items = await results_extractor.extract_results(top_k=self.config.run.top_k)
 
         # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
@@ -295,6 +290,126 @@ class SearchAuditOrchestrator:
         )
 
         return record
+
+    async def _scroll_for_results(
+        self, extractor: ResultsExtractor, top_k: int
+    ) -> None:
+        """Scroll incrementally and click 'Load More' to gather enough results.
+
+        Replaces the old single-scroll approach.  Keeps scrolling until either
+        ``top_k`` results are visible, the page stops growing, or
+        ``max_scroll_attempts`` is exhausted.
+
+        Args:
+            extractor: ResultsExtractor (used only for counting).
+            top_k: Desired number of results.
+        """
+        if not self.client:
+            return
+
+        cfg = self.config.run
+        max_attempts = cfg.max_scroll_attempts
+        step_px = cfg.scroll_step_px
+        pause_s = cfg.scroll_pause_ms / 1000
+
+        # Initial quick scroll to trigger any lazy-loading above the fold
+        await self.client.evaluate(f"window.scrollBy(0, {step_px})")
+        await asyncio.sleep(pause_s)
+
+        visible = await extractor.count_visible_results()
+        logger.debug(f"Initial visible results: {visible}")
+
+        prev_visible = visible
+        for attempt in range(max_attempts):
+            if visible >= top_k:
+                logger.debug(
+                    f"Enough results visible ({visible} >= {top_k}), stopping scroll"
+                )
+                break
+
+            # Try clicking "Load More" first — more reliable than infinite scroll
+            clicked = await self._click_load_more()
+            if clicked:
+                await asyncio.sleep(pause_s)
+                await self.client.wait_for_network_idle(
+                    timeout=self.config.run.network_idle_ms
+                )
+                visible = await extractor.count_visible_results()
+                logger.debug(
+                    f"After Load-More click (attempt {attempt + 1}): {visible} results"
+                )
+                if visible > prev_visible:
+                    prev_visible = visible
+                    continue  # got new results, try again
+
+            # Scroll down to trigger infinite-scroll / lazy loading
+            await self.client.evaluate(f"window.scrollBy(0, {step_px})")
+            await asyncio.sleep(pause_s)
+            await self.client.wait_for_network_idle(
+                timeout=self.config.run.network_idle_ms
+            )
+
+            visible = await extractor.count_visible_results()
+            logger.debug(
+                f"After scroll (attempt {attempt + 1}): {visible} results"
+            )
+
+            if visible == prev_visible:
+                # Page didn't grow — stop scrolling to avoid wasting time
+                logger.debug("No new results after scroll, stopping")
+                break
+            prev_visible = visible
+
+        # Scroll back to top so screenshot / extraction start from the beginning
+        await self.client.evaluate("window.scrollTo(0, 0)")
+        await asyncio.sleep(0.5)
+
+    async def _click_load_more(self) -> bool:
+        """Try to find and click a 'Load More' / 'Show More' button.
+
+        Returns:
+            True if a button was clicked.
+        """
+        if not self.client:
+            return False
+
+        cfg = self.config.run
+
+        # 1. Try CSS selectors
+        for selector in cfg.load_more_selectors:
+            try:
+                el = await self.client.query_selector(selector)
+                if el:
+                    await self.client.click(selector)
+                    logger.debug(f"Clicked Load-More via selector: {selector}")
+                    return True
+            except Exception:
+                continue
+
+        # 2. Fallback: find buttons / links by textContent
+        for pattern in cfg.load_more_text_patterns:
+            js = f"""
+            (function() {{
+                var candidates = document.querySelectorAll('button, a, [role="button"]');
+                for (var i = 0; i < candidates.length; i++) {{
+                    var txt = (candidates[i].textContent || '').trim().toLowerCase();
+                    if (txt.includes('{pattern}')) {{
+                        candidates[i].click();
+                        return true;
+                    }}
+                }}
+                return false;
+            }})()
+            """
+            try:
+                result = await self.client.evaluate(js)
+                if result and str(result).lower() == "true":
+                    logger.debug(f"Clicked Load-More via text pattern: '{pattern}'")
+                    return True
+            except Exception:
+                continue
+
+        return False
 
     async def _capture_artifacts(self, query: Query) -> PageArtifacts:
         """Capture page artifacts (screenshot, HTML).

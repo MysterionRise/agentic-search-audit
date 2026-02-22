@@ -23,6 +23,32 @@ class ResultsExtractor:
         self.config = config
         self.base_url = base_url
 
+    async def count_visible_results(self) -> int:
+        """Count visible result items on the page without full extraction.
+
+        Returns:
+            Number of matching result items currently in the DOM.
+        """
+        for selector in self.config.item_selectors:
+            script = f"""
+            (function() {{
+                var items = document.querySelectorAll('{selector}');
+                return items.length;
+            }})()
+            """
+            try:
+                count_str = await self.client.evaluate(script)
+                if not count_str or count_str in ("undefined", "null"):
+                    continue
+                count = int(count_str)
+                if count > 0:
+                    return count
+            except (ValueError, TypeError):
+                continue
+            except Exception:
+                continue
+        return 0
+
     async def extract_results(self, top_k: int = 10) -> list[ResultItem]:
         """Extract top-K search results from the page.
 

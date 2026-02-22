@@ -59,6 +59,17 @@ run:
   throttle_rps: 0.5  # requests per second
   seed: 42  # for reproducible LLM outputs
 
+  # Lazy loading / infinite scroll settings
+  max_scroll_attempts: 5   # Maximum scroll attempts to load more results
+  scroll_step_px: 800      # Pixels to scroll per step
+  scroll_pause_ms: 1500    # Pause between scrolls (ms) for content to load
+  # load_more_selectors:   # CSS selectors for "Load More" / "Show More" buttons
+  #   - 'button[class*="load-more" i]'
+  #   - 'button[class*="show-more" i]'
+  # load_more_text_patterns:  # Text patterns to match "Load More" buttons
+  #   - "load more"
+  #   - "show more"
+
   # Browser backend: "playwright" (default), "cdp", or "undetected"
   #
   # Backend selection guide:
