@@ -327,6 +327,23 @@ class ResultsConfig(BaseModel):
     )
 
 
+class LocationConfig(BaseModel):
+    """Location/region modal handling configuration."""
+
+    default_country: str = Field(
+        default="United States",
+        description="Default country to select when a location prompt appears",
+    )
+    default_zip_code: str | None = Field(
+        default=None,
+        description="Default ZIP/postal code to enter when prompted (e.g. '10001')",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether to attempt dismissing location/region modals",
+    )
+
+
 class ModalsConfig(BaseModel):
     """Modal/popup handling configuration."""
 
@@ -336,6 +353,10 @@ class ModalsConfig(BaseModel):
     )
     max_auto_clicks: int = Field(default=3, description="Max automatic modal dismissals")
     wait_after_close_ms: int = Field(default=500, description="Wait time after closing modal")
+    location: LocationConfig = Field(
+        default_factory=LocationConfig,
+        description="Location/region modal handling settings",
+    )
 
 
 class RunConfig(BaseModel):
