@@ -291,9 +291,7 @@ class SearchAuditOrchestrator:
 
         return record
 
-    async def _scroll_for_results(
-        self, extractor: ResultsExtractor, top_k: int
-    ) -> None:
+    async def _scroll_for_results(self, extractor: ResultsExtractor, top_k: int) -> None:
         """Scroll incrementally and click 'Load More' to gather enough results.
 
         Replaces the old single-scroll approach.  Keeps scrolling until either
@@ -322,22 +320,16 @@ class SearchAuditOrchestrator:
         prev_visible = visible
         for attempt in range(max_attempts):
             if visible >= top_k:
-                logger.debug(
-                    f"Enough results visible ({visible} >= {top_k}), stopping scroll"
-                )
+                logger.debug(f"Enough results visible ({visible} >= {top_k}), stopping scroll")
                 break
 
             # Try clicking "Load More" first — more reliable than infinite scroll
             clicked = await self._click_load_more()
             if clicked:
                 await asyncio.sleep(pause_s)
-                await self.client.wait_for_network_idle(
-                    timeout=self.config.run.network_idle_ms
-                )
+                await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
                 visible = await extractor.count_visible_results()
-                logger.debug(
-                    f"After Load-More click (attempt {attempt + 1}): {visible} results"
-                )
+                logger.debug(f"After Load-More click (attempt {attempt + 1}): {visible} results")
                 if visible > prev_visible:
                     prev_visible = visible
                     continue  # got new results, try again
@@ -345,14 +337,10 @@ class SearchAuditOrchestrator:
             # Scroll down to trigger infinite-scroll / lazy loading
             await self.client.evaluate(f"window.scrollBy(0, {step_px})")
             await asyncio.sleep(pause_s)
-            await self.client.wait_for_network_idle(
-                timeout=self.config.run.network_idle_ms
-            )
+            await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
             visible = await extractor.count_visible_results()
-            logger.debug(
-                f"After scroll (attempt {attempt + 1}): {visible} results"
-            )
+            logger.debug(f"After scroll (attempt {attempt + 1}): {visible} results")
 
             if visible == prev_visible:
                 # Page didn't grow — stop scrolling to avoid wasting time

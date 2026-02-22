@@ -39,6 +39,7 @@ def test_run_config_scroll_custom():
 # ResultsExtractor.count_visible_results
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 async def test_count_visible_results_returns_count():
     """count_visible_results returns the DOM element count."""
@@ -85,6 +86,7 @@ async def test_count_visible_results_returns_zero_when_none():
 # ---------------------------------------------------------------------------
 # Orchestrator._scroll_for_results
 # ---------------------------------------------------------------------------
+
 
 def _make_orchestrator(top_k=10, max_scroll_attempts=3, visible_counts=None):
     """Helper to build a minimal orchestrator with mocked client."""
@@ -183,6 +185,7 @@ async def test_scroll_respects_max_attempts():
 # ---------------------------------------------------------------------------
 # Orchestrator._click_load_more
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 async def test_click_load_more_via_selector():
