@@ -252,6 +252,19 @@ class JudgeScore(BaseModel):
         return self
 
 
+class ExpertInsight(BaseModel):
+    """Commentary from a specialist expert agent."""
+
+    expert_name: str = Field(description="Name of the expert (e.g. 'Retail Search SME')")
+    headline: str = Field(default="", description="One-line headline assessment")
+    commentary: str = Field(default="", description="Detailed expert analysis")
+    key_observations: list[str] = Field(default_factory=list, description="Key observations")
+    recommendations: list[str] = Field(
+        default_factory=list, description="Actionable recommendations"
+    )
+    risk_level: str = Field(default="medium", description="Risk level: low/medium/high/critical")
+
+
 class AuditRecord(BaseModel):
     """Complete audit record for a single query."""
 

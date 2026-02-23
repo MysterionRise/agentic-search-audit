@@ -11,6 +11,7 @@ from ..browser import classify_error, create_browser_client, is_retryable
 from ..browser.errors import BrowserErrorKind
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
+from ..judge.experts import ExpertPanel
 from ..report import ReportGenerator
 from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
@@ -139,9 +140,20 @@ class SearchAuditOrchestrator:
                             )
                             break  # non-retryable or exhausted attempts
 
+        # Run expert panel for site-level insights
+        expert_insights = []
+        if self.records:
+            try:
+                expert_panel = ExpertPanel(self.config.llm)
+                site_name = str(self.config.site.url)
+                expert_insights = await expert_panel.evaluate(self.records, site_name)
+                logger.info(f"Expert panel complete: {len(expert_insights)} insights generated")
+            except Exception as e:
+                logger.error(f"Expert panel failed: {e}")
+
         # Generate reports
         if self.records:
-            self.reporter.generate_reports(self.records)
+            self.reporter.generate_reports(self.records, expert_insights=expert_insights)
 
         logger.info(f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries")
         return self.records

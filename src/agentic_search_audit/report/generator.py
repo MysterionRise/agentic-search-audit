@@ -10,7 +10,7 @@ from typing import TextIO
 from ..analysis.benchmarks import Industry
 from ..analysis.maturity import MaturityEvaluator, MaturityReport
 from ..analysis.uplift_planner import FindingsAnalyzer, FindingsReport, Severity
-from ..core.types import AuditConfig, AuditRecord, get_fqi_band
+from ..core.types import AuditConfig, AuditRecord, ExpertInsight, get_fqi_band
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ class ReportGenerator:
         include_maturity: bool = True,
         include_findings: bool = True,
         generate_pdf: bool = False,
+        expert_insights: list[ExpertInsight] | None = None,
     ) -> None:
         """Generate all configured report formats.
 
@@ -69,6 +70,7 @@ class ReportGenerator:
             include_maturity: Include maturity assessment section
             include_findings: Include findings section
             generate_pdf: Generate PDF version of the HTML report
+            expert_insights: Optional list of expert commentary insights
         """
         logger.info(f"Generating reports in {self.run_dir}")
 
@@ -90,14 +92,16 @@ class ReportGenerator:
                 f"across {findings_report.total_queries_analyzed} queries"
             )
 
+        insights = expert_insights or []
+
         if "md" in self.config.report.formats:
-            self._generate_markdown(records, maturity_report, findings_report)
+            self._generate_markdown(records, maturity_report, findings_report, insights)
 
         if "html" in self.config.report.formats:
-            self._generate_html(records, maturity_report, findings_report)
+            self._generate_html(records, maturity_report, findings_report, insights)
 
         if "json" in self.config.report.formats:
-            self._generate_json(records, maturity_report, findings_report)
+            self._generate_json(records, maturity_report, findings_report, insights)
 
         # Generate PDF if requested
         if generate_pdf:
@@ -117,6 +121,7 @@ class ReportGenerator:
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
+        expert_insights: list[ExpertInsight] | None = None,
     ) -> None:
         """Generate Markdown report.
 
@@ -124,6 +129,7 @@ class ReportGenerator:
             records: Audit records
             maturity_report: Maturity assessment report
             findings_report: Findings analysis report
+            expert_insights: Optional expert commentary insights
         """
         report_path = self.run_dir / "report.md"
         logger.info(f"Generating Markdown report: {report_path}")
@@ -166,6 +172,10 @@ class ReportGenerator:
             # Findings Section
             if findings_report:
                 self._write_markdown_findings_section(f, findings_report)
+
+            # Expert Insights Section
+            if expert_insights:
+                self._write_markdown_expert_section(f, expert_insights)
 
             # Score distribution
             f.write("## Score Distribution\n\n")
@@ -337,11 +347,44 @@ class ReportGenerator:
                     f.write(f"- Suggestion: {finding.suggestion}\n")
                 f.write("\n")
 
+    def _write_markdown_expert_section(
+        self, f: "TextIO", expert_insights: list[ExpertInsight]
+    ) -> None:
+        """Write expert insights section to markdown file."""
+        f.write("## Expert Insights\n\n")
+
+        for insight in expert_insights:
+            risk_icon = {
+                "low": "LOW",
+                "medium": "MEDIUM",
+                "high": "HIGH",
+                "critical": "CRITICAL",
+            }.get(insight.risk_level, "N/A")
+
+            f.write(f"### {insight.expert_name}\n\n")
+            f.write(f"**{insight.headline}** | Risk: {risk_icon}\n\n")
+            f.write(f"{insight.commentary}\n\n")
+
+            if insight.key_observations:
+                f.write("**Key Observations:**\n")
+                for obs in insight.key_observations:
+                    f.write(f"- {obs}\n")
+                f.write("\n")
+
+            if insight.recommendations:
+                f.write("**Recommendations:**\n")
+                for rec in insight.recommendations:
+                    f.write(f"- {rec}\n")
+                f.write("\n")
+
+            f.write("---\n\n")
+
     def _generate_html(
         self,
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
+        expert_insights: list[ExpertInsight] | None = None,
     ) -> None:
         """Generate HTML report.
 
@@ -349,6 +392,7 @@ class ReportGenerator:
             records: Audit records
             maturity_report: Maturity assessment report
             findings_report: Findings analysis report
+            expert_insights: Optional expert commentary insights
         """
         report_path = self.run_dir / "report.html"
         logger.info(f"Generating HTML report: {report_path}")
@@ -1017,6 +1061,10 @@ class ReportGenerator:
             if findings_report:
                 self._write_html_findings_section(f, findings_report)
 
+            # Expert Insights Section
+            if expert_insights:
+                self._write_html_expert_section(f, expert_insights)
+
             # Query details header
             if records:
                 f.write("    <h2>Query Details</h2>\n")
@@ -1291,11 +1339,75 @@ class ReportGenerator:
 
         f.write("    </div>\n")
 
+    def _write_html_expert_section(self, f: TextIO, expert_insights: list[ExpertInsight]) -> None:
+        """Write expert insights section to HTML file."""
+        f.write("""
+    <div class="expert-section" style="margin: 30px 0;">
+        <h2>Expert Insights</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            Specialized analysis from domain experts
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+""")
+
+        risk_colors = {
+            "low": "#28a745",
+            "medium": "#ffc107",
+            "high": "#fd7e14",
+            "critical": "#dc3545",
+        }
+
+        for insight in expert_insights:
+            risk_color = risk_colors.get(insight.risk_level, "#6c757d")
+            expert_escaped = escape_html(insight.expert_name)
+            headline_escaped = escape_html(insight.headline)
+            commentary_escaped = escape_html(insight.commentary)
+
+            f.write(f"""
+            <div style="background: var(--card-bg, #fff); border: 1px solid var(--border-color, #dee2e6); border-radius: 8px; padding: 20px; border-left: 4px solid {risk_color};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 1.1em;">{expert_escaped}</h3>
+                    <span style="background: {risk_color}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; text-transform: uppercase;">
+                        {escape_html(insight.risk_level)} risk
+                    </span>
+                </div>
+                <p style="font-weight: 600; font-size: 1.05em; margin-bottom: 10px;">{headline_escaped}</p>
+                <p style="color: var(--text-secondary); line-height: 1.6; white-space: pre-line;">{commentary_escaped}</p>
+""")
+
+            if insight.key_observations:
+                f.write(
+                    '                <div style="margin-top: 12px;">\n'
+                    "                    <strong>Key Observations:</strong>\n"
+                    '                    <ul style="margin: 5px 0; padding-left: 20px;">\n'
+                )
+                for obs in insight.key_observations:
+                    f.write(f"                        <li>{escape_html(obs)}</li>\n")
+                f.write("                    </ul>\n                </div>\n")
+
+            if insight.recommendations:
+                f.write(
+                    '                <div style="margin-top: 12px;">\n'
+                    "                    <strong>Recommendations:</strong>\n"
+                    '                    <ul style="margin: 5px 0; padding-left: 20px;">\n'
+                )
+                for rec in insight.recommendations:
+                    f.write(
+                        f'                        <li style="color: var(--text-primary);">'
+                        f"{escape_html(rec)}</li>\n"
+                    )
+                f.write("                    </ul>\n                </div>\n")
+
+            f.write("            </div>\n")
+
+        f.write("        </div>\n    </div>\n")
+
     def _generate_json(
         self,
         records: list[AuditRecord],
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
+        expert_insights: list[ExpertInsight] | None = None,
     ) -> None:
         """Generate JSON report.
 
@@ -1303,6 +1415,7 @@ class ReportGenerator:
             records: Audit records
             maturity_report: Maturity assessment report
             findings_report: Findings analysis report
+            expert_insights: Optional expert commentary insights
         """
         report_path = self.run_dir / "audit.json"
         logger.info(f"Generating JSON report: {report_path}")
@@ -1359,6 +1472,10 @@ class ReportGenerator:
                     for finding in findings_report.findings
                 ],
             }
+
+        # Add expert insights
+        if expert_insights:
+            data["expert_insights"] = [i.model_dump() for i in expert_insights]
 
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
