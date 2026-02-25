@@ -41,7 +41,7 @@ def _is_retryable_llm_error(exc: BaseException) -> bool:
     connection errors.
     Does NOT retry on: 400 (bad request), 401/403 (auth), 404, JSON parse errors.
     """
-    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+    if isinstance(exc, TimeoutError | asyncio.TimeoutError):
         return True
 
     # OpenAI library errors

@@ -94,7 +94,7 @@ def test_judge_system_prompt():
     assert "query understanding" in prompt.lower()
     assert "results relevance" in prompt.lower()
     assert "result presentation" in prompt.lower()
-    assert "advanced features" in prompt.lower()
+    assert "search results enrichment" in prompt.lower()
     assert "error handling" in prompt.lower()
 
     # Should mention score range

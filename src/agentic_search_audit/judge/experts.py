@@ -250,7 +250,7 @@ class ExpertPanel:
                     return await self._call_expert_once(expert_name, system_prompt, user_prompt)
             except Exception as e:
                 last_exc = e
-                is_retryable = isinstance(e, (TimeoutError, asyncio.TimeoutError))
+                is_retryable = isinstance(e, TimeoutError | asyncio.TimeoutError)
                 # Check OpenAI status errors
                 try:
                     from openai import APIConnectionError, APIStatusError
