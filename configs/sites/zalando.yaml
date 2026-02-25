@@ -18,6 +18,7 @@ site:
       - 'input[placeholder*="Search" i]'
     submit_strategy: "enter"
     submit_selector: null
+    search_url_template: "https://www.zalando.co.uk/catalog/?q={query}"
     use_intelligent_fallback: true
     intelligent_detection_model: "gpt-4o-mini"
 
@@ -30,11 +31,11 @@ site:
       - 'h3'
     url_attr: 'href'
     snippet_selectors:
-      # First span inside article typically contains brand
-      - 'span'
+      # Brand name is the first span inside the h3 heading
+      - 'h3 span:first-child'
     price_selectors:
-      # Price spans are further down in the article
-      - 'span'
+      # Price is in a section > p element within the article header
+      - 'section p'
     image_selectors:
       - 'img'
 

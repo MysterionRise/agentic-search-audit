@@ -1,31 +1,31 @@
-# Argos.co.uk specific configuration (UK general retail)
+# Sephora.co.uk specific configuration (UK)
 
 site:
-  url: "https://www.argos.co.uk"
+  url: "https://www.sephora.co.uk"
   locale: "en-GB"
 
   search:
     input_selectors:
-      - 'input[name="searchTerm"]'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
+      - 'input[name="q"]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.argos.co.uk/search/{query}/"
+    search_url_template: "https://www.sephora.co.uk/search?q={query}"
     use_intelligent_fallback: true
 
   results:
     item_selectors:
-      - '[data-test="component-product-card"]'
-      - '[data-test="product-card"]'
-      - 'div[class*="ProductCard"]'
+      - '[data-testid="product-tile"]'
+      - '[data-comp*="ProductTile"]'
       - 'article'
+      - 'div[class*="product-card"]'
       - 'li[class*="product"]'
     title_selectors:
-      - '[data-test="product-title"]'
       - 'h2'
       - 'h3'
+      - 'span[class*="product-name"]'
       - 'a[class*="title"]'
     url_attr: 'href'
     snippet_selectors:
@@ -33,9 +33,9 @@ site:
       - 'p'
       - 'span'
     price_selectors:
-      - '[data-test="product-price"]'
       - 'span[class*="price"]'
       - 'div[class*="price"]'
+      - 'p[class*="price"]'
     image_selectors:
       - 'img'
 
@@ -44,11 +44,13 @@ site:
       - "accept"
       - "accept all"
       - "agree"
+      - "continue"
       - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
-      - "reject all"
+      - "maybe later"
+      - "not now"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -57,7 +59,7 @@ run:
   viewport_width: 1366
   viewport_height: 900
   network_idle_ms: 3000
-  post_submit_ms: 2000
+  post_submit_ms: 3000
   headless: true
   throttle_rps: 0.5
   seed: 42

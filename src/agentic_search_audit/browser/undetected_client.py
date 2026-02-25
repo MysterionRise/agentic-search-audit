@@ -83,7 +83,30 @@ class UndetectedBrowserClient:
             ua = random_user_agent()
             options.add_argument(f"--user-agent={ua}")
             logger.debug("Selected user-agent: %s", ua)
-            driver = uc.Chrome(options=options)
+            # Detect installed Chrome major version to avoid chromedriver mismatch
+            chrome_ver = None
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    [
+                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                        "--version",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    import re
+
+                    match = re.search(r"(\d+)\.", result.stdout)
+                    if match:
+                        chrome_ver = int(match.group(1))
+                        logger.debug("Detected Chrome version: %d", chrome_ver)
+            except Exception:
+                pass
+            driver = uc.Chrome(options=options, version_main=chrome_ver)
             driver.set_page_load_timeout(60)
             # Inject navigator.language overrides
             languages_js = json.dumps(
@@ -151,6 +174,31 @@ class UndetectedBrowserClient:
 
         await asyncio.to_thread(_new_tab)
         logger.info("Page recovered via new tab")
+
+    async def set_user_agent(self, ua: str) -> None:
+        """Switch user-agent via CDP command (avoids full browser restart)."""
+        if not self._driver:
+            raise RuntimeError("Browser not connected")
+
+        def _set_ua() -> None:
+            self._driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": ua})
+
+        logger.debug("Rotating user-agent via CDP: %s", ua[:60])
+        await asyncio.to_thread(_set_ua)
+
+    async def set_proxy(self, proxy_url: str) -> None:
+        """Switch proxy by restarting the browser (UC requires full restart)."""
+        logger.debug("Rotating proxy — full browser restart required")
+        self.proxy_url = proxy_url
+        await self.disconnect()
+        await self.connect()
+
+    async def clear_cookies(self) -> None:
+        """Delete all cookies from the browser."""
+        if not self._driver:
+            raise RuntimeError("Browser not connected")
+        await asyncio.to_thread(self._driver.delete_all_cookies)
+        logger.debug("Cookies cleared")
 
     # -- navigation ----------------------------------------------------------
 

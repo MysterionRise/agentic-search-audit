@@ -137,6 +137,21 @@ class CDPBrowserClient:
         await self.disconnect()
         await self.connect()
 
+    async def set_user_agent(self, ua: str) -> None:
+        """Switch user-agent (not fully supported for CDP — logs warning)."""
+        logger.warning("set_user_agent is not fully supported for CDP clients")
+
+    async def set_proxy(self, proxy_url: str) -> None:
+        """Switch proxy (not supported for CDP — the external browser controls this)."""
+        logger.warning("set_proxy is not supported for CDP clients")
+
+    async def clear_cookies(self) -> None:
+        """Delete all cookies from the CDP browser context."""
+        if not self._context:
+            raise RuntimeError("Browser context not available")
+        await self._context.clear_cookies()
+        logger.debug("Cookies cleared")
+
     # -- health checks -------------------------------------------------------
 
     def is_page_alive(self) -> bool:

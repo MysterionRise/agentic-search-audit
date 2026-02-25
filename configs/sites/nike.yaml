@@ -12,6 +12,7 @@ site:
       - 'input[class*="search"]'
     submit_strategy: "enter"
     submit_selector: null
+    search_url_template: "https://www.nike.com/w?q={query}"
     use_intelligent_fallback: true
     intelligent_detection_model: "gpt-4o-mini"
 

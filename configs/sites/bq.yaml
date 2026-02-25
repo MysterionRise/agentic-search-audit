@@ -1,39 +1,40 @@
-# Argos.co.uk specific configuration (UK general retail)
+# B&Q / diy.com specific configuration (UK home improvement)
 
 site:
-  url: "https://www.argos.co.uk"
+  url: "https://www.diy.com"
   locale: "en-GB"
 
   search:
     input_selectors:
-      - 'input[name="searchTerm"]'
+      - 'input[name="term"]'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.argos.co.uk/search/{query}/"
+    search_url_template: "https://www.diy.com/search?term={query}"
     use_intelligent_fallback: true
 
   results:
     item_selectors:
-      - '[data-test="component-product-card"]'
-      - '[data-test="product-card"]'
-      - 'div[class*="ProductCard"]'
+      - '[data-testid="product-card"]'
+      - 'div[class*="product-card"]'
       - 'article'
       - 'li[class*="product"]'
+      - 'a[class*="product"]'
     title_selectors:
-      - '[data-test="product-title"]'
+      - '[data-testid="product-title"]'
       - 'h2'
       - 'h3'
-      - 'a[class*="title"]'
+      - 'span[class*="title"]'
+      - 'p[class*="title"]'
     url_attr: 'href'
     snippet_selectors:
       - 'span[class*="brand"]'
       - 'p'
       - 'span'
     price_selectors:
-      - '[data-test="product-price"]'
+      - '[data-testid="product-price"]'
       - 'span[class*="price"]'
       - 'div[class*="price"]'
     image_selectors:
@@ -49,6 +50,7 @@ site:
       - "dismiss"
       - "no thanks"
       - "reject all"
+      - "necessary only"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 

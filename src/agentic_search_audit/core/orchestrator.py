@@ -8,10 +8,14 @@ from datetime import datetime
 from pathlib import Path
 
 from ..browser import classify_error, create_browser_client, is_retryable
+from ..browser.challenge_detector import ChallengeDetectedError, detect_challenge
 from ..browser.errors import BrowserErrorKind
+from ..browser.proxy import ProxyRotator
+from ..browser.stealth import UserAgentRotator
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
 from ..judge.experts import ExpertPanel
+from ..judge.rate_limiter import LLMRateLimiter
 from ..report import ReportGenerator
 from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
@@ -42,6 +46,9 @@ class SearchAuditOrchestrator:
         self.reporter: ReportGenerator | None = None
         self.compliance_checker: ComplianceChecker | None = None
 
+        # Adaptive throttle multiplier (increases on resistance, decays on success)
+        self._throttle_multiplier: float = 1.0
+
     async def run(self) -> list[AuditRecord]:
         """Run the complete audit.
 
@@ -51,10 +58,23 @@ class SearchAuditOrchestrator:
         logger.info(f"Starting audit with {len(self.queries)} queries")
         logger.info(f"Output directory: {self.run_dir}")
 
+        # Load checkpoint if resuming
+        completed_ids = self._load_checkpoint()
+
+        # Initialize shared LLM rate limiter
+        llm_rate_limiter = LLMRateLimiter(max_concurrent=3, min_interval_seconds=0.5)
+
         # Initialize browser client based on configured backend
         self.client = create_browser_client(self.config.run, locale=self.config.site.locale)
-        self.judge = SearchQualityJudge(self.config.llm)
+        self.judge = SearchQualityJudge(self.config.llm, rate_limiter=llm_rate_limiter)
         self.reporter = ReportGenerator(self.config, self.run_dir)
+
+        # Initialize UA rotator and proxy rotator
+        ua_rotator = UserAgentRotator()
+        proxy_rotator = ProxyRotator(
+            strategy=self.config.run.proxy_rotation_strategy,
+            proxy_list=self.config.run.proxy_list,
+        )
 
         # Initialize compliance checker
         robots_policy = RobotsPolicy(
@@ -81,8 +101,48 @@ class SearchAuditOrchestrator:
 
             # Process each query with configurable retry
             max_attempts = 1 + self.config.run.max_retries
+            cookie_interval = self.config.run.cookie_clear_interval
+            queries_since_cookie_clear = 0
+
             for i, query in enumerate(self.queries, 1):
+                # Skip already-completed queries (checkpoint resume)
+                if query.id in completed_ids:
+                    logger.info(
+                        f"Skipping query {i}/{len(self.queries)} (already completed): {query.text}"
+                    )
+                    continue
+
                 logger.info(f"Processing query {i}/{len(self.queries)}: {query.text}")
+
+                # Rotate user-agent before each query
+                new_ua = ua_rotator.next()
+                try:
+                    await self.client.set_user_agent(new_ua)
+                    # Re-navigate to site after UA rotation (new context)
+                    await self._navigate_to_site()
+                except Exception as e:
+                    logger.warning(f"UA rotation failed: {e}")
+
+                # Rotate proxy if configured for per-query
+                next_proxy = proxy_rotator.next_proxy()
+                if next_proxy:
+                    try:
+                        await self.client.set_proxy(next_proxy)
+                        await self._navigate_to_site()
+                    except Exception as e:
+                        logger.warning(f"Proxy rotation failed: {e}")
+
+                # Clear cookies periodically
+                if cookie_interval > 0:
+                    queries_since_cookie_clear += 1
+                    if queries_since_cookie_clear >= cookie_interval:
+                        try:
+                            await self.client.clear_cookies()
+                            queries_since_cookie_clear = 0
+                            logger.debug("Cookies cleared (periodic)")
+                            await self._navigate_to_site()
+                        except Exception as e:
+                            logger.warning(f"Cookie clearing failed: {e}")
 
                 for attempt in range(max_attempts):
                     try:
@@ -109,6 +169,9 @@ class SearchAuditOrchestrator:
 
                         # Save record to JSONL
                         self._save_record(record)
+
+                        # Signal success for adaptive throttle
+                        self._signal_success()
                         break  # success -- exit retry loop
 
                     except asyncio.TimeoutError:
@@ -116,7 +179,33 @@ class SearchAuditOrchestrator:
                             f"Query '{query.text}' timed out after 90s "
                             f"(attempt {attempt + 1}/{max_attempts}) -- skipping"
                         )
+                        self._signal_resistance()
                         break  # Don't retry timeouts -- move to next query
+
+                    except ChallengeDetectedError as e:
+                        self._signal_resistance()
+                        is_last_attempt = attempt >= max_attempts - 1
+                        if not is_last_attempt:
+                            logger.warning(
+                                f"Challenge detected for '{query.text}' "
+                                f"(attempt {attempt + 1}/{max_attempts}): {e} -- "
+                                "clearing cookies and retrying with increased backoff"
+                            )
+                            # Clear cookies before retry on challenge
+                            try:
+                                await self.client.clear_cookies()
+                            except Exception:
+                                pass
+                            # Use 3x backoff multiplier for challenges
+                            backoff = self._compute_backoff(attempt) * 3
+                            await asyncio.sleep(backoff)
+                            await self._navigate_to_site()
+                        else:
+                            logger.error(
+                                f"Challenge persists for '{query.text}' after "
+                                f"{max_attempts} attempts -- skipping"
+                            )
+                            break
 
                     except Exception as e:
                         error_kind = classify_error(e)
@@ -124,6 +213,7 @@ class SearchAuditOrchestrator:
                         is_last_attempt = attempt >= max_attempts - 1
 
                         if retryable and not is_last_attempt:
+                            self._signal_resistance()
                             logger.warning(
                                 f"Query '{query.text}' failed (attempt {attempt + 1}/{max_attempts},"
                                 f" {error_kind.value}): {e} -- retrying"
@@ -144,7 +234,7 @@ class SearchAuditOrchestrator:
         expert_insights = []
         if self.records:
             try:
-                expert_panel = ExpertPanel(self.config.llm)
+                expert_panel = ExpertPanel(self.config.llm, rate_limiter=llm_rate_limiter)
                 site_name = str(self.config.site.url)
                 expert_insights = await expert_panel.evaluate(self.records, site_name)
                 logger.info(f"Expert panel complete: {len(expert_insights)} insights generated")
@@ -157,6 +247,44 @@ class SearchAuditOrchestrator:
 
         logger.info(f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries")
         return self.records
+
+    def _load_checkpoint(self) -> set[str]:
+        """Load completed query IDs from existing JSONL checkpoint.
+
+        Returns:
+            Set of query IDs that have already been completed.
+        """
+        jsonl_path = self.run_dir / "audit.jsonl"
+        if not jsonl_path.exists():
+            return set()
+
+        completed_ids: set[str] = set()
+        try:
+            with open(jsonl_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record_data = json.loads(line)
+                        query_id = record_data.get("query", {}).get("id")
+                        if query_id:
+                            completed_ids.add(query_id)
+                            # Reload the record into self.records
+                            self.records.append(AuditRecord(**record_data))
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.warning(f"Skipping malformed checkpoint line: {e}")
+                        continue
+
+            if completed_ids:
+                logger.info(
+                    f"Resuming: {len(completed_ids)} queries already completed, "
+                    f"{len(self.queries) - len(completed_ids)} remaining"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load checkpoint: {e}")
+
+        return completed_ids
 
     async def _recover_for_retry(self, error_kind: BrowserErrorKind) -> None:
         """Recover the browser/page based on error classification.
@@ -196,6 +324,15 @@ class SearchAuditOrchestrator:
         delay: float = base * (2**attempt) * jitter
         return delay
 
+    def _signal_resistance(self) -> None:
+        """Increase throttle multiplier when encountering resistance signals."""
+        self._throttle_multiplier = min(self._throttle_multiplier * 1.5, 5.0)
+        logger.debug(f"Throttle multiplier increased to {self._throttle_multiplier:.2f}")
+
+    def _signal_success(self) -> None:
+        """Decay throttle multiplier toward 1.0 after successful queries."""
+        self._throttle_multiplier = max(self._throttle_multiplier * 0.9, 1.0)
+
     async def _navigate_to_site(self) -> None:
         """Navigate to the site and handle initial modals."""
         if not self.client:
@@ -230,6 +367,9 @@ class SearchAuditOrchestrator:
 
         Returns:
             AuditRecord with results and evaluation
+
+        Raises:
+            ChallengeDetectedError: If a bot-detection challenge is detected.
         """
         if not self.client:
             raise RuntimeError("Browser client not initialized")
@@ -270,39 +410,53 @@ class SearchAuditOrchestrator:
         await asyncio.sleep(self.config.run.post_submit_ms / 1000)
         await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
+        # Challenge detection: check for bot-detection pages before extraction
+        challenge = await detect_challenge(self.client)
+        if challenge.detected:
+            raise ChallengeDetectedError(challenge)
+
+        # Scroll to load all results before extraction (benefits both paths)
+        results_extractor = ResultsExtractor(
+            self.client,
+            self.config.site.results,
+            str(self.config.site.url),
+        )
+        no_results = await results_extractor.check_for_no_results()
+        if no_results:
+            logger.warning(f"No results found for query: {query.text}")
+
+        if not no_results:
+            await self._scroll_for_results(results_extractor, self.config.run.top_k)
+
         # Extract results -- vision-based or CSS-based with vision fallback
         items: list[ResultItem] = []
-        if self.config.run.use_vision_extraction:
-            # Vision-first: use LLM to extract results from screenshot
+        if self.config.run.use_vision_extraction and not no_results:
+            # Vision-first: use LLM to extract results from full-page screenshot
             from ..extractors.vision_results import VisionResultsExtractor
 
             vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
             items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
-        else:
+        elif not no_results:
             # CSS-first: use DOM selectors with vision fallback
-            results_extractor = ResultsExtractor(
-                self.client,
-                self.config.site.results,
-                str(self.config.site.url),
-            )
+            items = await results_extractor.extract_results(top_k=self.config.run.top_k)
 
-            if await results_extractor.check_for_no_results():
-                logger.warning(f"No results found for query: {query.text}")
-            else:
-                await self._scroll_for_results(results_extractor, self.config.run.top_k)
-                items = await results_extractor.extract_results(top_k=self.config.run.top_k)
+            # Vision fallback: if CSS extracted no items or items with no content
+            has_content = any(item.title or item.price for item in items)
+            if not items or not has_content:
+                reason = (
+                    "CSS extraction returned no items"
+                    if not items
+                    else "CSS extraction returned items with no content"
+                )
+                logger.warning(f"{reason} -- falling back to vision extraction")
+                from ..extractors.vision_results import VisionResultsExtractor
 
-                # Vision fallback: if CSS extracted empty/null items, try vision
-                has_content = any(item.title or item.price for item in items)
-                if items and not has_content:
-                    logger.warning(
-                        "CSS extraction returned items with no content -- "
-                        "falling back to vision extraction"
-                    )
-                    from ..extractors.vision_results import VisionResultsExtractor
+                vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
+                items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
 
-                    vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
-                    items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
+        # Signal resistance if empty results on a non-empty query
+        if not items and not no_results:
+            self._signal_resistance()
 
         # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
         page_artifacts = await self._capture_artifacts(query)
@@ -504,18 +658,47 @@ class SearchAuditOrchestrator:
             f.write("\n")
 
     async def _rate_limit(self) -> None:
-        """Apply rate limiting with ±30% jitter between requests."""
+        """Apply adaptive rate limiting with ±30% jitter between requests.
+
+        The throttle multiplier increases when encountering resistance signals
+        (challenges, empty results, errors) and decays on successful queries.
+        """
         if self.config.run.throttle_rps > 0:
             delay = 1.0 / self.config.run.throttle_rps
-            jittered = delay * random.uniform(0.7, 1.3)
-            logger.debug(f"Rate limiting: waiting {jittered:.2f}s (base {delay:.2f}s)")
+            jittered = delay * self._throttle_multiplier * random.uniform(0.7, 1.3)
+            logger.debug(
+                f"Rate limiting: waiting {jittered:.2f}s "
+                f"(base {delay:.2f}s, multiplier {self._throttle_multiplier:.2f}x)"
+            )
             await asyncio.sleep(jittered)
+
+
+def _find_latest_run_dir(base_dir: Path, site_name: str) -> Path | None:
+    """Find the most recent run directory for a site.
+
+    Args:
+        base_dir: Base output directory (e.g. ./runs)
+        site_name: Site hostname
+
+    Returns:
+        Path to the latest run directory, or None if none exists.
+    """
+    site_dir = base_dir / site_name
+    if not site_dir.exists():
+        return None
+    # Run dirs are named as timestamps (YYYYMMDD_HHMMSS), sorted alphabetically = chronologically
+    dirs = sorted(
+        [d for d in site_dir.iterdir() if d.is_dir() and (d / "audit.jsonl").exists()],
+        key=lambda d: d.name,
+    )
+    return dirs[-1] if dirs else None
 
 
 async def run_audit(
     config: AuditConfig,
     queries: list[Query],
     output_dir: str | None = None,
+    resume: bool = False,
 ) -> list[AuditRecord]:
     """Run a complete search audit.
 
@@ -523,16 +706,27 @@ async def run_audit(
         config: Audit configuration
         queries: List of queries to evaluate
         output_dir: Custom output directory (optional)
+        resume: If True, reuse the most recent run directory for checkpoint resume
 
     Returns:
         List of audit records
     """
-    # Create run directory
+    # Create or find run directory
     if output_dir:
         run_dir = Path(output_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "screenshots").mkdir(exist_ok=True)
         (run_dir / "html_snapshots").mkdir(exist_ok=True)
+    elif resume:
+        base_dir = Path(config.report.out_dir)
+        site_name = config.site.url.host or "unknown"
+        existing = _find_latest_run_dir(base_dir, site_name)
+        if existing:
+            run_dir = existing
+            logger.info(f"Resuming from existing run directory: {run_dir}")
+        else:
+            logger.warning("No previous run found to resume — starting fresh")
+            run_dir = get_run_dir(base_dir, site_name)
     else:
         base_dir = Path(config.report.out_dir)
         site_name = config.site.url.host or "unknown"

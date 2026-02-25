@@ -9,14 +9,21 @@ import asyncio
 import json
 import logging
 import os
+import random
+from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 
 from ..core.types import AuditRecord, ExpertInsight, LLMConfig
 
+if TYPE_CHECKING:
+    from .rate_limiter import LLMRateLimiter
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EXPERT_TIMEOUT_SECONDS = 30
+EXPERT_MAX_RETRIES = 2
+EXPERT_RETRY_BACKOFF_BASE = 3.0  # seconds
 
 RETAIL_SME_SYSTEM_PROMPT = """You are a Retail Search SME (Subject Matter Expert) with 15+ years of \
 experience in e-commerce merchandising, site search optimization, and conversion rate optimization.
@@ -135,13 +142,19 @@ Provide your expert analysis as a JSON object. Be specific and cite query exampl
 class ExpertPanel:
     """Runs expert commentary agents on aggregated audit results."""
 
-    def __init__(self, config: LLMConfig):
+    def __init__(
+        self,
+        config: LLMConfig,
+        rate_limiter: "LLMRateLimiter | None" = None,
+    ):
         """Initialize expert panel.
 
         Args:
             config: LLM configuration (reuses the same provider as the judge)
+            rate_limiter: Optional shared rate limiter for LLM API calls
         """
         self.config = config
+        self.rate_limiter = rate_limiter
         self.client: AsyncOpenAI | None = None
 
         if config.provider in ("openai", "openrouter", "vllm"):
@@ -210,7 +223,10 @@ class ExpertPanel:
     async def _call_expert(
         self, expert_name: str, system_prompt: str, user_prompt: str
     ) -> ExpertInsight:
-        """Call a single expert agent.
+        """Call a single expert agent with retry logic.
+
+        Retries on transient failures (429, 502/503, timeouts, connection errors)
+        with exponential backoff.
 
         Args:
             expert_name: Human-readable name of the expert
@@ -223,6 +239,59 @@ class ExpertPanel:
         assert self.client is not None
 
         logger.info(f"Calling expert: {expert_name}")
+        last_exc: BaseException | None = None
+
+        for attempt in range(EXPERT_MAX_RETRIES):
+            try:
+                if self.rate_limiter:
+                    async with self.rate_limiter.acquire():
+                        return await self._call_expert_once(expert_name, system_prompt, user_prompt)
+                else:
+                    return await self._call_expert_once(expert_name, system_prompt, user_prompt)
+            except Exception as e:
+                last_exc = e
+                is_retryable = isinstance(e, (TimeoutError, asyncio.TimeoutError))
+                # Check OpenAI status errors
+                try:
+                    from openai import APIConnectionError, APIStatusError
+
+                    if isinstance(e, APIConnectionError):
+                        is_retryable = True
+                    elif isinstance(e, APIStatusError):
+                        is_retryable = e.status_code in (429, 502, 503)
+                except ImportError:
+                    pass
+
+                if not is_retryable or attempt >= EXPERT_MAX_RETRIES - 1:
+                    raise
+                backoff = EXPERT_RETRY_BACKOFF_BASE * (2**attempt) * random.uniform(0.7, 1.3)
+                logger.warning(
+                    "Expert '%s' failed (attempt %d/%d): %s — retrying in %.1fs",
+                    expert_name,
+                    attempt + 1,
+                    EXPERT_MAX_RETRIES,
+                    e,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+
+        raise last_exc or RuntimeError(f"Expert '{expert_name}' failed")  # type: ignore[misc]
+
+    async def _call_expert_once(
+        self, expert_name: str, system_prompt: str, user_prompt: str
+    ) -> ExpertInsight:
+        """Execute a single expert LLM call (no retry).
+
+        Args:
+            expert_name: Human-readable name of the expert
+            system_prompt: Expert's system prompt
+            user_prompt: Shared user prompt with audit data
+
+        Returns:
+            ExpertInsight object
+        """
+        assert self.client is not None
+
         timeout = getattr(self.config, "timeout", None) or DEFAULT_EXPERT_TIMEOUT_SECONDS
 
         try:

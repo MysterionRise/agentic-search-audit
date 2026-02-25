@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any
+import random
+from typing import TYPE_CHECKING, Any
 
 from openai import AsyncOpenAI
 
@@ -16,6 +17,9 @@ from .rubric import (
     get_judge_schema,
 )
 
+if TYPE_CHECKING:
+    from .rate_limiter import LLMRateLimiter
+
 logger = logging.getLogger(__name__)
 
 # Default timeout for LLM API calls (in seconds)
@@ -25,17 +29,63 @@ DEFAULT_LLM_TIMEOUT_SECONDS = 30
 # Longer content would exceed token limits and increase costs
 HTML_SNIPPET_MAX_CHARS = 2000
 
+# Retry configuration
+JUDGE_MAX_RETRIES = 3
+JUDGE_RETRY_BACKOFF_BASE = 2.0  # seconds
+
+
+def _is_retryable_llm_error(exc: BaseException) -> bool:
+    """Check if an LLM API error is worth retrying.
+
+    Retries on: TimeoutError, HTTP 429 (rate limit), HTTP 502/503 (server error),
+    connection errors.
+    Does NOT retry on: 400 (bad request), 401/403 (auth), 404, JSON parse errors.
+    """
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return True
+
+    # OpenAI library errors
+    try:
+        from openai import APIConnectionError, APIStatusError
+
+        if isinstance(exc, APIConnectionError):
+            return True
+        if isinstance(exc, APIStatusError):
+            return exc.status_code in (429, 502, 503)
+    except ImportError:
+        pass
+
+    # Anthropic library errors
+    try:
+        from anthropic import APIConnectionError as AnthropicConnectionError
+        from anthropic import APIStatusError as AnthropicStatusError
+
+        if isinstance(exc, AnthropicConnectionError):
+            return True
+        if isinstance(exc, AnthropicStatusError):
+            return exc.status_code in (429, 502, 503)
+    except ImportError:
+        pass
+
+    return False
+
 
 class SearchQualityJudge:
     """LLM-based judge for search quality evaluation."""
 
-    def __init__(self, config: LLMConfig):
+    def __init__(
+        self,
+        config: LLMConfig,
+        rate_limiter: "LLMRateLimiter | None" = None,
+    ):
         """Initialize judge.
 
         Args:
             config: LLM configuration
+            rate_limiter: Optional shared rate limiter for LLM API calls
         """
         self.config = config
+        self.rate_limiter = rate_limiter
         self.client: Any = None
         self._anthropic_client: Any = None
 
@@ -187,7 +237,10 @@ class SearchQualityJudge:
         return prompt
 
     async def _call_llm(self, user_prompt: str) -> str:
-        """Call LLM for evaluation.
+        """Call LLM for evaluation with retry logic.
+
+        Retries on transient failures (429, 502/503, timeouts, connection errors)
+        with exponential backoff. Does NOT retry on auth errors or bad requests.
 
         Args:
             user_prompt: User prompt
@@ -196,8 +249,43 @@ class SearchQualityJudge:
             LLM response text
 
         Raises:
-            TimeoutError: If the LLM API call exceeds the timeout
+            TimeoutError: If all retry attempts time out
             ValueError: If the provider is not supported
+        """
+        last_exc: BaseException | None = None
+
+        for attempt in range(JUDGE_MAX_RETRIES):
+            try:
+                if self.rate_limiter:
+                    async with self.rate_limiter.acquire():
+                        return await self._call_llm_once(user_prompt)
+                else:
+                    return await self._call_llm_once(user_prompt)
+            except Exception as e:
+                last_exc = e
+                if not _is_retryable_llm_error(e) or attempt >= JUDGE_MAX_RETRIES - 1:
+                    raise
+                backoff = JUDGE_RETRY_BACKOFF_BASE * (2**attempt) * random.uniform(0.7, 1.3)
+                logger.warning(
+                    "LLM call failed (attempt %d/%d): %s — retrying in %.1fs",
+                    attempt + 1,
+                    JUDGE_MAX_RETRIES,
+                    e,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+
+        # Should not reach here, but just in case
+        raise last_exc or RuntimeError("LLM call failed with no exception")  # type: ignore[misc]
+
+    async def _call_llm_once(self, user_prompt: str) -> str:
+        """Execute a single LLM API call (no retry).
+
+        Args:
+            user_prompt: User prompt
+
+        Returns:
+            LLM response text
         """
         logger.debug("Calling LLM for evaluation...")
 
@@ -223,7 +311,6 @@ class SearchQualityJudge:
                     timeout=timeout_seconds,
                 )
             except asyncio.TimeoutError:
-                logger.error(f"LLM API call timed out after {timeout_seconds}s")
                 raise TimeoutError(
                     f"LLM evaluation timed out after {timeout_seconds} seconds. "
                     "The API may be overloaded or experiencing issues."
@@ -247,7 +334,6 @@ class SearchQualityJudge:
                     timeout=timeout_seconds,
                 )
             except asyncio.TimeoutError:
-                logger.error(f"Anthropic API call timed out after {timeout_seconds}s")
                 raise TimeoutError(
                     f"LLM evaluation timed out after {timeout_seconds} seconds. "
                     "The API may be overloaded or experiencing issues."

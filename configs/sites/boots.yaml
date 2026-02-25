@@ -1,4 +1,4 @@
-# Boots.com specific configuration
+# Boots.com specific configuration (UK pharmacy/beauty retailer)
 
 site:
   url: "https://www.boots.com"
@@ -6,56 +6,51 @@ site:
 
   search:
     input_selectors:
-      # Boots search input
-      - 'input[id="searchTerm"]'
-      - 'input[name="searchTerm"]'
-      - 'input[data-testid="search-input"]'
+      - 'input[name="search"]'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.boots.com/search?q={query}"
+    search_url_template: "https://www.boots.com/SearchDisplay?searchType=1002&storeId=11352&pageView=grid&sType=SimpleSearch&catalogId=28501&searchTerm={query}&resultCatEntryType=2&showResultsPage=true&beginIndex=0&langId=-1"
     use_intelligent_fallback: true
-    intelligent_detection_model: "gpt-4o-mini"
 
   results:
     item_selectors:
       - '[data-testid="product-card"]'
       - 'div[class*="product-card"]'
-      - 'div[class*="ProductCard"]'
       - 'article'
+      - 'li[class*="product"]'
+      - 'div[class*="ProductCard"]'
     title_selectors:
       - '[data-testid="product-title"]'
-      - 'h3'
       - 'h2'
-      - 'a[class*="product-title"]'
+      - 'h3'
+      - 'a[class*="title"]'
+      - 'span[class*="product-name"]'
     url_attr: 'href'
     snippet_selectors:
       - 'span[class*="brand"]'
-      - 'p[class*="description"]'
+      - 'p'
       - 'span'
     price_selectors:
       - '[data-testid="product-price"]'
       - 'span[class*="price"]'
       - 'div[class*="price"]'
     image_selectors:
-      - 'img[class*="product"]'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
+      - "accept all"
       - "agree"
-      - "continue"
       - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
-      - "maybe later"
-      - "accept all"
-      - "allow all"
-      - "accept all cookies"
+      - "reject all"
+      - "reject"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -68,7 +63,7 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  browser_backend: playwright
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"
@@ -77,7 +72,7 @@ llm:
   temperature: 0.2
   system_prompt: null
   base_url: "https://openrouter.ai/api/v1"
-  api_key: null  # Set in .env as OPENROUTER_API_KEY
+  api_key: null
 
 report:
   formats:

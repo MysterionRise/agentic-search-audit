@@ -105,6 +105,18 @@ class BrowserClient(Protocol):
         """Full browser restart: disconnect then connect."""
         ...
 
+    async def set_user_agent(self, ua: str) -> None:
+        """Switch the browser to a new user-agent string."""
+        ...
+
+    async def set_proxy(self, proxy_url: str) -> None:
+        """Switch the browser to a new proxy."""
+        ...
+
+    async def clear_cookies(self) -> None:
+        """Delete all cookies from the current browser context."""
+        ...
+
 
 class ProxyRotationStrategy(str, Enum):
     """Proxy rotation strategies for IP rotation."""
@@ -457,6 +469,10 @@ class RunConfig(BaseModel):
     proxy_list: list[str] | None = Field(
         default=None,
         description="Pool of proxy URLs for rotation (used when strategy is not 'none')",
+    )
+    cookie_clear_interval: int = Field(
+        default=5,
+        description="Clear cookies every N queries to avoid tracking accumulation (0 = never)",
     )
 
     @model_validator(mode="after")

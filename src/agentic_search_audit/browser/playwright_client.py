@@ -458,6 +458,73 @@ class PlaywrightBrowserClient:
         await self.disconnect()
         await self.connect()
 
+    async def set_user_agent(self, ua: str) -> None:
+        """Switch to a new user-agent by creating a fresh context + page.
+
+        Playwright contexts are cheap and UA is set at context creation time,
+        so we close the old context and create a new one with the updated UA.
+        """
+        if not self._browser:
+            raise RuntimeError("Browser not connected")
+
+        logger.debug("Rotating user-agent: %s", ua[:60])
+
+        # Close old page and context
+        if self._page:
+            try:
+                await self._page.close()
+            except Exception:
+                pass
+            self._page = None
+        if self._context:
+            try:
+                await self._context.close()
+            except Exception:
+                pass
+            self._context = None
+
+        tz = timezone_for_locale(self.locale)
+        self._context = await self._browser.new_context(
+            viewport={"width": self.viewport_width, "height": self.viewport_height},
+            user_agent=ua,
+            locale=self.locale,
+            timezone_id=tz,
+        )
+
+        # Re-apply stealth scripts
+        try:
+            from playwright_stealth import stealth_async  # type: ignore[import-untyped]
+
+            self._page = await self._context.new_page()
+            try:
+                await stealth_async(self._page)
+            except Exception:
+                await self._context.add_init_script(build_stealth_js(self.locale))
+        except ImportError:
+            await self._context.add_init_script(build_stealth_js(self.locale))
+            self._page = await self._context.new_page()
+
+        self._page.set_default_timeout(60000)
+        self._page.set_default_navigation_timeout(60000)
+
+    async def set_proxy(self, proxy_url: str) -> None:
+        """Switch to a new proxy by restarting the browser.
+
+        Playwright proxy is set at browser launch time, so a full restart
+        is required.
+        """
+        logger.debug("Rotating proxy — full browser restart required")
+        self.proxy_url = proxy_url
+        await self.disconnect()
+        await self.connect()
+
+    async def clear_cookies(self) -> None:
+        """Delete all cookies from the current browser context."""
+        if not self._context:
+            raise RuntimeError("Browser context not available")
+        await self._context.clear_cookies()
+        logger.debug("Cookies cleared")
+
     async def wait_for_page_stable(self, timeout: int = 5000) -> None:
         """Wait for the page to be visually stable.
 

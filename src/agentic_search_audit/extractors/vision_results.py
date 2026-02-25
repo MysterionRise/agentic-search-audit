@@ -11,9 +11,9 @@ from .vision_provider import VisionProvider, create_vision_provider
 logger = logging.getLogger(__name__)
 
 
-VISION_RESULTS_PROMPT = """You are analyzing a screenshot of an e-commerce search results page.
+VISION_RESULTS_PROMPT = """You are analyzing a full-page screenshot of an e-commerce search results page.
 
-Extract the visible product results from the main product grid. For each product, provide:
+Extract the product results from the main product grid. For each product, provide:
 - rank: position number (1-indexed, counting left-to-right then top-to-bottom)
 - title: full product name as shown
 - price: price string exactly as displayed (include currency symbol, e.g. "$29.99")
@@ -31,6 +31,7 @@ Return ONLY valid JSON in this exact format:
 
 Rules:
 - Extract up to TOP_K results from the main product grid only
+- Scan the ENTIRE screenshot from top to bottom -- products may appear far below the header
 - Ignore ads, sponsored banners, navigation elements, and sidebar widgets
 - If the page shows a "no results" or "nothing found" message, set "no_results": true and return empty results
 - If a field is not visible, use null
@@ -66,13 +67,13 @@ class VisionResultsExtractor:
 
         screenshot_path: Path | None = None
         try:
-            # Take screenshot of current page (not full page -- focus on visible results)
+            # Take full-page screenshot to capture all loaded results (including below fold)
             with tempfile.NamedTemporaryFile(
                 suffix=".png", prefix="vision_results_", delete=False
             ) as tmp_file:
                 screenshot_path = Path(tmp_file.name)
 
-            await self.client.screenshot(screenshot_path, full_page=False)
+            await self.client.screenshot(screenshot_path, full_page=True)
 
             # Read and base64 encode
             with open(screenshot_path, "rb") as f:

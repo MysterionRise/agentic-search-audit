@@ -304,6 +304,12 @@ Examples:
         help="Use LLM vision to extract results from screenshots (no CSS selectors needed)",
     )
 
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume a previous audit run by reusing the most recent run directory for the site",
+    )
+
     return parser.parse_args()
 
 
@@ -492,6 +498,7 @@ async def main_async() -> int:
             config=config,
             queries=queries,
             output_dir=str(args.output) if args.output else None,
+            resume=getattr(args, "resume", False),
         )
 
         # Print summary

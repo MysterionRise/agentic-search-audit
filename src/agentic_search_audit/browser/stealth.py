@@ -6,15 +6,29 @@ to avoid triggering bot-detection systems (Akamai, PerimeterX, DataDome).
 
 import json
 import random
+from collections import deque
 
 # ---------------------------------------------------------------------------
-# Realistic Chrome user-agent pool (macOS + Windows, recent Chrome versions)
+# Realistic Chrome user-agent pool (macOS + Windows + Linux, recent versions)
 # ---------------------------------------------------------------------------
 USER_AGENTS: list[str] = [
+    # Chrome 133
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    # Chrome 132
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    # Chrome 131
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # Chrome 130
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    # Chrome 129
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
 ]
@@ -23,6 +37,30 @@ USER_AGENTS: list[str] = [
 def random_user_agent() -> str:
     """Return a randomly chosen realistic Chrome user-agent string."""
     return random.choice(USER_AGENTS)
+
+
+class UserAgentRotator:
+    """Round-robin user-agent rotator.
+
+    Shuffles the UA pool at init and cycles through without repeats
+    until the pool is exhausted, then reshuffles.
+    """
+
+    def __init__(self, agents: list[str] | None = None) -> None:
+        self._agents = list(agents or USER_AGENTS)
+        self._queue: deque[str] = deque()
+        self._refill()
+
+    def _refill(self) -> None:
+        shuffled = list(self._agents)
+        random.shuffle(shuffled)
+        self._queue = deque(shuffled)
+
+    def next(self) -> str:
+        """Return the next user-agent string (round-robin, no repeats until pool exhausted)."""
+        if not self._queue:
+            self._refill()
+        return self._queue.popleft()
 
 
 # ---------------------------------------------------------------------------

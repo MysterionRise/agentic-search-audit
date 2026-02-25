@@ -1,4 +1,4 @@
-# Currys.co.uk specific configuration
+# Currys.co.uk specific configuration (UK electronics retailer)
 
 site:
   url: "https://www.currys.co.uk"
@@ -6,59 +6,49 @@ site:
 
   search:
     input_selectors:
-      # Currys search input
-      - 'input[id="search-input"]'
       - 'input[name="search"]'
-      - 'input[data-testid="search-input"]'
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[placeholder*="Search" i]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.currys.co.uk/search/{query}"
+    search_url_template: "https://www.currys.co.uk/search?q={query}"
     use_intelligent_fallback: true
-    intelligent_detection_model: "gpt-4o-mini"
 
   results:
     item_selectors:
       - '[data-testid="product-card"]'
       - 'article[class*="product"]'
-      - 'div[class*="productCard"]'
-      - 'a[href*="/products/"]'
+      - 'div[class*="product-card"]'
+      - 'article'
+      - 'li[class*="product"]'
     title_selectors:
       - '[data-testid="product-title"]'
-      - 'h3'
       - 'h2'
-      - 'a[class*="product-title"]'
-      - 'span[class*="title"]'
+      - 'h3'
+      - 'a[class*="title"]'
     url_attr: 'href'
     snippet_selectors:
       - 'span[class*="brand"]'
-      - 'p[class*="description"]'
-      - 'span[class*="description"]'
+      - 'p'
       - 'span'
     price_selectors:
       - '[data-testid="product-price"]'
       - 'span[class*="price"]'
       - 'div[class*="price"]'
-      - 'strong[class*="price"]'
     image_selectors:
-      - 'img[class*="product"]'
       - 'img'
 
   modals:
     close_text_matches:
       - "accept"
+      - "accept all"
       - "agree"
-      - "continue"
       - "got it"
       - "close"
       - "dismiss"
       - "no thanks"
-      - "maybe later"
-      - "accept all"
-      - "allow all"
-      - "accept all cookies"
+      - "reject"
     max_auto_clicks: 3
     wait_after_close_ms: 500
 
@@ -71,7 +61,7 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  browser_backend: playwright
+  browser_backend: undetected
 
 llm:
   provider: "openrouter"
@@ -80,7 +70,7 @@ llm:
   temperature: 0.2
   system_prompt: null
   base_url: "https://openrouter.ai/api/v1"
-  api_key: null  # Set in .env as OPENROUTER_API_KEY
+  api_key: null
 
 report:
   formats:

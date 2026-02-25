@@ -36,14 +36,19 @@ Are results well-presented with clear info, filters, and navigation aids?
 - 1: Confusing presentation, no filters
 - 0: Broken or unusable layout
 
-### 4. Advanced Features (20% weight)
-Are advanced search capabilities present (autocomplete, did-you-mean, etc.)?
-- 5: Autocomplete, suggestions, spell correction, visual search, personalization
-- 4: Most advanced features present
-- 3: Some advanced features (e.g., basic autocomplete)
-- 2: Limited advanced features
-- 1: Minimal beyond basic search
-- 0: No advanced features
+### 4. Search Results Enrichment (20% weight)
+Does the results page offer features that help users refine and explore?
+Evaluate ONLY what is visible on the search results page itself.
+- 5: Rich facets/filters, sort options, "did you mean" corrections shown on page, result count, category refinements, related searches
+- 4: Good filtering and sorting with minor gaps (e.g., missing result count or related searches)
+- 3: Basic filters present but limited sort or refinement options
+- 2: Few or no filters, no sort options, minimal navigational aids on the results page
+- 1: Results listed with no enrichment features at all
+- 0: No results page features beyond a bare list
+
+NOTE: Do NOT evaluate autocomplete, typeahead suggestions, visual search, or
+personalization — these occur before or outside the results page and are not
+observable in this evaluation context.
 
 ### 5. Error Handling (10% weight)
 How well does search handle edge cases, zero results, and errors?
@@ -78,7 +83,7 @@ Return ONLY a valid JSON object with this EXACT structure:
   "query_understanding": {"score": 3.5, "diagnosis": "Handles exact match well but..."},
   "results_relevance": {"score": 4.0, "diagnosis": "Results are relevant to..."},
   "result_presentation": {"score": 3.0, "diagnosis": "Basic product cards shown..."},
-  "advanced_features": {"score": 2.5, "diagnosis": "Only basic autocomplete..."},
+  "advanced_features": {"score": 2.5, "diagnosis": "Basic filters but no sort options..."},
   "error_handling": {"score": 4.0, "diagnosis": "Good zero-result handling..."},
   "rationale": "Overall assessment explanation...",
   "executive_summary": "One-paragraph summary for stakeholders...",
@@ -167,7 +172,7 @@ def get_judge_schema() -> dict[str, Any]:
             },
             "advanced_features": {
                 **dimension_schema,
-                "description": "Advanced features score and diagnosis",
+                "description": "Search results enrichment score and diagnosis",
             },
             "error_handling": {
                 **dimension_schema,
