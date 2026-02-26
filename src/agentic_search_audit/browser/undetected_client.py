@@ -3,6 +3,9 @@
 import asyncio
 import json
 import logging
+import platform
+import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -14,6 +17,54 @@ from .stealth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def detect_chrome_version() -> int | None:
+    """Detect installed Chrome major version across platforms.
+
+    Returns:
+        Chrome major version number, or None if detection fails.
+    """
+    system = platform.system()
+    commands: list[list[str]] = []
+
+    if system == "Darwin":
+        commands.append(
+            [
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "--version",
+            ]
+        )
+    elif system == "Linux":
+        commands.extend(
+            [
+                ["google-chrome", "--version"],
+                ["google-chrome-stable", "--version"],
+                ["chromium-browser", "--version"],
+                ["chromium", "--version"],
+            ]
+        )
+    elif system == "Windows":
+        for path in [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]:
+            commands.append([path, "--version"])
+
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                match = re.search(r"(\d+)\.", result.stdout)
+                if match:
+                    version = int(match.group(1))
+                    logger.debug("Detected Chrome version: %d (via %s)", version, cmd[0])
+                    return version
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+
+    logger.debug("Could not detect Chrome version on %s", system)
+    return None
 
 
 class UndetectedBrowserClient:
@@ -84,28 +135,7 @@ class UndetectedBrowserClient:
             options.add_argument(f"--user-agent={ua}")
             logger.debug("Selected user-agent: %s", ua)
             # Detect installed Chrome major version to avoid chromedriver mismatch
-            chrome_ver = None
-            try:
-                import subprocess
-
-                result = subprocess.run(
-                    [
-                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                        "--version",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    import re
-
-                    match = re.search(r"(\d+)\.", result.stdout)
-                    if match:
-                        chrome_ver = int(match.group(1))
-                        logger.debug("Detected Chrome version: %d", chrome_ver)
-            except Exception:
-                pass
+            chrome_ver = detect_chrome_version()
             driver = uc.Chrome(options=options, version_main=chrome_ver)
             driver.set_page_load_timeout(60)
             # Inject navigator.language overrides

@@ -20,6 +20,7 @@ from playwright.async_api import (
 
 from .stealth import (
     build_stealth_js,
+    get_client_hints_headers,
     human_typing_delay,
     pre_action_delay,
     random_user_agent,
@@ -112,6 +113,9 @@ class PlaywrightBrowserClient:
             locale=self.locale,
             timezone_id=tz,
         )
+
+        # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
+        await self._context.set_extra_http_headers(get_client_hints_headers(ua))
 
         # Add stealth scripts to hide automation detection
         try:
@@ -490,6 +494,9 @@ class PlaywrightBrowserClient:
             locale=self.locale,
             timezone_id=tz,
         )
+
+        # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
+        await self._context.set_extra_http_headers(get_client_hints_headers(ua))
 
         # Re-apply stealth scripts
         try:

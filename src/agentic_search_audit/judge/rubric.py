@@ -122,6 +122,17 @@ HTML snippet (first 2000 chars):
 {html_snippet}
 ```
 
+## PDP (Product Detail Page) Data
+
+When individual results include a "pdp" object, this contains data extracted from
+visiting the actual product detail page. Use this data to evaluate:
+- **Price consistency**: Does the price on the search results page match the PDP price?
+- **Title accuracy**: Does the search result title accurately represent the product?
+- **Product availability**: Are out-of-stock items appearing prominently in search results?
+- **Information completeness**: Does the PDP have ratings, reviews, size/color options?
+
+When "pdp_discrepancies" are present, flag these as issues in Result Presentation.
+
 ## Instructions
 
 Analyze the results and provide FQI scores across all 5 dimensions.
@@ -239,14 +250,34 @@ def format_results_for_judge(results: list) -> str:
     """
     formatted = []
     for item in results:
-        formatted.append(
-            {
-                "rank": item.rank,
-                "title": item.title or "N/A",
-                "url": item.url or "N/A",
-                "snippet": item.snippet or "N/A",
-                "price": item.price or "N/A",
-            }
-        )
+        entry: dict[str, Any] = {
+            "rank": item.rank,
+            "title": item.title or "N/A",
+            "url": item.url or "N/A",
+            "snippet": item.snippet or "N/A",
+            "price": item.price or "N/A",
+        }
+
+        # Add PDP data when available
+        if item.attributes.get("pdp_analyzed") == "true":
+            pdp_data: dict[str, str | None] = {}
+            for key, value in item.attributes.items():
+                if key.startswith("pdp_") and key not in (
+                    "pdp_analyzed",
+                    "pdp_error",
+                    "pdp_screenshot_path",
+                ):
+                    pdp_data[key] = value
+
+            entry["pdp"] = pdp_data
+
+            # Auto-detect discrepancies
+            from ..extractors.pdp_analyzer import PdpAnalyzer
+
+            consistency = PdpAnalyzer.check_consistency(item)
+            if consistency:
+                entry["pdp_discrepancies"] = consistency
+
+        formatted.append(entry)
 
     return json.dumps(formatted, indent=2)

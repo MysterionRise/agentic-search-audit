@@ -90,6 +90,11 @@ run:
   # browserbase_api_key: null                  # Browserbase cloud browser API key
   # browserbase_project_id: null               # Browserbase project ID
 
+  # PDP (Product Detail Page) analysis:
+  #   enable_pdp_analysis: false  # Click into PDPs from search results
+  #   pdp_top_k: 3               # Number of top results to visit as PDPs
+  #   pdp_timeout_ms: 15000      # Timeout per PDP visit (ms)
+
   # Proxy / IP rotation:
   #   proxy_url: http://user:pass@host:port    # Single proxy (used when strategy is "none")
   #   proxy_rotation_strategy: none            # "none", "per-site", or "per-query"

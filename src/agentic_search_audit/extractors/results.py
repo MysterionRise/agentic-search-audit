@@ -149,6 +149,33 @@ class ResultsExtractor:
         # Extract URL
         url = await self._extract_url(base_selector, index)
 
+        # Additional attributes
+        attributes: dict[str, str] = {}
+
+        # Validate extracted URL
+        if url:
+            from urllib.parse import urlparse
+
+            parsed_url = urlparse(url)
+            # Check for valid scheme
+            if parsed_url.scheme not in ("http", "https", ""):
+                logger.warning(f"Result {rank}: invalid URL scheme '{parsed_url.scheme}': {url}")
+                url = None
+            elif parsed_url.netloc:
+                # Check for off-domain URLs (ad network links etc.)
+                base_netloc = urlparse(self.base_url).netloc
+                if base_netloc and parsed_url.netloc != base_netloc:
+                    # Allow subdomains of the base domain
+                    base_domain = ".".join(base_netloc.split(".")[-2:])
+                    url_domain = ".".join(parsed_url.netloc.split(".")[-2:])
+                    if base_domain != url_domain:
+                        attributes["url_off_domain"] = "true"
+                        logger.debug(
+                            f"Result {rank}: off-domain URL detected:"
+                            f" {parsed_url.netloc}"
+                            f" (expected: {base_netloc})"
+                        )
+
         # Extract snippet
         snippet = await self._extract_text_from_selectors(
             base_selector, index, self.config.snippet_selectors
@@ -161,9 +188,6 @@ class ResultsExtractor:
 
         # Extract image (optional)
         image = await self._extract_image_url(base_selector, index)
-
-        # Additional attributes
-        attributes: dict[str, str] = {}
 
         return ResultItem(
             rank=rank,

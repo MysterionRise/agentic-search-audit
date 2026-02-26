@@ -275,6 +275,36 @@ class ReportGenerator:
                 screenshot_rel = Path(record.page.screenshot_path).relative_to(self.run_dir)
                 f.write(f"**Screenshot:** [{screenshot_rel}]({screenshot_rel})\n\n")
 
+                # PDP Analysis section (if any items have PDP data)
+                pdp_items = [
+                    item for item in record.items if item.attributes.get("pdp_analyzed") == "true"
+                ]
+                if pdp_items:
+                    f.write("**PDP Analysis:**\n\n")
+                    f.write(
+                        "| Rank | PDP Title | PDP Price | Search Price"
+                        " | Match | Availability | Rating |\n"
+                    )
+                    f.write(
+                        "|------|-----------|-----------|"
+                        "--------------|-------|--------------|--------|\n"
+                    )
+                    for item in pdp_items:
+                        attrs = item.attributes
+                        pdp_title = (attrs.get("pdp_title", "N/A") or "N/A")[:40]
+                        pdp_price = attrs.get("pdp_price", "N/A") or "N/A"
+                        search_price = item.price or "N/A"
+                        # Simple price match check
+                        price_match = "Yes" if pdp_price == search_price else "No"
+                        availability = attrs.get("pdp_availability", "N/A") or "N/A"
+                        rating = attrs.get("pdp_rating", "N/A") or "N/A"
+                        f.write(
+                            f"| {item.rank} | {pdp_title} | {pdp_price}"
+                            f" | {search_price} | {price_match}"
+                            f" | {availability} | {rating} |\n"
+                        )
+                    f.write("\n")
+
                 f.write("---\n\n")
 
         logger.info(f"Markdown report saved to {report_path}")
@@ -1219,7 +1249,80 @@ class ReportGenerator:
             <summary>Screenshot</summary>
             <img src="{screenshot_rel}" alt="Screenshot" class="screenshot" loading="lazy">
         </details>
-        </div>
+""")
+
+                # PDP Analysis in HTML
+                pdp_items = [
+                    item for item in record.items if item.attributes.get("pdp_analyzed") == "true"
+                ]
+                if pdp_items:
+                    f.write("""
+        <details class="screenshot-toggle">
+            <summary>PDP Analysis</summary>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>PDP Title</th>
+                        <th>PDP Price</th>
+                        <th>Search Price</th>
+                        <th>Match</th>
+                        <th>Availability</th>
+                        <th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+""")
+                    for item in pdp_items:
+                        attrs = item.attributes
+                        pdp_title = escape_html((attrs.get("pdp_title", "N/A") or "N/A")[:60])
+                        pdp_price = escape_html(attrs.get("pdp_price", "N/A") or "N/A")
+                        search_price = escape_html(item.price or "N/A")
+                        price_match = "Yes" if attrs.get("pdp_price") == item.price else "No"
+                        match_style = (
+                            "color: #28a745;" if price_match == "Yes" else "color: #dc3545;"
+                        )
+                        availability = escape_html(attrs.get("pdp_availability", "N/A") or "N/A")
+                        rating = escape_html(attrs.get("pdp_rating", "N/A") or "N/A")
+
+                        f.write(f"""
+                    <tr>
+                        <td>{item.rank}</td>
+                        <td>{pdp_title}</td>
+                        <td>{pdp_price}</td>
+                        <td>{search_price}</td>
+                        <td style="{match_style}">{price_match}</td>
+                        <td>{availability}</td>
+                        <td>{rating}</td>
+                    </tr>
+""")
+
+                    f.write("""
+                </tbody>
+            </table>
+""")
+
+                    # Show PDP screenshots
+                    for item in pdp_items:
+                        pdp_ss = item.attributes.get("pdp_screenshot_path", "")
+                        if pdp_ss:
+                            try:
+                                pdp_ss_rel = Path(pdp_ss).relative_to(self.run_dir)
+                                f.write(
+                                    f"            <details><summary>"
+                                    f"PDP Screenshot (Rank {item.rank})"
+                                    f"</summary>"
+                                    f'<img src="{pdp_ss_rel}"'
+                                    f' alt="PDP Screenshot"'
+                                    f' class="screenshot"'
+                                    f' loading="lazy"></details>\n'
+                                )
+                            except ValueError:
+                                pass
+
+                    f.write("        </details>\n")
+
+                f.write("""        </div>
     </details>
 """)
 

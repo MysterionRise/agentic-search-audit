@@ -174,6 +174,10 @@ class ModalHandler:
                 logger.debug("No more modals found")
                 break
 
+        # Last resort: try Escape key to dismiss any remaining overlay
+        if dismissed_count == 0:
+            dismissed_count += await self._try_escape_dismissal()
+
         if dismissed_count > 0:
             logger.info(f"Dismissed {dismissed_count} modal(s)")
 
@@ -346,7 +350,64 @@ class ModalHandler:
             except Exception as e:
                 logger.debug(f"Shadow DOM consent search failed: {e}")
 
+        # Try iframe consent if nothing else worked
+        if dismissed == 0:
+            dismissed += await self._try_iframe_consent()
+
         return dismissed
+
+    async def _try_iframe_consent(self) -> int:
+        """Try to dismiss cookie consent within iframes.
+
+        Enumerates all iframe elements and attempts to find and click
+        consent buttons within same-origin iframes.
+
+        Returns:
+            Number of consent dialogs dismissed
+        """
+        try:
+            result = await self.client.evaluate("""
+                (function() {
+                    const consentPatterns =
+                        /onetrust|cookiebot|quantcast|trustarc|didomi|consent|cookie|privacy/i;
+                    const iframes = document.querySelectorAll('iframe');
+                    for (const iframe of iframes) {
+                        const src = iframe.getAttribute('src') || '';
+                        if (!consentPatterns.test(src)) continue;
+
+                        try {
+                            const doc = iframe.contentDocument;
+                            if (!doc) continue;
+
+                            const acceptPatterns = /accept|agree|allow|consent|got it/i;
+                            const buttons = doc.querySelectorAll(
+                                'button, [role="button"], a[href="#"]'
+                            );
+                            for (const btn of buttons) {
+                                const text = (btn.textContent || btn.innerText || '').trim();
+                                const rect = btn.getBoundingClientRect();
+                                if (rect.width === 0 || rect.height === 0) continue;
+                                if (acceptPatterns.test(text)) {
+                                    btn.click();
+                                    return text.substring(0, 50);
+                                }
+                            }
+                        } catch (e) {
+                            // Cross-origin iframe - cannot access DOM
+                            continue;
+                        }
+                    }
+                    return false;
+                })()
+            """)
+            if result and result not in ["false", "undefined", "null"]:
+                logger.info(f"Dismissed consent via iframe: {result}")
+                await asyncio.sleep(self.config.wait_after_close_ms / 1000)
+                return 1
+        except Exception as e:
+            logger.debug(f"Iframe consent search failed: {e}")
+
+        return 0
 
     async def _try_location_modals(self) -> int:
         """Try to dismiss location/region/shipping modals.
@@ -517,6 +578,54 @@ class ModalHandler:
                 return 1
         except Exception as e:
             logger.debug(f"Location modal confirm click failed: {e}")
+
+        return 0
+
+    async def _check_modal_overlay(self) -> bool:
+        """Check if a modal overlay is currently visible.
+
+        Returns:
+            True if a modal/overlay is detected
+        """
+        try:
+            result = await self.client.evaluate("""
+                (function() {
+                    const overlays = document.querySelectorAll(
+                        '[role="dialog"], [role="alertdialog"], [class*="modal"], ' +
+                        '[class*="overlay"], [class*="popup"]'
+                    );
+                    for (const el of overlays) {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width > 100 && rect.height > 100) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })()
+            """)
+            return result and result not in ["false", "undefined", "null"]
+        except Exception as e:
+            logger.debug(f"Modal overlay check failed: {e}")
+            return False
+
+    async def _try_escape_dismissal(self) -> int:
+        """Try dismissing modals by pressing Escape key.
+
+        Returns:
+            Number of modals dismissed (0 or 1)
+        """
+        if not await self._check_modal_overlay():
+            return 0
+
+        try:
+            await self.client.press_key("Escape")
+            await asyncio.sleep(0.5)
+
+            if not await self._check_modal_overlay():
+                logger.info("Dismissed modal via Escape key")
+                return 1
+        except Exception as e:
+            logger.debug(f"Escape key dismissal failed: {e}")
 
         return 0
 

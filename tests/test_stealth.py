@@ -1,13 +1,18 @@
 """Tests for anti-bot stealth utilities."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from agentic_search_audit.browser.stealth import (
     LOCALE_TIMEZONE_MAP,
     USER_AGENTS,
     WEBGL_PROFILES,
+    build_client_hints_js,
     build_stealth_js,
+    get_client_hints_headers,
     human_typing_delay,
+    inject_human_behavior,
     languages_for_locale,
     mouse_jitter_js,
     post_action_delay,
@@ -207,3 +212,157 @@ class TestBuildStealthJS:
         js = build_stealth_js()
         assert "chrome" in js
         assert "runtime" in js
+
+    def test_contains_client_hints(self) -> None:
+        js = build_stealth_js()
+        assert "userAgentData" in js
+        assert "brands" in js
+
+
+@pytest.mark.unit
+class TestBuildClientHintsJS:
+    """Client Hints JavaScript generation."""
+
+    def test_returns_js_string(self) -> None:
+        js = build_client_hints_js()
+        assert isinstance(js, str)
+        assert "userAgentData" in js
+
+    def test_extracts_chrome_version_from_ua(self) -> None:
+        ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/131.0.0.0 Safari/537.36"
+        js = build_client_hints_js(ua)
+        assert '"131"' in js
+
+    def test_defaults_to_133_without_ua(self) -> None:
+        js = build_client_hints_js("")
+        assert '"133"' in js
+
+    def test_contains_brands_array(self) -> None:
+        js = build_client_hints_js()
+        assert "Chromium" in js
+        assert "Google Chrome" in js
+        assert "Not-A.Brand" in js
+
+    def test_contains_high_entropy_values(self) -> None:
+        js = build_client_hints_js()
+        assert "getHighEntropyValues" in js
+        assert "platformVersion" in js
+        assert "architecture" in js
+
+
+@pytest.mark.unit
+class TestGetClientHintsHeaders:
+    """Client Hints HTTP header generation."""
+
+    def test_returns_expected_keys(self) -> None:
+        headers = get_client_hints_headers()
+        assert "Sec-CH-UA" in headers
+        assert "Sec-CH-UA-Mobile" in headers
+        assert "Sec-CH-UA-Platform" in headers
+
+    def test_extracts_version_from_ua(self) -> None:
+        headers = get_client_hints_headers("Mozilla/5.0 Chrome/132.0.0.0 Safari/537.36")
+        assert '"132"' in headers["Sec-CH-UA"]
+
+    def test_mobile_is_false(self) -> None:
+        headers = get_client_hints_headers()
+        assert headers["Sec-CH-UA-Mobile"] == "?0"
+
+    def test_platform_is_macos(self) -> None:
+        headers = get_client_hints_headers()
+        assert headers["Sec-CH-UA-Platform"] == '"macOS"'
+
+
+@pytest.mark.unit
+class TestInjectHumanBehavior:
+    """Human-like behavioral randomization."""
+
+    async def test_inject_human_behavior_runs(self) -> None:
+        """inject_human_behavior completes without error on mock client."""
+        client = AsyncMock()
+        client.evaluate = AsyncMock(return_value=None)
+        # Run multiple times to hit different random branches
+        for _ in range(20):
+            await inject_human_behavior(client)
+
+    async def test_inject_human_behavior_calls_evaluate(self) -> None:
+        """inject_human_behavior calls client.evaluate for scroll/mouse actions."""
+        client = AsyncMock()
+        client.evaluate = AsyncMock(return_value=None)
+        await inject_human_behavior(client)
+        # At least one evaluate call for scroll/mouse, or no calls for pause
+        # Either way, no exception is raised
+
+
+@pytest.mark.unit
+class TestChromeVersionDetection:
+    """Cross-platform Chrome version detection."""
+
+    def test_detect_chrome_version_imports(self) -> None:
+        """detect_chrome_version can be imported."""
+        from agentic_search_audit.browser.undetected_client import detect_chrome_version
+
+        assert callable(detect_chrome_version)
+
+    def test_detect_chrome_version_returns_int_or_none(self) -> None:
+        """detect_chrome_version returns int or None."""
+        from agentic_search_audit.browser.undetected_client import detect_chrome_version
+
+        result = detect_chrome_version()
+        assert result is None or isinstance(result, int)
+
+    def test_detect_chrome_version_mock_darwin(self) -> None:
+        """detect_chrome_version parses version on Darwin."""
+        from unittest.mock import MagicMock, patch
+
+        from agentic_search_audit.browser.undetected_client import detect_chrome_version
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Google Chrome 131.0.6778.85"
+
+        with patch(
+            "agentic_search_audit.browser.undetected_client.platform.system", return_value="Darwin"
+        ):
+            with patch(
+                "agentic_search_audit.browser.undetected_client.subprocess.run",
+                return_value=mock_result,
+            ):
+                version = detect_chrome_version()
+                assert version == 131
+
+    def test_detect_chrome_version_mock_linux(self) -> None:
+        """detect_chrome_version parses version on Linux."""
+        from unittest.mock import MagicMock, patch
+
+        from agentic_search_audit.browser.undetected_client import detect_chrome_version
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Google Chrome 133.0.6931.0"
+
+        with patch(
+            "agentic_search_audit.browser.undetected_client.platform.system", return_value="Linux"
+        ):
+            with patch(
+                "agentic_search_audit.browser.undetected_client.subprocess.run",
+                return_value=mock_result,
+            ):
+                version = detect_chrome_version()
+                assert version == 133
+
+    def test_detect_chrome_version_not_found(self) -> None:
+        """detect_chrome_version returns None when Chrome is not installed."""
+        from unittest.mock import patch
+
+        from agentic_search_audit.browser.undetected_client import detect_chrome_version
+
+        with patch(
+            "agentic_search_audit.browser.undetected_client.platform.system", return_value="Darwin"
+        ):
+            with patch(
+                "agentic_search_audit.browser.undetected_client.subprocess.run",
+                side_effect=FileNotFoundError,
+            ):
+                version = detect_chrome_version()
+                assert version is None

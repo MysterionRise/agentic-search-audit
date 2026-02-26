@@ -11,7 +11,7 @@ from ..browser import classify_error, create_browser_client, is_retryable
 from ..browser.challenge_detector import ChallengeDetectedError, detect_challenge
 from ..browser.errors import BrowserErrorKind
 from ..browser.proxy import ProxyRotator
-from ..browser.stealth import UserAgentRotator
+from ..browser.stealth import UserAgentRotator, inject_human_behavior
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
 from ..judge import SearchQualityJudge
 from ..judge.experts import ExpertPanel
@@ -357,6 +357,11 @@ class SearchAuditOrchestrator:
         await asyncio.sleep(1)
         await modal_handler.wait_for_page_stable()
 
+        # Challenge detection on initial navigation (not just post-search)
+        challenge = await detect_challenge(self.client)
+        if challenge.detected:
+            raise ChallengeDetectedError(challenge)
+
         logger.info("Site loaded and ready")
 
     async def _process_query(self, query: Query) -> AuditRecord:
@@ -401,6 +406,9 @@ class SearchAuditOrchestrator:
                 llm_config=self.config.llm,
                 use_intelligent_fallback=self.config.site.search.use_intelligent_fallback,
             )
+            # Human-like behavior before search
+            await inject_human_behavior(self.client)
+
             success = await search_finder.submit_search(query.text)
 
             if not success:
@@ -454,9 +462,53 @@ class SearchAuditOrchestrator:
                 vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
                 items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
 
+        # Human-like behavior after extraction
+        try:
+            await inject_human_behavior(self.client)
+        except Exception:
+            pass  # Non-critical
+
         # Signal resistance if empty results on a non-empty query
         if not items and not no_results:
             self._signal_resistance()
+
+        # PDP analysis: click into top product pages and extract data
+        if self.config.run.enable_pdp_analysis and items:
+            try:
+                from ..extractors.pdp_analyzer import PdpAnalyzer
+
+                pdp_analyzer = PdpAnalyzer(
+                    client=self.client,
+                    llm_config=self.config.llm,
+                    modals_config=self.config.site.modals,
+                    run_dir=self.run_dir,
+                    query=query,
+                    timeout_ms=self.config.run.pdp_timeout_ms,
+                )
+                search_page_url = await self.client.evaluate("window.location.href") or str(
+                    self.config.site.url
+                )
+                items = await pdp_analyzer.analyze_pdps(
+                    items=items,
+                    search_page_url=search_page_url,
+                    top_k=self.config.run.pdp_top_k,
+                )
+                analyzed_count = sum(
+                    1 for item in items if item.attributes.get("pdp_analyzed") == "true"
+                )
+                logger.info(
+                    f"PDP analysis complete: {analyzed_count}/"
+                    f"{min(len(items), self.config.run.pdp_top_k)} PDPs analyzed"
+                )
+
+                # Challenge detection after PDP navigation (may have triggered blocks)
+                challenge = await detect_challenge(self.client)
+                if challenge.detected:
+                    raise ChallengeDetectedError(challenge)
+            except ChallengeDetectedError:
+                raise  # Re-raise challenge errors
+            except Exception as e:
+                logger.warning(f"PDP analysis failed (non-fatal): {e}")
 
         # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
         page_artifacts = await self._capture_artifacts(query)

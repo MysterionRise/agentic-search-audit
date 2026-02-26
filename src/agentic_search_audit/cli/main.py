@@ -305,6 +305,12 @@ Examples:
     )
 
     parser.add_argument(
+        "--pdp",
+        action="store_true",
+        help="Click into product detail pages to extract and evaluate PDP data",
+    )
+
+    parser.add_argument(
         "--resume",
         action="store_true",
         help="Resume a previous audit run by reusing the most recent run directory for the site",
@@ -397,6 +403,11 @@ async def main_async() -> int:
             if "run" not in overrides:
                 overrides["run"] = {}
             overrides["run"]["use_vision_extraction"] = True
+
+        if args.pdp:
+            if "run" not in overrides:
+                overrides["run"] = {}
+            overrides["run"]["enable_pdp_analysis"] = True
 
         # Load config
         config = load_config(

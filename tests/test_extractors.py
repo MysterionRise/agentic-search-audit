@@ -401,3 +401,202 @@ async def test_location_modal_dismissed_via_text_pattern():
 
     result = await handler.dismiss_modals()
     assert result >= 1
+
+
+# --- Iframe consent dismissal tests ---
+
+
+@pytest.mark.unit
+async def test_iframe_consent_dismissal():
+    """_try_iframe_consent finds and clicks accept button inside a consent iframe."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    # Simulate: no regular selectors match, but iframe consent returns text
+    client.evaluate = AsyncMock(return_value="Accept All Cookies")
+
+    result = await handler._try_iframe_consent()
+    assert result == 1
+
+
+@pytest.mark.unit
+async def test_iframe_consent_not_found():
+    """_try_iframe_consent returns 0 when no consent iframe is found."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    client.evaluate = AsyncMock(return_value="false")
+
+    result = await handler._try_iframe_consent()
+    assert result == 0
+
+
+# --- Escape key dismissal tests ---
+
+
+@pytest.mark.unit
+async def test_escape_dismissal_when_overlay_present():
+    """_try_escape_dismissal presses Escape when a modal overlay is detected."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    call_count = 0
+
+    async def mock_check_overlay():
+        nonlocal call_count
+        call_count += 1
+        # First call: overlay present, second call: overlay gone (dismissed)
+        return call_count == 1
+
+    handler._check_modal_overlay = mock_check_overlay
+
+    result = await handler._try_escape_dismissal()
+    assert result == 1
+    client.press_key.assert_awaited_once_with("Escape")
+
+
+@pytest.mark.unit
+async def test_escape_dismissal_noop_without_overlay():
+    """_try_escape_dismissal returns 0 when no overlay is present."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    handler._check_modal_overlay = AsyncMock(return_value=False)
+
+    result = await handler._try_escape_dismissal()
+    assert result == 0
+    client.press_key.assert_not_called()
+
+
+@pytest.mark.unit
+async def test_escape_dismissal_as_last_resort():
+    """dismiss_modals tries Escape as last resort when nothing else works."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    # No cookie consent selectors match
+    client.query_selector = AsyncMock(return_value=None)
+    # No consent API works
+    client.evaluate = AsyncMock(return_value="false")
+
+    call_count = 0
+
+    # Override _check_modal_overlay to detect overlay then clear it
+    async def mock_overlay():
+        nonlocal call_count
+        call_count += 1
+        # On first check (from _try_escape_dismissal): overlay present
+        # On second check (after Escape): overlay gone
+        return call_count == 1
+
+    handler._check_modal_overlay = mock_overlay
+
+    result = await handler.dismiss_modals()
+    # Escape-based dismissal should have fired
+    assert result >= 1
+
+
+# --- Modal overlay detection tests ---
+
+
+@pytest.mark.unit
+async def test_check_modal_overlay_found():
+    """_check_modal_overlay returns True when a visible overlay exists."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    client.evaluate = AsyncMock(return_value="true")
+
+    result = await handler._check_modal_overlay()
+    assert result is True
+
+
+@pytest.mark.unit
+async def test_check_modal_overlay_not_found():
+    """_check_modal_overlay returns False when no overlay exists."""
+    client = AsyncMock()
+    config = ModalsConfig()
+    handler = ModalHandler(client, config)
+
+    client.evaluate = AsyncMock(return_value="false")
+
+    result = await handler._check_modal_overlay()
+    assert result is False
+
+
+# --- URL verification in results extraction ---
+
+
+@pytest.mark.unit
+async def test_url_verification_rejects_invalid_scheme():
+    """ResultsExtractor flags URLs with non-http(s) schemes."""
+    client = AsyncMock()
+    config = ResultsConfig(item_selectors=[".product"])
+
+    extractor = ResultsExtractor(client, config, "https://example.com")
+
+    # Mock: 1 item found, then extract returns javascript: URL
+    client.evaluate = AsyncMock(
+        side_effect=[
+            "1",  # count of items
+            None,  # title extraction attempt 1
+            None,  # title extraction attempt 2
+            None,  # title extraction attempt 3
+            None,  # title extraction attempt 4
+            None,  # title extraction attempt 5
+            "javascript:alert(1)",  # URL extraction
+            None,  # snippet
+            None,  # snippet
+            None,  # snippet
+            None,  # price
+            None,  # price
+            None,  # price
+            None,  # image
+            None,  # image
+        ]
+    )
+
+    results = await extractor.extract_results(top_k=1)
+    assert len(results) == 1
+    # The javascript: URL should be rejected (set to None)
+    assert results[0].url is None
+
+
+@pytest.mark.unit
+async def test_url_verification_flags_off_domain():
+    """ResultsExtractor flags off-domain URLs."""
+    client = AsyncMock()
+    config = ResultsConfig(
+        item_selectors=[".product"],
+        title_selectors=["h2"],
+    )
+
+    extractor = ResultsExtractor(client, config, "https://www.example.com")
+
+    # Mock: 1 item found, then extract returns off-domain URL
+    client.evaluate = AsyncMock(
+        side_effect=[
+            "1",  # count of items
+            "Product Title",  # title from h2
+            "https://ad-network.com/track/product",  # URL extraction
+            None,  # snippet attempts
+            None,
+            None,
+            None,  # price attempts
+            None,
+            None,
+            None,  # image
+            None,
+        ]
+    )
+
+    results = await extractor.extract_results(top_k=1)
+    assert len(results) == 1
+    # URL is preserved but flagged as off-domain
+    assert results[0].attributes.get("url_off_domain") == "true"

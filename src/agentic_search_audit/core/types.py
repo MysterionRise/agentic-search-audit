@@ -475,6 +475,16 @@ class RunConfig(BaseModel):
         description="Clear cookies every N queries to avoid tracking accumulation (0 = never)",
     )
 
+    # PDP (Product Detail Page) analysis
+    enable_pdp_analysis: bool = Field(
+        default=False,
+        description="Click into product detail pages and extract PDP data for evaluation",
+    )
+    pdp_top_k: int = Field(default=3, description="Number of top search results to visit as PDPs")
+    pdp_timeout_ms: int = Field(
+        default=15000, description="Timeout for each PDP visit in milliseconds"
+    )
+
     @model_validator(mode="after")
     def _validate_proxy_config(self) -> "RunConfig":
         """Validate proxy configuration consistency."""

@@ -54,6 +54,31 @@ def _parse_json_response(content: str, provider_name: str) -> dict[str, Any]:
     if not content:
         raise VisionParsingError(f"{provider_name} returned empty content", raw_content=content)
 
+    # Check for refusal patterns before attempting JSON parse
+    content_lower = content.lower()
+    refusal_patterns = [
+        "i'm unable to",
+        "i cannot extract",
+        "i can't analyze",
+        "i'm not able to",
+        "i cannot assist",
+        "i can't help",
+        "i cannot process",
+        "i'm sorry, but i",
+        "as an ai",
+        "i cannot view",
+        "i cannot see",
+        "i don't see an image",
+        "no image provided",
+        "i cannot identify",
+    ]
+    for pattern in refusal_patterns:
+        if pattern in content_lower:
+            raise VisionParsingError(
+                f"{provider_name} refused to analyze image: matched pattern '{pattern}'",
+                raw_content=content,
+            )
+
     # Strategy 1: Direct JSON parse
     try:
         result: dict[str, Any] = json.loads(content)

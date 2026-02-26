@@ -4,9 +4,12 @@ Provides human-like behavior patterns and browser fingerprint randomisation
 to avoid triggering bot-detection systems (Akamai, PerimeterX, DataDome).
 """
 
+import asyncio
 import json
 import random
+import re
 from collections import deque
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Realistic Chrome user-agent pool (macOS + Windows + Linux, recent versions)
@@ -228,7 +231,7 @@ def build_stealth_js(locale: str = "en-US") -> str:
     languages = languages_for_locale(locale)
     languages_json = json.dumps(languages)
 
-    return f"""
+    js = f"""
     // --- navigator.webdriver ---
     Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
 
@@ -364,3 +367,110 @@ def build_stealth_js(locale: str = "en-US") -> str:
         }}
     }})();
     """
+    # Append Client Hints override
+    js += build_client_hints_js()
+    return js
+
+
+# ---------------------------------------------------------------------------
+# Client Hints (navigator.userAgentData + Sec-CH-* headers)
+# ---------------------------------------------------------------------------
+
+
+def build_client_hints_js(user_agent: str = "") -> str:
+    """Build JavaScript to set navigator.userAgentData for Client Hints API.
+
+    Args:
+        user_agent: Current user-agent string (used to extract Chrome version)
+
+    Returns:
+        JavaScript code string
+    """
+    chrome_match = re.search(r"Chrome/(\d+)", user_agent)
+    chrome_ver = chrome_match.group(1) if chrome_match else "133"
+
+    return f"""
+    // --- navigator.userAgentData (Client Hints) ---
+    if (!navigator.userAgentData) {{
+        Object.defineProperty(navigator, 'userAgentData', {{
+            get: () => ({{
+                brands: [
+                    {{ brand: "Chromium", version: "{chrome_ver}" }},
+                    {{ brand: "Google Chrome", version: "{chrome_ver}" }},
+                    {{ brand: "Not-A.Brand", version: "99" }}
+                ],
+                mobile: false,
+                platform: "macOS",
+                getHighEntropyValues: function(hints) {{
+                    return Promise.resolve({{
+                        brands: this.brands,
+                        mobile: this.mobile,
+                        platform: this.platform,
+                        platformVersion: "15.0.0",
+                        architecture: "x86",
+                        bitness: "64",
+                        model: "",
+                        uaFullVersion: "{chrome_ver}.0.0.0",
+                        fullVersionList: this.brands
+                    }});
+                }}
+            }})
+        }});
+    }}
+    """
+
+
+def get_client_hints_headers(user_agent: str = "") -> dict[str, str]:
+    """Get Sec-CH-* HTTP headers for Client Hints.
+
+    Args:
+        user_agent: Current user-agent string
+
+    Returns:
+        Dictionary of Client Hints HTTP headers
+    """
+    chrome_match = re.search(r"Chrome/(\d+)", user_agent)
+    chrome_ver = chrome_match.group(1) if chrome_match else "133"
+
+    return {
+        "Sec-CH-UA": (
+            f'"Chromium";v="{chrome_ver}", '
+            f'"Google Chrome";v="{chrome_ver}", '
+            f'"Not-A.Brand";v="99"'
+        ),
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"macOS"',
+    }
+
+
+# ---------------------------------------------------------------------------
+# Human-like behavioral randomisation
+# ---------------------------------------------------------------------------
+
+
+async def inject_human_behavior(client: Any) -> None:
+    """Inject a random human-like behavior to appear less automated.
+
+    Randomly performs one of:
+    - Scroll jitter: scroll down/up a small random amount
+    - Mouse movement: dispatch synthetic mousemove events
+    - Short pause: wait 0.5-2 seconds
+
+    Args:
+        client: Browser client implementing the BrowserClient protocol
+    """
+    action = random.choice(["scroll", "mouse", "pause"])
+
+    if action == "scroll":
+        offset = random.randint(50, 200)
+        direction = random.choice([1, -1])
+        await client.evaluate(f"window.scrollBy(0, {offset * direction})")
+        await asyncio.sleep(random.uniform(0.3, 0.8))
+        await client.evaluate(f"window.scrollBy(0, {-offset * direction})")  # scroll back
+    elif action == "mouse":
+        x = random.randint(100, 800)
+        y = random.randint(100, 500)
+        js = mouse_jitter_js(x, y, steps=random.randint(3, 6))
+        await client.evaluate(js)
+    else:  # pause
+        await asyncio.sleep(random.uniform(0.5, 2.0))

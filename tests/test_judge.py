@@ -85,6 +85,91 @@ def test_format_results_for_judge():
 
 
 @pytest.mark.unit
+def test_format_results_for_judge_with_pdp_data():
+    """Test formatting results with PDP attributes present."""
+    results = [
+        ResultItem(
+            rank=1,
+            title="Nike Air Max",
+            url="https://nike.com/product/1",
+            snippet="Premium running shoe",
+            price="$120",
+            attributes={
+                "pdp_analyzed": "true",
+                "pdp_title": "Nike Air Max 90",
+                "pdp_price": "$129.99",
+                "pdp_availability": "In Stock",
+                "pdp_rating": "4.5",
+                "pdp_screenshot_path": "/tmp/screenshots/pdp/q001_1.png",
+            },
+        ),
+    ]
+
+    formatted = format_results_for_judge(results)
+    parsed = json.loads(formatted)
+
+    assert len(parsed) == 1
+    assert "pdp" in parsed[0]
+    pdp = parsed[0]["pdp"]
+    assert pdp["pdp_title"] == "Nike Air Max 90"
+    assert pdp["pdp_price"] == "$129.99"
+    assert pdp["pdp_availability"] == "In Stock"
+    assert pdp["pdp_rating"] == "4.5"
+    # pdp_analyzed and pdp_screenshot_path should be excluded
+    assert "pdp_analyzed" not in pdp
+    assert "pdp_screenshot_path" not in pdp
+
+
+@pytest.mark.unit
+def test_format_results_for_judge_with_pdp_discrepancies():
+    """Test formatting results includes PDP discrepancies when present."""
+    results = [
+        ResultItem(
+            rank=1,
+            title="Nike Air Max",
+            url="https://nike.com/product/1",
+            snippet="Premium running shoe",
+            price="$120",
+            attributes={
+                "pdp_analyzed": "true",
+                "pdp_title": "Nike Air Max 90",
+                "pdp_price": "$129.99",
+                "pdp_availability": "In Stock",
+            },
+        ),
+    ]
+
+    formatted = format_results_for_judge(results)
+    parsed = json.loads(formatted)
+
+    assert len(parsed) == 1
+    # Price mismatch should produce discrepancy
+    assert "pdp_discrepancies" in parsed[0]
+    assert "price_discrepancy" in parsed[0]["pdp_discrepancies"]
+
+
+@pytest.mark.unit
+def test_format_results_for_judge_no_pdp():
+    """Test formatting results without PDP data omits pdp key."""
+    results = [
+        ResultItem(
+            rank=1,
+            title="Nike Air Max",
+            url="https://nike.com/product/1",
+            snippet="Premium running shoe",
+            price="$120",
+        ),
+    ]
+
+    formatted = format_results_for_judge(results)
+    parsed = json.loads(formatted)
+
+    assert len(parsed) == 1
+    assert "pdp" not in parsed[0]
+    assert "pdp_discrepancies" not in parsed[0]
+
+
+@pytest.mark.unit
 def test_judge_system_prompt():
     """Test that system prompt contains key elements."""
     prompt = JUDGE_SYSTEM_PROMPT
