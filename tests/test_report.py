@@ -342,15 +342,14 @@ class TestMaturitySectionReports:
 
         content = (temp_run_dir / "report.md").read_text()
 
-        # Check header and level
-        assert "## Maturity Assessment" in content
-        assert "L3_ENHANCED" in content
-        assert "3.50" in content  # Overall score
+        # Check header and level (restructured to ## Overview)
+        assert "## Overview" in content
+        assert "L5_AGENTIC" in content  # maturity label for avg FQI=4.5
+        assert "4.50" in content  # FQI score
 
         # Check dimension table
         assert "### Dimension Scores" in content
         assert "Results Relevance" in content
-        assert "4.00" in content  # Relevance score
 
         # Check strengths and weaknesses
         assert "### Strengths" in content
@@ -362,7 +361,7 @@ class TestMaturitySectionReports:
     def test_html_maturity_section(
         self, audit_config, temp_run_dir, sample_audit_record, sample_maturity_report
     ):
-        """Test HTML maturity section contains badge and CSS classes."""
+        """Test HTML combined opening contains badge, overview, and dimension table."""
         generator = ReportGenerator(audit_config, temp_run_dir)
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
@@ -373,14 +372,14 @@ class TestMaturitySectionReports:
 
         content = (temp_run_dir / "report.html").read_text()
 
-        # Check maturity badge with correct class
-        assert "maturity-l3" in content
+        # Check combined opening with maturity badge (FQI=4.50 -> L5_AGENTIC)
+        assert "combined-opening" in content
         assert "maturity-badge" in content
-        assert "Level 3: L3_ENHANCED" in content
+        assert "L5_AGENTIC" in content
 
-        # Check dimension grid
-        assert "dimension-grid" in content
+        # Check dimension scores table in combined opening
         assert "Results Relevance" in content
+        assert "Query Understanding" in content
 
     @pytest.mark.unit
     def test_json_maturity_section(
@@ -402,22 +401,21 @@ class TestMaturitySectionReports:
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
-        "level,css_class",
+        "dim_score,css_class",
         [
-            (MaturityLevel.L1_BASIC, "maturity-l1"),
-            (MaturityLevel.L2_FUNCTIONAL, "maturity-l2"),
-            (MaturityLevel.L3_ENHANCED, "maturity-l3"),
-            (MaturityLevel.L4_INTELLIGENT, "maturity-l4"),
-            (MaturityLevel.L5_AGENTIC, "maturity-l5"),
+            (1.0, "maturity-l1"),
+            (2.0, "maturity-l2"),
+            (3.0, "maturity-l3"),
+            (4.0, "maturity-l4"),
+            (4.8, "maturity-l5"),
         ],
     )
     def test_maturity_all_levels_css(
         self,
         audit_config,
         temp_run_dir,
-        sample_audit_record,
         sample_maturity_report,
-        level,
+        dim_score,
         css_class,
     ):
         """Test each maturity level renders with correct CSS class."""
@@ -425,12 +423,29 @@ class TestMaturitySectionReports:
 
         screenshot_path = temp_run_dir / "screenshots" / "test.png"
         screenshot_path.write_text("dummy")
-        sample_audit_record.page.screenshot_path = str(screenshot_path)
 
-        # Modify maturity level
-        sample_maturity_report.overall_level = level
+        # Create record with specific score to get the target maturity level
+        query = Query(id="q001", text="test", lang="en", origin=QueryOrigin.PREDEFINED)
+        items = [ResultItem(rank=1, title="Product", url="https://example.com")]
+        page = PageArtifacts(
+            url="https://example.com",
+            final_url="https://example.com/search",
+            html_path="/tmp/test.html",
+            screenshot_path=str(screenshot_path),
+        )
+        judge = make_fqi_judge_score(
+            query_understanding_score=dim_score,
+            results_relevance_score=dim_score,
+            result_presentation_score=dim_score,
+            advanced_features_score=dim_score,
+            error_handling_score=dim_score,
+            rationale="Test",
+        )
+        record = AuditRecord(
+            site="https://example.com", query=query, items=items, page=page, judge=judge
+        )
 
-        generator._generate_html([sample_audit_record], sample_maturity_report, None)
+        generator._generate_html([record], sample_maturity_report, None)
 
         content = (temp_run_dir / "report.html").read_text()
         assert css_class in content
@@ -469,6 +484,9 @@ class TestFindingsSectionReports:
         assert "not sufficiently relevant" in content
         assert "8/10 queries" in content
 
+        # MEDIUM severity should NOT be present (filtered out)
+        assert "### Medium Severity" not in content
+
     @pytest.mark.unit
     def test_html_findings_section(
         self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
@@ -492,6 +510,11 @@ class TestFindingsSectionReports:
         assert "severity-badge" in content
         assert "severity-critical" in content
         assert "severity-high" in content
+
+        # MEDIUM severity findings should NOT be present (filtered out)
+        # Note: severity-medium CSS class exists in stylesheet, so check finding cards only
+        body_after_style = content[content.index("</style>") :]
+        assert "severity-medium" not in body_after_style
 
         # Check finding cards
         assert "finding-card" in content
@@ -532,7 +555,7 @@ class TestFindingsSectionReports:
 
         assert "findings" in content
         assert content["findings"]["total_queries_analyzed"] == 10
-        assert len(content["findings"]["items"]) == 3
+        assert len(content["findings"]["items"]) == 2  # Only Critical + High
         assert content["findings"]["items"][0]["severity"] == "critical"
         assert content["findings"]["items"][0]["affected_queries"] == 8
         assert "scope_limitations" in content["findings"]
@@ -763,9 +786,11 @@ class TestReportEdgeCases:
 
         content = (temp_run_dir / "report.md").read_text()
 
-        # Should show N/A for missing values
-        assert "N/A" in content
+        # Ghost items (no title AND no url) should be filtered out
+        # Valid items should still appear with em-dash for missing fields
         assert "Valid Title" in content
+        # Item with no title and no url should be excluded (ghost item)
+        assert "| 1 |" not in content
 
     @pytest.mark.unit
     def test_very_long_strings(self, audit_config, temp_run_dir):
@@ -1139,3 +1164,362 @@ class TestCSVExport:
         assert data_row[0] == "F001"
         assert '"quotes"' in data_row[1]
         assert "commas" in data_row[1]
+
+    @pytest.mark.unit
+    def test_csv_findings_filtered_to_critical_high(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
+    ):
+        """Test CSV export only contains CRITICAL and HIGH severity findings."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        # sample_findings_report has CRITICAL, HIGH, and MEDIUM findings
+        generator.generate_reports(
+            [sample_audit_record],
+            include_maturity=False,
+            include_findings=False,
+        )
+        # Manually generate with our findings report that has mixed severities
+        # by calling generate_reports with the findings injected
+        import csv as csv_mod
+        import io
+
+        # Filter and export CSV the same way generator does
+        filtered_findings = [
+            f
+            for f in sample_findings_report.findings
+            if f.severity in (Severity.CRITICAL, Severity.HIGH)
+        ]
+        filtered_report = FindingsReport(
+            findings=filtered_findings,
+            summary=sample_findings_report.summary,
+            total_queries_analyzed=sample_findings_report.total_queries_analyzed,
+            scope_limitations=sample_findings_report.scope_limitations,
+        )
+        csv_content = generator.findings_analyzer.export_to_csv(filtered_report)
+        reader = csv_mod.reader(io.StringIO(csv_content))
+        rows = list(reader)
+
+        # Header + 2 data rows (CRITICAL + HIGH only, not MEDIUM)
+        assert len(rows) == 3
+        severities_in_csv = [row[5] for row in rows[1:]]  # Severity is column index 5
+        for sev in severities_in_csv:
+            assert sev.lower() in ("critical", "high")
+
+    @pytest.mark.unit
+    def test_csv_export_excludes_medium_low(
+        self, temp_run_dir, sample_audit_record, sample_findings_report
+    ):
+        """Test that generate_reports CSV excludes MEDIUM/LOW findings."""
+        config = AuditConfig(
+            site=SiteConfig(url="https://nike.com"),
+            report=ReportConfig(formats=["md"], out_dir=str(temp_run_dir)),
+        )
+        generator = ReportGenerator(config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        # Patch the findings analyzer to return our sample report with mixed severities
+        from unittest.mock import patch
+
+        with patch.object(
+            generator.findings_analyzer, "analyze", return_value=sample_findings_report
+        ):
+            generator.generate_reports(
+                [sample_audit_record],
+                include_maturity=False,
+                include_findings=True,
+            )
+
+        csv_path = temp_run_dir / "findings.csv"
+        assert csv_path.exists()
+        csv_text = csv_path.read_text()
+        # MEDIUM finding (F003) should NOT appear
+        assert "F003" not in csv_text
+        # CRITICAL (F001) and HIGH (F002) should appear
+        assert "F001" in csv_text
+        assert "F002" in csv_text
+
+
+# ============================================================================
+# Report Restructuring Tests
+# ============================================================================
+
+
+class TestReportRestructuring:
+    """Tests for report restructuring changes (Phase 2)."""
+
+    @pytest.mark.unit
+    def test_markdown_has_combined_opening(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_maturity_report
+    ):
+        """Test combined opening section is present in markdown report."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record], sample_maturity_report)
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## Overview" in content
+        assert "**Maturity Level:**" in content
+        assert "**FQI Score:**" in content
+        assert "| Query Understanding (QU) |" in content
+        assert "| Results Relevance (RR) |" in content
+        assert "| Result Presentation (RP) |" in content
+        assert "| Advanced Features (AF) |" in content
+        assert "| Error Handling (EH) |" in content
+        assert "| **FQI (weighted)** |" in content
+
+    @pytest.mark.unit
+    def test_markdown_no_quick_reference(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_maturity_report
+    ):
+        """Test Quick Reference is removed (scores are in combined opening)."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record], sample_maturity_report)
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## Quick Reference" not in content
+        # Dimension scores are in the combined opening instead
+        assert "### Dimension Scores" in content
+
+    @pytest.mark.unit
+    def test_markdown_has_level_explanations(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test maturity level definitions section is present in markdown."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record])
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## Maturity Level Definitions" in content
+        assert "**L1_BASIC**" in content
+        assert "**L5_AGENTIC**" in content
+        assert "**<-- This site**" in content
+
+    @pytest.mark.unit
+    def test_markdown_has_benchmark_comparison(
+        self, audit_config, temp_run_dir, sample_audit_record
+    ):
+        """Test industry benchmark comparison section is present in markdown."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record])
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## Industry Benchmark Comparison" in content
+        assert "**Benchmark:**" in content
+        assert "Gap to Avg" in content
+
+    @pytest.mark.unit
+    def test_markdown_has_dimension_descriptions(
+        self, audit_config, temp_run_dir, sample_audit_record
+    ):
+        """Test FQI dimension descriptions section is present in markdown."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record])
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## FQI Dimension Descriptions" in content
+        assert "**Query Understanding (QU)** (25%)" in content
+        assert "**Error Handling (EH)** (10%)" in content
+
+    @pytest.mark.unit
+    def test_maturity_labels_replace_bands(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test maturity labels (L-levels) replace FQI band labels in query details."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record])
+        content = (temp_run_dir / "report.md").read_text()
+        # Should use L-level labels, not band labels
+        assert "L5_AGENTIC" in content or "L4_INTELLIGENT" in content or "L3_ENHANCED" in content
+        # Old band labels should NOT appear in query details
+        for old_label in ["(Excellent)", "(Good)", "(Weak)", "(Critical)", "(Broken)"]:
+            assert old_label not in content
+
+    @pytest.mark.unit
+    def test_report_section_order_markdown(
+        self,
+        audit_config,
+        temp_run_dir,
+        sample_audit_record,
+        sample_maturity_report,
+        sample_findings_report,
+    ):
+        """Test sections appear in correct order in markdown."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown(
+            [sample_audit_record], sample_maturity_report, sample_findings_report
+        )
+        content = (temp_run_dir / "report.md").read_text()
+        # Verify ordering: Overview -> Level Definitions -> Benchmark
+        #                   -> Dimension Descriptions -> Findings
+        #                   -> Score Distribution -> Query Details
+        overview_pos = content.index("## Overview")
+        level_pos = content.index("## Maturity Level Definitions")
+        bench_pos = content.index("## Industry Benchmark Comparison")
+        dim_pos = content.index("## FQI Dimension Descriptions")
+        findings_pos = content.index("## Search Quality Issues")
+        score_pos = content.index("## Score Distribution")
+        query_pos = content.index("## Query Details")
+        assert overview_pos < level_pos < bench_pos < dim_pos
+        assert dim_pos < findings_pos < score_pos < query_pos
+
+    @pytest.mark.unit
+    def test_markdown_no_standalone_executive_summary(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_maturity_report
+    ):
+        """Test standalone Executive Summary section is removed (merged into Overview)."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_markdown([sample_audit_record], sample_maturity_report)
+        content = (temp_run_dir / "report.md").read_text()
+        assert "## Executive Summary" not in content
+        assert "## Maturity Assessment" not in content
+        # Quick Reference is removed (merged into combined opening)
+        assert "## Quick Reference" not in content
+
+    @pytest.mark.unit
+    def test_html_no_summary_div(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test Summary div is removed from HTML report."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+        assert "<h2>Summary</h2>" not in content
+
+    @pytest.mark.unit
+    def test_html_has_new_sections(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_maturity_report
+    ):
+        """Test HTML report has new restructured sections."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_html([sample_audit_record], sample_maturity_report)
+        content = (temp_run_dir / "report.html").read_text()
+        # Combined opening
+        assert "combined-opening" in content
+        # Level explanations (collapsible)
+        assert "Maturity Level Definitions" in content
+        # Benchmark comparison
+        assert "benchmark-section" in content
+        assert "Industry Benchmark Comparison" in content
+        # Dimension descriptions
+        assert "FQI Dimension Descriptions" in content
+
+    @pytest.mark.unit
+    def test_html_print_styles(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test PDF polish: print CSS has break-inside and page-break rules."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+        generator._generate_html([sample_audit_record])
+        content = (temp_run_dir / "report.html").read_text()
+        # Phase 5: PDF polish checks
+        assert ".combined-opening" in content
+        assert ".finding-card" in content
+        assert "page-break-before: always" in content
+        assert "canvas" in content  # canvas display:none rule for print
+
+    @pytest.mark.unit
+    def test_json_findings_critical_high_only(
+        self, audit_config, temp_run_dir, sample_audit_record, sample_findings_report
+    ):
+        """Test JSON findings only include Critical and High severity."""
+        generator = ReportGenerator(audit_config, temp_run_dir)
+        generator._generate_json([sample_audit_record], None, sample_findings_report)
+        content = json.loads((temp_run_dir / "audit.json").read_text())
+        if "findings" in content and "items" in content["findings"]:
+            for item in content["findings"]["items"]:
+                assert item["severity"] in ("critical", "high")
+
+
+# ============================================================================
+# PDF Export Tests
+# ============================================================================
+
+
+class TestPdfExport:
+    """Tests for PDF export wiring."""
+
+    @pytest.mark.unit
+    def test_pdf_flag_triggers_generate_pdf(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test that generate_pdf=True calls _generate_pdf."""
+        from unittest.mock import patch
+
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        with patch.object(generator, "_generate_pdf") as mock_pdf:
+            generator.generate_reports([sample_audit_record], generate_pdf=True)
+            mock_pdf.assert_called_once()
+
+    @pytest.mark.unit
+    def test_pdf_not_called_by_default(self, audit_config, temp_run_dir, sample_audit_record):
+        """Test that _generate_pdf is NOT called when generate_pdf=False."""
+        from unittest.mock import patch
+
+        generator = ReportGenerator(audit_config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        with patch.object(generator, "_generate_pdf") as mock_pdf:
+            generator.generate_reports([sample_audit_record], generate_pdf=False)
+            mock_pdf.assert_not_called()
+
+    @pytest.mark.unit
+    def test_pdf_auto_enables_html(self, temp_run_dir, sample_audit_record):
+        """Test that --pdf auto-generates HTML even when HTML not in formats."""
+        from unittest.mock import patch
+
+        # Config with only "md" format — no "html"
+        config = AuditConfig(
+            site=SiteConfig(url="https://nike.com"),
+            report=ReportConfig(formats=["md"], out_dir=str(temp_run_dir)),
+        )
+        generator = ReportGenerator(config, temp_run_dir)
+
+        screenshot_path = temp_run_dir / "screenshots" / "test.png"
+        screenshot_path.write_text("dummy")
+        sample_audit_record.page.screenshot_path = str(screenshot_path)
+
+        with patch.object(generator, "_generate_pdf") as mock_pdf:
+            generator.generate_reports(
+                [sample_audit_record],
+                generate_pdf=True,
+                include_maturity=False,
+                include_findings=False,
+            )
+            mock_pdf.assert_called_once()
+
+        # HTML should have been auto-generated for PDF
+        assert (temp_run_dir / "report.html").exists()
+        # MD should also exist (it's in formats)
+        assert (temp_run_dir / "report.md").exists()

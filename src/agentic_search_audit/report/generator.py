@@ -7,10 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-from ..analysis.benchmarks import Industry
+from ..analysis.benchmarks import Industry, get_industry_benchmark
 from ..analysis.maturity import MaturityEvaluator, MaturityReport
 from ..analysis.uplift_planner import FindingsAnalyzer, FindingsReport, Severity
-from ..core.types import AuditConfig, AuditRecord, ExpertInsight, get_fqi_band
+from ..core.types import AuditConfig, AuditRecord, ExpertInsight, get_fqi_band, get_maturity_label
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,23 @@ class ReportGenerator:
             )
 
         if include_findings and records:
-            findings_report = self.findings_analyzer.analyze(records)
+            raw_findings_report = self.findings_analyzer.analyze(records)
+            # Filter to CRITICAL + HIGH only for all outputs (reports + CSV)
+            filtered_findings = [
+                f
+                for f in raw_findings_report.findings
+                if f.severity in (Severity.CRITICAL, Severity.HIGH)
+            ]
+            # Rebuild summary with filtered count so report text matches actual findings shown
+            filtered_summary = self.findings_analyzer._build_summary(
+                filtered_findings, raw_findings_report.total_queries_analyzed
+            )
+            findings_report = FindingsReport(
+                findings=filtered_findings,
+                summary=filtered_summary,
+                total_queries_analyzed=raw_findings_report.total_queries_analyzed,
+                scope_limitations=raw_findings_report.scope_limitations,
+            )
             logger.info(
                 f"Findings: {len(findings_report.findings)} issues identified "
                 f"across {findings_report.total_queries_analyzed} queries"
@@ -103,11 +119,14 @@ class ReportGenerator:
         if "json" in self.config.report.formats:
             self._generate_json(records, maturity_report, findings_report, insights)
 
-        # Generate PDF if requested
+        # Generate PDF if requested (auto-enable HTML if needed)
         if generate_pdf:
+            if "html" not in self.config.report.formats:
+                logger.info("HTML format auto-enabled for PDF generation")
+                self._generate_html(records, maturity_report, findings_report, insights)
             self._generate_pdf()
 
-        # Export findings to CSV if available
+        # Export findings to CSV (already filtered above)
         if findings_report and findings_report.findings:
             csv_path = self.run_dir / "findings.csv"
             csv_content = self.findings_analyzer.export_to_csv(findings_report)
@@ -141,63 +160,51 @@ class ReportGenerator:
             f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write(f"**Total Queries:** {len(records)}\n\n")
 
-            # Executive Summary (if maturity report available)
-            if maturity_report:
-                f.write("## Executive Summary\n\n")
-                f.write(f"{maturity_report.executive_summary}\n\n")
+            # Combined opening (Executive Summary + Maturity)
+            if maturity_report and records:
+                self._write_markdown_combined_opening(f, records, maturity_report)
 
-            # Summary statistics
+            # Level explanations
             if records:
                 avg_fqi = sum(r.judge.fqi for r in records) / len(records)
-                avg_qu = sum(r.judge.query_understanding.score for r in records) / len(records)
-                avg_rr = sum(r.judge.results_relevance.score for r in records) / len(records)
-                avg_rp = sum(r.judge.result_presentation.score for r in records) / len(records)
-                avg_af = sum(r.judge.advanced_features.score for r in records) / len(records)
-                avg_eh = sum(r.judge.error_handling.score for r in records) / len(records)
+                self._write_markdown_level_explanations(f, get_maturity_label(avg_fqi))
 
-                f.write("## Summary\n\n")
-                f.write("| Metric | Average Score |\n")
-                f.write("|--------|---------------|\n")
-                f.write(f"| FQI | {avg_fqi:.2f} |\n")
-                f.write(f"| QU | {avg_qu:.2f} |\n")
-                f.write(f"| RR | {avg_rr:.2f} |\n")
-                f.write(f"| RP | {avg_rp:.2f} |\n")
-                f.write(f"| AF | {avg_af:.2f} |\n")
-                f.write(f"| EH | {avg_eh:.2f} |\n\n")
+            # Industry benchmark comparison
+            if records:
+                self._write_markdown_benchmark_comparison(f, records)
 
-            # Maturity Assessment Section
-            if maturity_report:
-                self._write_markdown_maturity_section(f, maturity_report)
+            # Dimension descriptions
+            self._write_markdown_dimension_descriptions(f)
 
-            # Findings Section
+            # Findings Section (CRITICAL + HIGH only)
             if findings_report:
                 self._write_markdown_findings_section(f, findings_report)
 
-            # Expert Insights Section
+            # Expert Insights
             if expert_insights:
                 self._write_markdown_expert_section(f, expert_insights)
 
             # Score distribution
             f.write("## Score Distribution\n\n")
             score_ranges = {
-                "Broken (0-1.5)": 0,
-                "Critical (1.5-2.5)": 0,
-                "Weak (2.5-3.5)": 0,
-                "Good (3.5-4.5)": 0,
-                "Excellent (4.5-5)": 0,
+                "L1_BASIC (0-1.5)": 0,
+                "L2_FUNCTIONAL (1.5-2.5)": 0,
+                "L3_ENHANCED (2.5-3.5)": 0,
+                "L4_INTELLIGENT (3.5-4.5)": 0,
+                "L5_AGENTIC (4.5-5)": 0,
             }
             for record in records:
                 score = record.judge.fqi
                 if score >= 4.5:
-                    score_ranges["Excellent (4.5-5)"] += 1
+                    score_ranges["L5_AGENTIC (4.5-5)"] += 1
                 elif score >= 3.5:
-                    score_ranges["Good (3.5-4.5)"] += 1
+                    score_ranges["L4_INTELLIGENT (3.5-4.5)"] += 1
                 elif score >= 2.5:
-                    score_ranges["Weak (2.5-3.5)"] += 1
+                    score_ranges["L3_ENHANCED (2.5-3.5)"] += 1
                 elif score >= 1.5:
-                    score_ranges["Critical (1.5-2.5)"] += 1
+                    score_ranges["L2_FUNCTIONAL (1.5-2.5)"] += 1
                 else:
-                    score_ranges["Broken (0-1.5)"] += 1
+                    score_ranges["L1_BASIC (0-1.5)"] += 1
 
             for range_label, count in score_ranges.items():
                 f.write(f"- {range_label}: {count} queries\n")
@@ -210,7 +217,7 @@ class ReportGenerator:
                 f.write(f"### {i}. {record.query.text}\n\n")
 
                 # FQI score with band
-                band = get_fqi_band(record.judge.fqi)
+                band = get_maturity_label(record.judge.fqi)
                 f.write(f"**FQI:** {record.judge.fqi:.2f} ({band})\n\n")
 
                 # Dimension breakdown with diagnosis
@@ -257,15 +264,18 @@ class ReportGenerator:
                         f.write(f"- {improvement}\n")
                     f.write("\n")
 
-                # Top results
-                if record.items:
-                    f.write(f"**Top {len(record.items)} Results:**\n\n")
+                # Top results — filter out items with no title and no URL (extraction ghosts)
+                visible_items = [item for item in record.items[:10] if item.title or item.url]
+                if visible_items:
+                    count = len(visible_items)
+                    header = "**Top Result:**" if count == 1 else f"**Top {count} Results:**"
+                    f.write(f"{header}\n\n")
                     f.write("| Rank | Title | Price | URL |\n")
                     f.write("|------|-------|-------|-----|\n")
-                    for item in record.items[:10]:
-                        title = (item.title or "N/A")[:50]
-                        price = item.price or "N/A"
-                        url = (item.url or "N/A")[:60]
+                    for item in visible_items:
+                        title = (item.title or "\u2014")[:60]
+                        price = item.price or "\u2014"
+                        url = item.url or "\u2014"
                         f.write(f"| {item.rank} | {title} | {price} | {url} |\n")
                 else:
                     f.write("**Results:** No results found for this query.\n")
@@ -283,11 +293,13 @@ class ReportGenerator:
                     f.write("**PDP Analysis:**\n\n")
                     f.write(
                         "| Rank | PDP Title | PDP Price | Search Price"
-                        " | Match | Availability | Rating |\n"
+                        " | Match | Availability | Rating"
+                        " | Size Options | Color Options |\n"
                     )
                     f.write(
                         "|------|-----------|-----------|"
-                        "--------------|-------|--------------|--------|\n"
+                        "--------------|-------|--------------|--------"
+                        "|--------------|---------------|\n"
                     )
                     for item in pdp_items:
                         attrs = item.attributes
@@ -298,10 +310,13 @@ class ReportGenerator:
                         price_match = "Yes" if pdp_price == search_price else "No"
                         availability = attrs.get("pdp_availability", "N/A") or "N/A"
                         rating = attrs.get("pdp_rating", "N/A") or "N/A"
+                        size_options = attrs.get("pdp_size_options_count", "N/A")
+                        color_options = attrs.get("pdp_color_options_count", "N/A")
                         f.write(
                             f"| {item.rank} | {pdp_title} | {pdp_price}"
                             f" | {search_price} | {price_match}"
-                            f" | {availability} | {rating} |\n"
+                            f" | {availability} | {rating}"
+                            f" | {size_options} | {color_options} |\n"
                         )
                     f.write("\n")
 
@@ -343,6 +358,188 @@ class ReportGenerator:
                 f.write(f"- {weakness}\n")
             f.write("\n")
 
+    def _write_markdown_combined_opening(
+        self, f: TextIO, records: list[AuditRecord], maturity_report: MaturityReport
+    ) -> None:
+        """Write combined opening section with maturity + summary + benchmarks + dimensions."""
+        avg_fqi = sum(r.judge.fqi for r in records) / len(records)
+        avg_qu = sum(r.judge.query_understanding.score for r in records) / len(records)
+        avg_rr = sum(r.judge.results_relevance.score for r in records) / len(records)
+        avg_rp = sum(r.judge.result_presentation.score for r in records) / len(records)
+        avg_af = sum(r.judge.advanced_features.score for r in records) / len(records)
+        avg_eh = sum(r.judge.error_handling.score for r in records) / len(records)
+
+        maturity_label = get_maturity_label(avg_fqi)
+
+        f.write("## Overview\n\n")
+        f.write(f"**Maturity Level:** {maturity_label} | **FQI Score:** {avg_fqi:.2f}/5.00\n\n")
+
+        # Executive summary inline
+        f.write(f"{maturity_report.executive_summary}\n\n")
+
+        # Benchmark context
+        benchmark = get_industry_benchmark(self.industry)
+        scores = {
+            "query_understanding": avg_qu,
+            "results_relevance": avg_rr,
+            "result_presentation": avg_rp,
+            "advanced_features": avg_af,
+            "error_handling": avg_eh,
+            "fqi": avg_fqi,
+        }
+        comparison = benchmark.compare(scores)
+        fqi_cmp = comparison.get("fqi", {})
+        if fqi_cmp:
+            f.write(
+                f"**Industry Benchmark ({benchmark.name}):** Site FQI {avg_fqi:.2f} vs "
+                f"Industry Avg {fqi_cmp['industry_avg']:.2f} | "
+                f"Top Quartile {fqi_cmp['industry_top_quartile']:.2f} | "
+                f"Status: {fqi_cmp['status'].replace('_', ' ').title()}\n\n"
+            )
+
+        # Dimension scores table
+        f.write("### Dimension Scores\n\n")
+        f.write("| Dimension | Score | Weight |\n")
+        f.write("|-----------|-------|--------|\n")
+        f.write(f"| Query Understanding (QU) | {avg_qu:.2f} | 25% |\n")
+        f.write(f"| Results Relevance (RR) | {avg_rr:.2f} | 25% |\n")
+        f.write(f"| Result Presentation (RP) | {avg_rp:.2f} | 20% |\n")
+        f.write(f"| Advanced Features (AF) | {avg_af:.2f} | 20% |\n")
+        f.write(f"| Error Handling (EH) | {avg_eh:.2f} | 10% |\n")
+        f.write(f"| **FQI (weighted)** | **{avg_fqi:.2f}** | **100%** |\n\n")
+
+        # Strengths and weaknesses
+        if maturity_report.strengths:
+            f.write("### Strengths\n\n")
+            for s in maturity_report.strengths:
+                f.write(f"- {s}\n")
+            f.write("\n")
+
+        if maturity_report.weaknesses:
+            f.write("### Areas for Improvement\n\n")
+            for w in maturity_report.weaknesses:
+                f.write(f"- {w}\n")
+            f.write("\n")
+
+    def _write_markdown_level_explanations(self, f: TextIO, current_level: str) -> None:
+        """Write maturity level explanation section."""
+        levels = {
+            "L1_BASIC": (
+                "Basic keyword matching only. Search returns results"
+                " for exact terms but lacks intelligence."
+            ),
+            "L2_FUNCTIONAL": (
+                "Working search with basic features. Handles simple"
+                " queries but limited error handling."
+            ),
+            "L3_ENHANCED": (
+                "Good UX with filters and facets. Handles most query"
+                " types with reasonable relevance."
+            ),
+            "L4_INTELLIGENT": (
+                "Advanced NLP, personalization, and smart recommendations."
+                " Handles complex queries."
+            ),
+            "L5_AGENTIC": (
+                "AI-powered, conversational, predictive search." " Best-in-class findability."
+            ),
+        }
+        f.write("## Maturity Level Definitions\n\n")
+        for level, desc in levels.items():
+            marker = " **<-- This site**" if level == current_level else ""
+            f.write(f"- **{level}**: {desc}{marker}\n")
+        f.write("\n")
+
+    def _write_markdown_benchmark_comparison(self, f: TextIO, records: list[AuditRecord]) -> None:
+        """Write industry benchmark comparison table."""
+        benchmark = get_industry_benchmark(self.industry)
+
+        avg_scores = {
+            "query_understanding": (
+                sum(r.judge.query_understanding.score for r in records) / len(records)
+            ),
+            "results_relevance": (
+                sum(r.judge.results_relevance.score for r in records) / len(records)
+            ),
+            "result_presentation": (
+                sum(r.judge.result_presentation.score for r in records) / len(records)
+            ),
+            "advanced_features": (
+                sum(r.judge.advanced_features.score for r in records) / len(records)
+            ),
+            "error_handling": (sum(r.judge.error_handling.score for r in records) / len(records)),
+            "fqi": sum(r.judge.fqi for r in records) / len(records),
+        }
+        comparison = benchmark.compare(avg_scores)
+
+        f.write("## Industry Benchmark Comparison\n\n")
+        f.write(
+            f"**Benchmark:** {benchmark.name}"
+            f" (n={benchmark.sample_size}, {benchmark.last_updated})\n\n"
+        )
+        f.write(
+            "| Dimension | Site Score | Industry Avg" " | Top Quartile | Gap to Avg | Status |\n"
+        )
+        f.write("|-----------|-----------|-------------|" "-------------|-----------|--------|\n")
+
+        dim_labels = {
+            "query_understanding": "Query Understanding",
+            "results_relevance": "Results Relevance",
+            "result_presentation": "Result Presentation",
+            "advanced_features": "Advanced Features",
+            "error_handling": "Error Handling",
+            "fqi": "**FQI Overall**",
+        }
+        for dim_key, label in dim_labels.items():
+            cmp = comparison.get(dim_key, {})
+            if cmp:
+                gap = cmp["gap_to_avg"]
+                gap_str = f"+{gap:.2f}" if gap >= 0 else f"{gap:.2f}"
+                status = cmp["status"].replace("_", " ").title()
+                f.write(
+                    f"| {label} | {cmp['score']:.2f} | {cmp['industry_avg']:.2f} | "
+                    f"{cmp['industry_top_quartile']:.2f} | {gap_str} | {status} |\n"
+                )
+        f.write("\n")
+
+    def _write_markdown_dimension_descriptions(self, f: TextIO) -> None:
+        """Write dimension description section."""
+        f.write("## FQI Dimension Descriptions\n\n")
+        descriptions = [
+            (
+                "Query Understanding (QU)",
+                "25%",
+                "How well the search engine understands user intent,"
+                " including synonyms, typos, and semantic queries.",
+            ),
+            (
+                "Results Relevance (RR)",
+                "25%",
+                "How relevant the returned results are to the query,"
+                " and whether they are well-ranked.",
+            ),
+            (
+                "Result Presentation (RP)",
+                "20%",
+                "Quality of result display: product cards, images," " prices, and navigability.",
+            ),
+            (
+                "Advanced Features (AF)",
+                "20%",
+                "Search enrichment features visible on the results page:"
+                " filters, facets, sort, refinements.",
+            ),
+            (
+                "Error Handling (EH)",
+                "10%",
+                "Graceful handling of edge cases, zero results,"
+                " and error states with helpful messaging.",
+            ),
+        ]
+        for name, weight, desc in descriptions:
+            f.write(f"- **{name}** ({weight}): {desc}\n")
+        f.write("\n")
+
     def _write_markdown_findings_section(
         self, f: "TextIO", findings_report: FindingsReport
     ) -> None:
@@ -355,7 +552,7 @@ class ReportGenerator:
         f.write(f"> {findings_report.scope_limitations}\n\n")
 
         # Group findings by severity
-        for severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]:
+        for severity in [Severity.CRITICAL, Severity.HIGH]:
             group = [f for f in findings_report.findings if f.severity == severity]
             if not group:
                 continue
@@ -368,7 +565,7 @@ class ReportGenerator:
                 )
                 f.write(
                     f"- Dimension: {finding.affected_dimension} "
-                    f"(avg score: {finding.avg_dimension_score:.1f})\n"
+                    f"(avg score: {finding.avg_dimension_score:.2f})\n"
                 )
                 if finding.example_queries:
                     examples = ", ".join(f'"{q}"' for q in finding.example_queries)
@@ -982,8 +1179,14 @@ class ReportGenerator:
                 background: white;
                 color: black;
             }
-            .query-card, .maturity-section, .findings-section {
+            .query-card, .maturity-section, .findings-section, .combined-opening, .finding-card {
                 break-inside: avoid;
+            }
+            .benchmark-section, .query-details-section {
+                page-break-before: always;
+            }
+            canvas {
+                display: none !important;
             }
         }
     </style>
@@ -1003,8 +1206,8 @@ class ReportGenerator:
 """)
             # FQI Hero Score
             if records:
-                fqi_band = get_fqi_band(avg_fqi)
-                fqi_band_class = self._get_fqi_band_class(fqi_band)
+                fqi_band = get_maturity_label(avg_fqi)
+                fqi_band_class = self._get_maturity_badge_class(fqi_band)
                 f.write(f"""
     <div class="summary" style="text-align: center; padding: 30px;">
         <div style="font-size: 3.5em; font-weight: bold; margin-bottom: 5px;">{avg_fqi:.2f}</div>
@@ -1031,67 +1234,41 @@ class ReportGenerator:
         <label>Filter by FQI band:</label>
         <select id="scoreFilter" onchange="filterQueries()">
             <option value="all">All Bands</option>
-            <option value="0-1.5">Broken (0-1.5)</option>
-            <option value="1.5-2.5">Critical (1.5-2.5)</option>
-            <option value="2.5-3.5">Weak (2.5-3.5)</option>
-            <option value="3.5-4.5">Good (3.5-4.5)</option>
-            <option value="4.5-5">Excellent (4.5-5)</option>
+            <option value="0-1.5">L1_BASIC (0-1.5)</option>
+            <option value="1.5-2.5">L2_FUNCTIONAL (1.5-2.5)</option>
+            <option value="2.5-3.5">L3_ENHANCED (2.5-3.5)</option>
+            <option value="3.5-4.5">L4_INTELLIGENT (3.5-4.5)</option>
+            <option value="4.5-5">L5_AGENTIC (4.5-5)</option>
         </select>
         <label>Search:</label>
         <input type="text" id="querySearch" placeholder="Search queries..." oninput="filterQueries()">
     </div>
 """)
 
-            # Summary
-            f.write(f"""
-    <div class="summary">
-        <h2>Summary</h2>
-        <table>
-            <tr>
-                <th>Metric</th>
-                <th>Average Score</th>
-            </tr>
-            <tr>
-                <td>FQI</td>
-                <td>{avg_fqi:.2f}</td>
-            </tr>
-            <tr>
-                <td>QU</td>
-                <td>{avg_qu:.2f}</td>
-            </tr>
-            <tr>
-                <td>RR</td>
-                <td>{avg_rr:.2f}</td>
-            </tr>
-            <tr>
-                <td>RP</td>
-                <td>{avg_rp:.2f}</td>
-            </tr>
-            <tr>
-                <td>AF</td>
-                <td>{avg_af:.2f}</td>
-            </tr>
-            <tr>
-                <td>EH</td>
-                <td>{avg_eh:.2f}</td>
-            </tr>
-        </table>
-    </div>
-""")
+            # Combined opening section
+            if maturity_report and records:
+                self._write_html_combined_opening(f, records, maturity_report)
+
+            # Level explanations (collapsible)
+            if records:
+                self._write_html_level_explanations(f, get_maturity_label(avg_fqi))
+
+            # Industry benchmark comparison
+            if records:
+                self._write_html_benchmark_comparison(f, records)
+
+            # Dimension descriptions
+            self._write_html_dimension_descriptions(f)
 
             # Charts section
             if records:
                 self._write_html_score_charts(f, records, avg_qu, avg_rr, avg_rp, avg_af, avg_eh)
 
-            # Maturity Assessment Section
-            if maturity_report:
-                self._write_html_maturity_section(f, maturity_report)
-
-            # Findings Section
+            # Findings Section (CRITICAL + HIGH only)
             if findings_report:
                 self._write_html_findings_section(f, findings_report)
 
-            # Expert Insights Section
+            # Expert Insights
             if expert_insights:
                 self._write_html_expert_section(f, expert_insights)
 
@@ -1102,8 +1279,8 @@ class ReportGenerator:
             for i, record in enumerate(records):
                 fqi_score = record.judge.fqi
                 score_class = self._get_score_class(fqi_score)
-                fqi_band = get_fqi_band(fqi_score)
-                fqi_band_class = self._get_fqi_band_class(fqi_band)
+                fqi_band = get_maturity_label(fqi_score)
+                fqi_band_class = self._get_maturity_badge_class(fqi_band)
                 screenshot_rel = Path(record.page.screenshot_path).relative_to(self.run_dir)
                 query_escaped = escape_html(record.query.text.lower())
 
@@ -1172,7 +1349,9 @@ class ReportGenerator:
                 f.write("            </div>\n        </div>\n")
 
                 # --- Results table (moved up, before analysis) ---
-                if record.items:
+                # Filter out ghost items (no title and no URL) from extraction artifacts
+                html_visible_items = [item for item in record.items[:10] if item.title or item.url]
+                if html_visible_items:
                     f.write("""
         <h3>Top Results</h3>
         <table class="results-table">
@@ -1187,18 +1366,32 @@ class ReportGenerator:
             <tbody>
 """)
 
-                    for item in record.items[:10]:
-                        title = escape_html((item.title or "N/A")[:80])
-                        price = escape_html(item.price or "N/A")
-                        url = (item.url or "")[:80]
+                    for item in html_visible_items:
+                        title = escape_html((item.title or "\u2014")[:80])
+                        price = escape_html(item.price or "\u2014")
+                        url = item.url or ""
                         url_escaped = escape_html(url)
-                        url_display = escape_html(url[:50]) + "..." if url else "N/A"
-                        f.write(f"""
+                        url_display = (
+                            escape_html(url[:70]) + "\u2026"
+                            if len(url) > 70
+                            else escape_html(url) if url else "\u2014"
+                        )
+                        if url:
+                            f.write(f"""
                 <tr>
                     <td>{item.rank}</td>
                     <td>{title}</td>
                     <td>{price}</td>
                     <td><a href="{url_escaped}" target="_blank" rel="noopener noreferrer">{url_display}</a></td>
+                </tr>
+""")
+                        else:
+                            f.write(f"""
+                <tr>
+                    <td>{item.rank}</td>
+                    <td>{title}</td>
+                    <td>{price}</td>
+                    <td>\u2014</td>
                 </tr>
 """)
 
@@ -1269,6 +1462,8 @@ class ReportGenerator:
                         <th>Match</th>
                         <th>Availability</th>
                         <th>Rating</th>
+                        <th>Size Options</th>
+                        <th>Color Options</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1284,6 +1479,10 @@ class ReportGenerator:
                         )
                         availability = escape_html(attrs.get("pdp_availability", "N/A") or "N/A")
                         rating = escape_html(attrs.get("pdp_rating", "N/A") or "N/A")
+                        size_options = escape_html(str(attrs.get("pdp_size_options_count", "N/A")))
+                        color_options = escape_html(
+                            str(attrs.get("pdp_color_options_count", "N/A"))
+                        )
 
                         f.write(f"""
                     <tr>
@@ -1294,6 +1493,8 @@ class ReportGenerator:
                         <td style="{match_style}">{price_match}</td>
                         <td>{availability}</td>
                         <td>{rating}</td>
+                        <td>{size_options}</td>
+                        <td>{color_options}</td>
                     </tr>
 """)
 
@@ -1339,6 +1540,249 @@ class ReportGenerator:
 """)
 
         logger.info(f"HTML report saved to {report_path}")
+
+    def _write_html_combined_opening(
+        self, f: TextIO, records: list[AuditRecord], maturity_report: MaturityReport
+    ) -> None:
+        """Write combined opening card with maturity + exec summary + benchmark mini-table."""
+        avg_fqi = sum(r.judge.fqi for r in records) / len(records)
+        avg_qu = sum(r.judge.query_understanding.score for r in records) / len(records)
+        avg_rr = sum(r.judge.results_relevance.score for r in records) / len(records)
+        avg_rp = sum(r.judge.result_presentation.score for r in records) / len(records)
+        avg_af = sum(r.judge.advanced_features.score for r in records) / len(records)
+        avg_eh = sum(r.judge.error_handling.score for r in records) / len(records)
+
+        maturity_label = get_maturity_label(avg_fqi)
+        level_class = self._get_maturity_badge_class(maturity_label)
+
+        benchmark = get_industry_benchmark(self.industry)
+        scores = {
+            "query_understanding": avg_qu,
+            "results_relevance": avg_rr,
+            "result_presentation": avg_rp,
+            "advanced_features": avg_af,
+            "error_handling": avg_eh,
+            "fqi": avg_fqi,
+        }
+        comparison = benchmark.compare(scores)
+        fqi_cmp = comparison.get("fqi", {})
+
+        f.write(f"""
+    <div class="combined-opening maturity-section">
+        <h2>Overview</h2>
+        <p>
+            <span class="maturity-badge {level_class}">{escape_html(maturity_label)}</span>
+            <strong>FQI Score:</strong> {avg_fqi:.2f}/5.00
+        </p>
+        <p>{escape_html(maturity_report.executive_summary)}</p>
+""")
+
+        # Benchmark context
+        if fqi_cmp:
+            status = fqi_cmp["status"].replace("_", " ").title()
+            f.write(f"""
+        <p style="color: var(--text-secondary); font-size: 0.9em;">
+            <strong>Industry Benchmark ({escape_html(benchmark.name)}):</strong>
+            Site FQI {avg_fqi:.2f} vs
+            Industry Avg {fqi_cmp['industry_avg']:.2f} |
+            Top Quartile {fqi_cmp['industry_top_quartile']:.2f} |
+            Status: {escape_html(status)}
+        </p>
+""")
+
+        # Dimension scores mini-table
+        f.write("""
+        <h3>Dimension Scores</h3>
+        <table class="results-table">
+            <thead>
+                <tr><th>Dimension</th><th>Score</th><th>Weight</th></tr>
+            </thead>
+            <tbody>
+""")
+        dims = [
+            ("Query Understanding (QU)", avg_qu, "25%"),
+            ("Results Relevance (RR)", avg_rr, "25%"),
+            ("Result Presentation (RP)", avg_rp, "20%"),
+            ("Advanced Features (AF)", avg_af, "20%"),
+            ("Error Handling (EH)", avg_eh, "10%"),
+            ("<strong>FQI (weighted)</strong>", avg_fqi, "<strong>100%</strong>"),
+        ]
+        for name, score, weight in dims:
+            f.write(
+                f"                <tr><td>{name}</td>"
+                f"<td>{score:.2f}</td><td>{weight}</td></tr>\n"
+            )
+        f.write("            </tbody>\n        </table>\n")
+
+        # Strengths
+        if maturity_report.strengths:
+            f.write("        <h3>Strengths</h3>\n        <ul>\n")
+            for s in maturity_report.strengths:
+                f.write(f"            <li style='color: #28a745;'>{escape_html(s)}</li>\n")
+            f.write("        </ul>\n")
+
+        # Weaknesses
+        if maturity_report.weaknesses:
+            f.write("        <h3>Areas for Improvement</h3>\n        <ul>\n")
+            for w in maturity_report.weaknesses:
+                f.write(f"            <li style='color: #dc3545;'>{escape_html(w)}</li>\n")
+            f.write("        </ul>\n")
+
+        f.write("    </div>\n")
+
+    def _write_html_level_explanations(self, f: TextIO, current_level: str) -> None:
+        """Write maturity level explanations as collapsible block."""
+        levels = {
+            "L1_BASIC": (
+                "Basic keyword matching only. Search returns results"
+                " for exact terms but lacks intelligence."
+            ),
+            "L2_FUNCTIONAL": (
+                "Working search with basic features. Handles simple"
+                " queries but limited error handling."
+            ),
+            "L3_ENHANCED": (
+                "Good UX with filters and facets. Handles most query"
+                " types with reasonable relevance."
+            ),
+            "L4_INTELLIGENT": (
+                "Advanced NLP, personalization, and smart recommendations."
+                " Handles complex queries."
+            ),
+            "L5_AGENTIC": (
+                "AI-powered, conversational, predictive search." " Best-in-class findability."
+            ),
+        }
+        f.write("""
+    <div class="maturity-section">
+        <details>
+            <summary><h2 style="display: inline;">Maturity Level Definitions</h2></summary>
+            <ul style="margin-top: 10px;">
+""")
+        for level, desc in levels.items():
+            marker = " <strong>&lt;-- This site</strong>" if level == current_level else ""
+            f.write(f"                <li><strong>{level}</strong>: {desc}{marker}</li>\n")
+        f.write("""            </ul>
+        </details>
+    </div>
+""")
+
+    def _write_html_benchmark_comparison(self, f: TextIO, records: list[AuditRecord]) -> None:
+        """Write industry benchmark comparison as styled table."""
+        benchmark = get_industry_benchmark(self.industry)
+
+        avg_scores = {
+            "query_understanding": (
+                sum(r.judge.query_understanding.score for r in records) / len(records)
+            ),
+            "results_relevance": (
+                sum(r.judge.results_relevance.score for r in records) / len(records)
+            ),
+            "result_presentation": (
+                sum(r.judge.result_presentation.score for r in records) / len(records)
+            ),
+            "advanced_features": (
+                sum(r.judge.advanced_features.score for r in records) / len(records)
+            ),
+            "error_handling": (sum(r.judge.error_handling.score for r in records) / len(records)),
+            "fqi": sum(r.judge.fqi for r in records) / len(records),
+        }
+        comparison = benchmark.compare(avg_scores)
+
+        f.write(f"""
+    <div class="benchmark-section maturity-section">
+        <h2>Industry Benchmark Comparison</h2>
+        <p style="color: var(--text-secondary);">
+            <strong>Benchmark:</strong> {escape_html(benchmark.name)}
+            (n={benchmark.sample_size}, {escape_html(benchmark.last_updated)})
+        </p>
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Dimension</th>
+                    <th>Site Score</th>
+                    <th>Industry Avg</th>
+                    <th>Top Quartile</th>
+                    <th>Gap to Avg</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+""")
+
+        dim_labels = {
+            "query_understanding": "Query Understanding",
+            "results_relevance": "Results Relevance",
+            "result_presentation": "Result Presentation",
+            "advanced_features": "Advanced Features",
+            "error_handling": "Error Handling",
+            "fqi": "<strong>FQI Overall</strong>",
+        }
+        for dim_key, label in dim_labels.items():
+            cmp = comparison.get(dim_key, {})
+            if cmp:
+                gap = cmp["gap_to_avg"]
+                gap_str = f"+{gap:.2f}" if gap >= 0 else f"{gap:.2f}"
+                gap_color = "#28a745" if gap >= 0 else "#dc3545"
+                status = cmp["status"].replace("_", " ").title()
+                f.write(
+                    f"                <tr>"
+                    f"<td>{label}</td>"
+                    f"<td>{cmp['score']:.2f}</td>"
+                    f"<td>{cmp['industry_avg']:.2f}</td>"
+                    f"<td>{cmp['industry_top_quartile']:.2f}</td>"
+                    f'<td style="color: {gap_color}; font-weight: 600;">{gap_str}</td>'
+                    f"<td>{escape_html(status)}</td>"
+                    f"</tr>\n"
+                )
+
+        f.write("""            </tbody>
+        </table>
+    </div>
+""")
+
+    def _write_html_dimension_descriptions(self, f: TextIO) -> None:
+        """Write dimension descriptions section."""
+        descriptions = [
+            (
+                "Query Understanding (QU)",
+                "25%",
+                "How well the search engine understands user intent,"
+                " including synonyms, typos, and semantic queries.",
+            ),
+            (
+                "Results Relevance (RR)",
+                "25%",
+                "How relevant the returned results are to the query,"
+                " and whether they are well-ranked.",
+            ),
+            (
+                "Result Presentation (RP)",
+                "20%",
+                "Quality of result display: product cards, images," " prices, and navigability.",
+            ),
+            (
+                "Advanced Features (AF)",
+                "20%",
+                "Search enrichment features visible on the results page:"
+                " filters, facets, sort, refinements.",
+            ),
+            (
+                "Error Handling (EH)",
+                "10%",
+                "Graceful handling of edge cases, zero results,"
+                " and error states with helpful messaging.",
+            ),
+        ]
+
+        f.write("""
+    <div class="maturity-section">
+        <h2>FQI Dimension Descriptions</h2>
+        <ul>
+""")
+        for name, weight, desc in descriptions:
+            f.write(f"            <li><strong>{name}</strong> ({weight}): {desc}</li>\n")
+        f.write("        </ul>\n    </div>\n")
 
     def _write_html_maturity_section(self, f: TextIO, maturity_report: MaturityReport) -> None:
         """Write maturity assessment section to HTML file."""
@@ -1405,7 +1849,7 @@ class ReportGenerator:
 """)
 
         # Group findings by severity
-        for severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]:
+        for severity in [Severity.CRITICAL, Severity.HIGH]:
             group = [fi for fi in findings_report.findings if fi.severity == severity]
             if not group:
                 continue
@@ -1422,7 +1866,7 @@ class ReportGenerator:
             </span>
             <p style="margin: 10px 0 5px 0; color: #666;">
                 Dimension: {escape_html(finding.affected_dimension)}
-                (avg score: {finding.avg_dimension_score:.1f})
+                (avg score: {finding.avg_dimension_score:.2f})
             </p>
 """)
                 if finding.example_queries:
@@ -1573,6 +2017,7 @@ class ReportGenerator:
                         "suggestion": finding.suggestion,
                     }
                     for finding in findings_report.findings
+                    if finding.severity in (Severity.CRITICAL, Severity.HIGH)
                 ],
             }
 
@@ -1634,6 +2079,17 @@ class ReportGenerator:
         else:
             return "fill-poor"
 
+    def _get_maturity_badge_class(self, label: str) -> str:
+        """Get CSS class for maturity level badge."""
+        mapping = {
+            "L1_BASIC": "maturity-l1",
+            "L2_FUNCTIONAL": "maturity-l2",
+            "L3_ENHANCED": "maturity-l3",
+            "L4_INTELLIGENT": "maturity-l4",
+            "L5_AGENTIC": "maturity-l5",
+        }
+        return mapping.get(label, "maturity-l1")
+
     def _get_fqi_band_class(self, band: str) -> str:
         """Get CSS class for FQI band label.
 
@@ -1678,14 +2134,14 @@ class ReportGenerator:
         """
         # Calculate FQI band distribution for histogram
         band_distribution = {
-            "Broken": 0,
-            "Critical": 0,
-            "Weak": 0,
-            "Good": 0,
-            "Excellent": 0,
+            "L1_BASIC": 0,
+            "L2_FUNCTIONAL": 0,
+            "L3_ENHANCED": 0,
+            "L4_INTELLIGENT": 0,
+            "L5_AGENTIC": 0,
         }
         for record in records:
-            band = get_fqi_band(record.judge.fqi)
+            band = get_maturity_label(record.judge.fqi)
             band_distribution[band] += 1
 
         f.write(f"""
@@ -1749,10 +2205,10 @@ class ReportGenerator:
         new Chart(histCtx, {{
             type: 'bar',
             data: {{
-                labels: ['Broken', 'Critical', 'Weak', 'Good', 'Excellent'],
+                labels: ['L1_BASIC', 'L2_FUNCTIONAL', 'L3_ENHANCED', 'L4_INTELLIGENT', 'L5_AGENTIC'],
                 datasets: [{{
                     label: 'Number of Queries',
-                    data: [{band_distribution["Broken"]}, {band_distribution["Critical"]}, {band_distribution["Weak"]}, {band_distribution["Good"]}, {band_distribution["Excellent"]}],
+                    data: [{band_distribution["L1_BASIC"]}, {band_distribution["L2_FUNCTIONAL"]}, {band_distribution["L3_ENHANCED"]}, {band_distribution["L4_INTELLIGENT"]}, {band_distribution["L5_AGENTIC"]}],
                     backgroundColor: [
                         'rgba(220, 53, 69, 0.7)',
                         'rgba(255, 127, 14, 0.7)',
