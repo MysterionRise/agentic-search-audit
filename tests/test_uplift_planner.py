@@ -50,7 +50,6 @@ class TestSeverity:
         assert Severity.CRITICAL.value == "critical"
         assert Severity.HIGH.value == "high"
         assert Severity.MEDIUM.value == "medium"
-        assert Severity.LOW.value == "low"
 
     def test_severity_is_str_enum(self):
         """Test Severity is a string enum."""
@@ -93,9 +92,9 @@ class TestCalculateSeverity:
         """Test >25% affected -> MEDIUM."""
         assert calculate_severity(30.0, 3.5) == Severity.MEDIUM
 
-    def test_low(self):
-        """Test <25% affected with good score -> LOW."""
-        assert calculate_severity(10.0, 4.0) == Severity.LOW
+    def test_low_becomes_medium(self):
+        """Test <25% affected with good score -> MEDIUM (LOW removed)."""
+        assert calculate_severity(10.0, 4.0) == Severity.MEDIUM
 
     def test_boundary_75(self):
         """Test exactly 75% is not CRITICAL (>75 required)."""
@@ -106,8 +105,8 @@ class TestCalculateSeverity:
         assert calculate_severity(50.0, 3.5) == Severity.MEDIUM
 
     def test_boundary_25(self):
-        """Test exactly 25% is not MEDIUM (>25 required)."""
-        assert calculate_severity(25.0, 3.5) == Severity.LOW
+        """Test exactly 25% is not HIGH (>25 required) -> MEDIUM."""
+        assert calculate_severity(25.0, 3.5) == Severity.MEDIUM
 
     def test_boundary_score_2(self):
         """Test exactly 2.0 is not CRITICAL (<2.0 required)."""
@@ -137,7 +136,7 @@ class TestFinding:
             observation="Test",
             affected_queries=0,
             total_queries=0,
-            severity=Severity.LOW,
+            severity=Severity.MEDIUM,
             affected_dimension="results_relevance",
             avg_dimension_score=0.0,
         )
@@ -218,7 +217,7 @@ class TestFindingsAnalyzer:
         report = analyzer.analyze(records)
 
         # Verify sorted by severity order
-        severity_order = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
+        severity_order = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM]
         last_severity_idx = -1
         for finding in report.findings:
             idx = severity_order.index(finding.severity)

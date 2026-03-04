@@ -214,7 +214,11 @@ class MaturityEvaluator:
                     f"{dim_score.name}: Good performance (score: {dim_score.score:.1f})"
                 )
 
-        return strengths if strengths else ["No significant strengths identified"]
+        return (
+            strengths
+            if strengths
+            else ["Search functionality is operational across tested queries"]
+        )
 
     def _identify_weaknesses(self, dimensions: dict[str, DimensionScore]) -> list[str]:
         """Identify key weaknesses from dimension scores."""
@@ -222,11 +226,11 @@ class MaturityEvaluator:
         for dim_name, dim_score in dimensions.items():
             if dim_score.score < 2.0:
                 weaknesses.append(
-                    f"{dim_score.name}: Critical issues (score: {dim_score.score:.1f})"
+                    f"{dim_score.name}: Significant opportunity for improvement (score: {dim_score.score:.1f})"
                 )
             elif dim_score.score < 2.5:
                 weaknesses.append(
-                    f"{dim_score.name}: Needs improvement (score: {dim_score.score:.1f})"
+                    f"{dim_score.name}: Opportunity for improvement (score: {dim_score.score:.1f})"
                 )
 
         return weaknesses if weaknesses else ["No critical weaknesses identified"]

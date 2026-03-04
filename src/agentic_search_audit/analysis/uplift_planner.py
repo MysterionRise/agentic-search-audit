@@ -16,8 +16,7 @@ class Severity(str, Enum):
 
     CRITICAL = "critical"  # >75% affected OR dimension avg <2.0
     HIGH = "high"  # >50% affected OR dimension avg <3.0
-    MEDIUM = "medium"  # >25% affected
-    LOW = "low"  # <25% affected
+    MEDIUM = "medium"  # <=25% affected
 
 
 class Category(str, Enum):
@@ -80,7 +79,7 @@ def calculate_severity(affected_pct: float, avg_dim_score: float) -> Severity:
         return Severity.HIGH
     if affected_pct > 25:
         return Severity.MEDIUM
-    return Severity.LOW
+    return Severity.MEDIUM
 
 
 # Keyword-based issue patterns for grouping judge-reported issues into findings
@@ -205,7 +204,6 @@ _SEVERITY_ORDER = {
     Severity.CRITICAL: 0,
     Severity.HIGH: 1,
     Severity.MEDIUM: 2,
-    Severity.LOW: 3,
 }
 
 
@@ -288,8 +286,30 @@ class FindingsAnalyzer:
             finding_id += 1
 
         # Step 3: Catch-all for unmatched issues appearing in 2+ queries
+        # Filter out extraction-artifact false findings (our tool's limitations, not site issues)
+        extraction_artifact_keywords = [
+            "missing title",
+            "missing url",
+            "missing price",
+            "n/a",
+            "missing product information",
+            "missing key product",
+            "no title",
+            "no url",
+            "no price",
+        ]
+
         for issue_text, query_indices in unmatched.items():
             if len(query_indices) < 2:
+                continue
+
+            # Skip issues that are likely extraction artifacts rather than real site problems
+            if any(kw in issue_text for kw in extraction_artifact_keywords):
+                logger.debug(
+                    "Filtering extraction-artifact finding: %s (%d queries)",
+                    issue_text,
+                    len(query_indices),
+                )
                 continue
 
             # Use results_relevance as default dimension for unmatched issues
