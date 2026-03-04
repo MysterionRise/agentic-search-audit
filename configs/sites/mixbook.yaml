@@ -1,0 +1,60 @@
+# Mixbook.com - Photo books, cards & custom printing
+# STATUS: EXPERIMENTAL - Selectors copied from generic template, not validated
+#         against live site. Run with --no-headless to verify selectors work.
+# Competitor to Shutterfly for photo product search quality comparison
+
+site:
+  url: "https://www.mixbook.com"
+  search:
+    input_selectors:
+      - 'input[type="search"]'
+      - 'input[aria-label*="Search" i]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[name="q"]'
+      - 'input[name="search"]'
+      - 'input[data-testid*="search" i]'
+    submit_strategy: "enter"
+    use_intelligent_fallback: true
+  results:
+    item_selectors:
+      - 'div[class*="product-card"]'
+      - 'div[class*="ProductCard"]'
+      - 'div[class*="search-result"]'
+      - 'div[class*="tile"]'
+      - 'li[class*="product"]'
+      - 'a[class*="product"]'
+    title_selectors:
+      - 'h2'
+      - 'h3'
+      - '[class*="title"]'
+      - '[class*="name"]'
+    price_selectors:
+      - '[class*="price"]'
+      - 'span[class*="Price"]'
+    image_selectors:
+      - 'img'
+    snippet_selectors:
+      - '[class*="description"]'
+      - 'p'
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "maybe later"
+      - "no thanks"
+      - "not now"
+
+run:
+  browser_backend: undetected
+  throttle_rps: 0.3
+  network_idle_ms: 4000
+  post_submit_ms: 3000
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o"
+  base_url: "https://openrouter.ai/api/v1"

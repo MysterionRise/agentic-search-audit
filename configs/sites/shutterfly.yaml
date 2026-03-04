@@ -1,0 +1,69 @@
+# Shutterfly.com - Personalized products & photo printing
+# NOTE: robots.txt disallows /sitesearch, so we MUST use input-based search
+#       (no search_url_template). use_intelligent_fallback covers edge cases.
+# NOTE: Shutterfly A/B tests between old UI (input.text_box[role=searchbox])
+#       and new UI (input[aria-label=autocomplete-input] with sfly-lib-* classes).
+#       Selectors below cover both versions.
+
+site:
+  url: "https://www.shutterfly.com"
+  search:
+    input_selectors:
+      # Old UI selectors
+      - 'input[role="searchbox"]'
+      - 'input.text_box'
+      - 'input[aria-label="Enter searching text here"]'
+      # New UI selectors
+      - 'input[aria-label="autocomplete-input"]'
+      # Generic fallbacks
+      - 'input[type="search"]'
+      - 'input[aria-label*="search" i]'
+      - 'input[placeholder*="Search" i]'
+      - 'input[name="q"]'
+      - 'input[name="search"]'
+      - 'input[data-testid*="search" i]'
+    submit_strategy: "enter"
+    use_intelligent_fallback: true
+  results:
+    item_selectors:
+      - 'div[class*="product-card"]'
+      - 'div[class*="ProductCard"]'
+      - 'div[class*="search-result"]'
+      - 'div[class*="tile"]'
+      - 'li[class*="product"]'
+      - 'a[class*="product"]'
+    title_selectors:
+      - 'h2'
+      - 'h3'
+      - '[class*="title"]'
+      - '[class*="name"]'
+    price_selectors:
+      - '[class*="price"]'
+      - 'span[class*="Price"]'
+    image_selectors:
+      - 'img'
+    snippet_selectors:
+      - '[class*="description"]'
+      - 'p'
+  modals:
+    close_text_matches:
+      - "accept"
+      - "agree"
+      - "continue"
+      - "got it"
+      - "close"
+      - "dismiss"
+      - "maybe later"
+      - "no thanks"
+      - "not now"
+
+run:
+  browser_backend: undetected
+  throttle_rps: 0.3
+  network_idle_ms: 4000
+  post_submit_ms: 3000
+
+llm:
+  provider: "openrouter"
+  model: "openai/gpt-4o"
+  base_url: "https://openrouter.ai/api/v1"
