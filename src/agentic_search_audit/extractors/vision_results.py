@@ -1,9 +1,11 @@
 """Vision-based search results extraction using LLM."""
 
 import base64
+import json as _json
 import logging
 import tempfile
 from pathlib import Path
+from urllib.parse import urljoin
 
 from ..core.types import BrowserClient, LLMConfig, ResultItem
 from .vision_provider import VisionProvider, create_vision_provider
@@ -143,6 +145,10 @@ class VisionResultsExtractor:
             logger.info(
                 f"Vision extracted {len(items)} results " f"(total visible: {total_visible})"
             )
+
+            # Enrich with URLs from DOM (vision can't see href attributes)
+            items = await self._enrich_urls_from_dom(items)
+
             return items
 
         except Exception as e:
@@ -152,6 +158,112 @@ class VisionResultsExtractor:
         finally:
             if screenshot_path is not None and screenshot_path.exists():
                 screenshot_path.unlink()
+
+    async def _enrich_urls_from_dom(self, items: list[ResultItem]) -> list[ResultItem]:
+        """Enrich vision-extracted items with URLs by matching titles against the DOM.
+
+        Vision extraction captures titles from screenshots but cannot see href
+        attributes. This method queries the DOM for <a> elements, matches them
+        to extracted items by title text, and populates the url field.
+
+        Args:
+            items: Vision-extracted ResultItems (url=None)
+
+        Returns:
+            Same items with url fields populated where matches were found
+        """
+        if not items:
+            return items
+
+        titles = [item.title or "" for item in items]
+        titles_json = _json.dumps(titles)
+
+        try:
+            # Get the current page URL for resolving relative hrefs
+            page_url = await self.client.evaluate("window.location.href") or ""
+
+            # Find all <a> elements with href and visible text, return title→href mapping
+            result = await self.client.evaluate(f"""
+                (function() {{
+                    var titles = {titles_json};
+                    var mapping = {{}};
+                    // Collect all <a> elements with href
+                    var links = document.querySelectorAll('a[href]');
+                    // Build a list of candidate link objects
+                    var candidates = [];
+                    for (var i = 0; i < links.length; i++) {{
+                        var a = links[i];
+                        var href = a.getAttribute('href');
+                        if (!href || href === '#' || href.startsWith('javascript:')) continue;
+                        // Get visible text from the link or its children
+                        var text = (a.textContent || '').trim();
+                        if (!text) continue;
+                        var rect = a.getBoundingClientRect();
+                        if (rect.width === 0 && rect.height === 0) continue;
+                        candidates.push({{text: text, href: href}});
+                    }}
+                    // For each vision-extracted title, find the best matching link
+                    for (var t = 0; t < titles.length; t++) {{
+                        var title = titles[t];
+                        if (!title) continue;
+                        var titleLower = title.toLowerCase().trim();
+                        if (!titleLower) continue;
+                        var bestHref = null;
+                        var bestScore = 0;
+                        for (var c = 0; c < candidates.length; c++) {{
+                            var cand = candidates[c];
+                            var candLower = cand.text.toLowerCase();
+                            // Exact match
+                            if (candLower === titleLower) {{
+                                bestHref = cand.href;
+                                bestScore = 100;
+                                break;
+                            }}
+                            // Title contained within link text
+                            if (candLower.indexOf(titleLower) !== -1) {{
+                                var score = titleLower.length / candLower.length * 80;
+                                if (score > bestScore) {{
+                                    bestScore = score;
+                                    bestHref = cand.href;
+                                }}
+                            }}
+                            // Link text contained within title
+                            if (titleLower.indexOf(candLower) !== -1 && candLower.length > 3) {{
+                                var score2 = candLower.length / titleLower.length * 70;
+                                if (score2 > bestScore) {{
+                                    bestScore = score2;
+                                    bestHref = cand.href;
+                                }}
+                            }}
+                        }}
+                        if (bestHref && bestScore >= 40) {{
+                            mapping[t.toString()] = bestHref;
+                        }}
+                    }}
+                    return JSON.stringify(mapping);
+                }})()
+            """)
+
+            if result and result not in ("null", "undefined", "{}"):
+                mapping = _json.loads(result) if isinstance(result, str) else result
+                enriched = 0
+                for idx_str, href in mapping.items():
+                    idx = int(idx_str)
+                    if 0 <= idx < len(items) and not items[idx].url:
+                        abs_url = urljoin(page_url, href) if page_url else href
+                        items[idx].url = abs_url
+                        enriched += 1
+                if enriched > 0:
+                    logger.info(f"Enriched {enriched}/{len(items)} vision items with URLs from DOM")
+                else:
+                    logger.debug("DOM URL enrichment found no matches")
+            else:
+                logger.debug("DOM URL enrichment returned no mapping")
+
+        except Exception as e:
+            logger.debug(f"DOM URL enrichment failed (non-fatal): {e}")
+
+        return items
 
     async def check_for_no_results(self) -> bool:
         """Use vision to check if the page shows a no-results message.

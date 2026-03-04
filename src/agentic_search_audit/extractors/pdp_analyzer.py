@@ -37,6 +37,24 @@ Analyze the product detail page screenshot and extract the following fields as J
 Return ONLY valid JSON. No explanation or markdown wrapping.\
 """
 
+DROPDOWN_SELECTORS: dict[str, list[str]] = {
+    "size": [
+        'select[name*="size" i]',
+        'select[id*="size" i]',
+        'button[aria-label*="size" i]',
+        '[class*="size-selector" i]',
+        '[data-testid*="size" i]',
+    ],
+    "color": [
+        'select[name*="color" i]',
+        'select[id*="color" i]',
+        'button[aria-label*="color" i]',
+        '[class*="swatch" i]',
+        '[class*="color-selector" i]',
+        '[data-testid*="color" i]',
+    ],
+}
+
 
 class PdpAnalyzer:
     """Visits product detail pages from search results and extracts structured data."""
@@ -186,6 +204,27 @@ class PdpAnalyzer:
 
         item.attributes["pdp_analyzed"] = "true"
 
+        # Interactive dropdown extraction
+        for variant_type in ("size", "color"):
+            try:
+                dropdown_data = await self._extract_dropdown_options(variant_type)
+                item.attributes[f"pdp_{variant_type}_dropdown_found"] = dropdown_data.get(
+                    "found", "false"
+                )
+                if dropdown_data.get("found") == "true":
+                    item.attributes[f"pdp_{variant_type}_options_count"] = dropdown_data.get(
+                        "count", "0"
+                    )
+                    item.attributes[f"pdp_{variant_type}_available"] = dropdown_data.get(
+                        "available", ""
+                    )
+                    item.attributes[f"pdp_{variant_type}_unavailable"] = dropdown_data.get(
+                        "unavailable", ""
+                    )
+            except Exception as e:
+                logger.debug("Dropdown extraction failed for %s: %s", variant_type, e)
+                item.attributes[f"pdp_{variant_type}_dropdown_found"] = "error"
+
         # Navigate back to search results
         await self._navigate_back(search_page_url)
 
@@ -247,6 +286,126 @@ class PdpAnalyzer:
             logger.error("PDP data extraction failed for %s: %s", screenshot_path, e)
             return {}
 
+    async def _extract_dropdown_options(self, variant_type: str) -> dict[str, str]:
+        """Orchestrate extraction for a variant type (size or color).
+
+        Args:
+            variant_type: Either "size" or "color".
+
+        Returns:
+            Dict with keys like found, count, available, unavailable.
+        """
+        try:
+            selectors = DROPDOWN_SELECTORS.get(variant_type, [])
+            # Try native <select> elements first
+            for selector in selectors:
+                result = await self._extract_select_options(selector)
+                if result is not None:
+                    return result
+            # Fall back to button/div-based dropdowns
+            for selector in selectors:
+                result = await self._extract_expanded_options(selector, variant_type)
+                if result is not None:
+                    return result
+            return {"found": "false"}
+        except Exception:
+            return {"found": "error"}
+
+    async def _extract_select_options(self, selector: str) -> dict[str, str] | None:
+        """Extract options from a native <select> element."""
+        js = f"""
+        (function() {{
+            var sel = document.querySelector('{selector}');
+            if (!sel || sel.tagName !== 'SELECT') return null;
+            var opts = Array.from(sel.options).filter(o => o.value);
+            var available = opts.filter(o => !o.disabled).map(o => o.textContent.trim());
+            var unavailable = opts.filter(o => o.disabled).map(o => o.textContent.trim());
+            return {{
+                found: 'true',
+                count: String(opts.length),
+                available: available.join(', '),
+                unavailable: unavailable.join(', ')
+            }};
+        }})()
+        """
+        result = await self.client.evaluate(js)
+        if result and isinstance(result, dict) and result.get("found") == "true":
+            return dict(result)
+        return None
+
+    async def _extract_expanded_options(
+        self, trigger_selector: str, variant_type: str
+    ) -> dict[str, str] | None:
+        """Click a trigger element and read expanded dropdown options.
+
+        Scopes the option query to the trigger's parent container rather than
+        the full document, to avoid matching navigation menus and other
+        unrelated elements that use the same ARIA roles.
+        """
+        try:
+            el = await self.client.query_selector(trigger_selector)
+            if not el:
+                return None
+            await self.client.click(trigger_selector)
+            await asyncio.sleep(0.5)
+
+            # Escape the trigger selector for safe use inside JS string
+            safe_sel = trigger_selector.replace("\\", "\\\\").replace("'", "\\'")
+
+            # Try to read expanded options scoped to trigger's container
+            js = f"""
+            (function() {{
+                var trigger = document.querySelector('{safe_sel}');
+                if (!trigger) return null;
+                // Walk up to find the dropdown container
+                var container = trigger.closest(
+                    '[role="listbox"], [class*="dropdown"], [class*="select"], [class*="picker"]'
+                ) || trigger.parentElement;
+                // If container is too broad, try next sibling or parent
+                if (!container || container === document.body || container === document.documentElement) {{
+                    container = trigger.nextElementSibling || trigger.parentElement;
+                }}
+                var options = container.querySelectorAll(
+                    '[role="option"], li, [class*="swatch-item"], [class*="option-item"]'
+                );
+                // Fallback: check for listbox-scoped options if container approach yields nothing
+                if (!options.length) {{
+                    options = document.querySelectorAll(
+                        '[role="listbox"] [role="option"], '
+                        + '[aria-expanded="true"] ~ * [role="option"]'
+                    );
+                }}
+                if (!options.length) return null;
+                var available = [];
+                var unavailable = [];
+                options.forEach(function(o) {{
+                    var text = o.textContent.trim() || o.getAttribute('aria-label') || '';
+                    if (!text) return;
+                    var isDisabled = o.classList.contains('disabled')
+                        || o.classList.contains('unavailable')
+                        || o.classList.contains('out-of-stock')
+                        || o.getAttribute('aria-disabled') === 'true';
+                    if (isDisabled) {{
+                        unavailable.push(text);
+                    }} else {{
+                        available.push(text);
+                    }}
+                }});
+                return {{
+                    found: 'true',
+                    count: String(available.length + unavailable.length),
+                    available: available.join(', '),
+                    unavailable: unavailable.join(', ')
+                }};
+            }})()
+            """
+            result = await self.client.evaluate(js)
+            if result and isinstance(result, dict) and result.get("found") == "true":
+                return dict(result)
+        except Exception as e:
+            logger.debug("Failed to extract expanded options for %s: %s", variant_type, e)
+        return None
+
     @staticmethod
     def check_consistency(item: ResultItem) -> dict[str, str]:
         """Check consistency between search result data and PDP-extracted data.
@@ -297,5 +456,23 @@ class PdpAnalyzer:
                         f"Low similarity ({jaccard:.2f}): "
                         f"Search: '{search_title}', PDP: '{pdp_title}'"
                     )
+
+        # Variant availability check (>50% unavailable)
+        for variant_type in ("size", "color"):
+            count_str = attrs.get(f"pdp_{variant_type}_options_count", "0")
+            unavailable_str = attrs.get(f"pdp_{variant_type}_unavailable", "")
+            try:
+                total = int(count_str)
+                unavailable_count = (
+                    len([x for x in unavailable_str.split(", ") if x.strip()])
+                    if unavailable_str
+                    else 0
+                )
+                if total > 0 and unavailable_count / total > 0.5:
+                    issues[f"{variant_type}_mostly_unavailable"] = (
+                        f"{unavailable_count}/{total} {variant_type} options unavailable"
+                    )
+            except (ValueError, ZeroDivisionError):
+                pass
 
         return issues

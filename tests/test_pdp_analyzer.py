@@ -360,3 +360,113 @@ def test_run_config_pdp_custom():
     assert config.enable_pdp_analysis is True
     assert config.pdp_top_k == 5
     assert config.pdp_timeout_ms == 30000
+
+
+# ---------------------------------------------------------------------------
+# Dropdown extraction
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+async def test_extract_select_dropdown_options(
+    mock_client, llm_config, modals_config, sample_query, tmp_path
+):
+    """Test extraction from <select> elements."""
+    analyzer = _make_analyzer(mock_client, llm_config, modals_config, sample_query, tmp_path)
+
+    mock_client.evaluate = AsyncMock(
+        return_value={
+            "found": "true",
+            "count": "5",
+            "available": "S, M, L, XL",
+            "unavailable": "XXL",
+        }
+    )
+
+    result = await analyzer._extract_select_options('select[name*="size" i]')
+
+    assert result is not None
+    assert result["found"] == "true"
+    assert result["count"] == "5"
+    assert "S" in result["available"]
+    assert "XXL" in result["unavailable"]
+
+
+@pytest.mark.unit
+async def test_extract_select_returns_none_when_not_found(
+    mock_client, llm_config, modals_config, sample_query, tmp_path
+):
+    """Test returns None when select element not found."""
+    analyzer = _make_analyzer(mock_client, llm_config, modals_config, sample_query, tmp_path)
+    mock_client.evaluate = AsyncMock(return_value=None)
+
+    result = await analyzer._extract_select_options('select[name*="size" i]')
+    assert result is None
+
+
+@pytest.mark.unit
+async def test_extract_expanded_options(
+    mock_client, llm_config, modals_config, sample_query, tmp_path
+):
+    """Test extraction from button-triggered dropdown uses scoped querying."""
+    analyzer = _make_analyzer(mock_client, llm_config, modals_config, sample_query, tmp_path)
+
+    mock_client.query_selector = AsyncMock(return_value={"tagName": "BUTTON"})
+    mock_client.click = AsyncMock()
+    mock_client.evaluate = AsyncMock(
+        return_value={
+            "found": "true",
+            "count": "3",
+            "available": "Red, Blue",
+            "unavailable": "Green",
+        }
+    )
+
+    result = await analyzer._extract_expanded_options('button[aria-label*="color" i]', "color")
+
+    assert result is not None
+    assert result["found"] == "true"
+    assert "Red" in result["available"]
+    mock_client.click.assert_called_once()
+
+    # Verify the JS uses scoped querying (trigger + container, not document-wide)
+    evaluate_calls = mock_client.evaluate.call_args_list
+    js_code = evaluate_calls[-1][0][0]  # Last evaluate call is the options extraction
+    assert "trigger" in js_code
+    assert "container" in js_code
+    assert "closest" in js_code
+
+
+@pytest.mark.unit
+async def test_dropdown_not_found_fallback(
+    mock_client, llm_config, modals_config, sample_query, tmp_path
+):
+    """Test graceful fallback when no dropdown found."""
+    analyzer = _make_analyzer(mock_client, llm_config, modals_config, sample_query, tmp_path)
+    mock_client.evaluate = AsyncMock(return_value=None)
+    mock_client.query_selector = AsyncMock(return_value=None)
+
+    result = await analyzer._extract_dropdown_options("size")
+    assert result["found"] == "false"
+
+
+@pytest.mark.unit
+def test_consistency_check_variant_availability():
+    """Test consistency check flags mostly unavailable variants."""
+    item = ResultItem(
+        rank=1,
+        title="Nike Air Max",
+        url="https://example.com/p/1",
+        price="$120",
+        attributes={
+            "pdp_analyzed": "true",
+            "pdp_price": "$120.00",
+            "pdp_size_options_count": "6",
+            "pdp_size_unavailable": "S, M, L, XL",
+            "pdp_size_available": "XXS, XXL",
+        },
+    )
+
+    issues = PdpAnalyzer.check_consistency(item)
+    assert "size_mostly_unavailable" in issues
+    assert "4/6" in issues["size_mostly_unavailable"]

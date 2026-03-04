@@ -202,8 +202,22 @@ class SearchBoxFinder:
         if not await self._click_trigger():
             return False
 
+        # Proactively hide any marketing/promo overlays that may block interaction
+        # or prevent the search bar from rendering (e.g. Shutterfly marketing-popup)
+        removed = await self._force_remove_overlays()
+        if removed > 0:
+            await asyncio.sleep(1.0)  # wait for page to render after overlay removal
+
         # Find search box
         search_selector = await self.find_search_box()
+        if not search_selector and removed > 0:
+            # Overlay was blocking — reload page (cookies may suppress popup now)
+            logger.info("Search box not found after overlay removal — reloading page")
+            await self.client.evaluate("location.reload()")
+            await asyncio.sleep(3.0)
+            await self._force_remove_overlays()
+            await asyncio.sleep(0.5)
+            search_selector = await self.find_search_box()
         if not search_selector:
             logger.error("Could not find search box")
             return False
@@ -235,7 +249,29 @@ class SearchBoxFinder:
                 }})()
             """)
             # 3. Click to focus and use keyboard shortcuts as fallback
-            await self.client.click(safe_selector)
+            try:
+                await self.client.click(safe_selector)
+            except Exception as click_err:
+                if "element click intercepted" in str(click_err):
+                    logger.warning(
+                        "Click intercepted by overlay — force-removing overlays and retrying"
+                    )
+                    await self._force_remove_overlays()
+                    await asyncio.sleep(0.5)
+                    try:
+                        await self.client.click(safe_selector)
+                    except Exception as retry_err:
+                        if "element click intercepted" in str(retry_err):
+                            logger.warning(
+                                "Click still intercepted — using JavaScript click as fallback"
+                            )
+                            await self.client.evaluate(
+                                f'document.querySelector("{escaped_selector}").click()'
+                            )
+                        else:
+                            raise
+                else:
+                    raise
             await asyncio.sleep(0.2)
             # Select all and delete using keyboard
             await self.client.evaluate(f'document.querySelector("{escaped_selector}").select()')
@@ -243,7 +279,25 @@ class SearchBoxFinder:
             await asyncio.sleep(0.2)
 
             # Type query
-            await self.client.type_text(safe_selector, query_text, delay=30)
+            try:
+                await self.client.type_text(safe_selector, query_text, delay=30)
+            except Exception as type_err:
+                if "element click intercepted" in str(type_err):
+                    logger.warning("type_text intercepted by overlay — using JS input fallback")
+                    escaped_text = query_text.replace("\\", "\\\\").replace('"', '\\"')
+                    await self.client.evaluate(f"""
+                        (function() {{
+                            var el = document.querySelector("{escaped_selector}");
+                            if (el) {{
+                                el.focus();
+                                el.value = "{escaped_text}";
+                                el.dispatchEvent(new Event("input", {{bubbles: true}}));
+                                el.dispatchEvent(new Event("change", {{bubbles: true}}));
+                            }}
+                        }})()
+                    """)
+                else:
+                    raise
 
             # Wait for autocomplete to load (many search boxes have autocomplete)
             await asyncio.sleep(1.0)
@@ -286,6 +340,98 @@ class SearchBoxFinder:
         except Exception as e:
             logger.error(f"Failed to submit search: {e}")
             return False
+
+    async def _force_remove_overlays(self) -> int:
+        """Force-hide modal overlays blocking interaction via JavaScript.
+
+        Uses display:none instead of remove() to avoid breaking page structure.
+        Also removes any body scroll locks that overlays may have set.
+
+        Returns:
+            Number of overlays hidden
+        """
+        try:
+            result = await self.client.evaluate("""
+                (function() {
+                    var hidden = 0;
+                    // Target specific marketing/promo overlay patterns
+                    var selectors = [
+                        '.modal-overlay.marketing-popup',
+                        '.modal-overlay.newsletter-popup',
+                        '.modal-overlay.promo-popup',
+                        '[class*="marketing-popup"]',
+                        '[class*="newsletter-popup"]',
+                        '[class*="promo-popup"]',
+                        '[class*="signup-modal"]',
+                        '[class*="email-capture"]',
+                        '[class*="email-popup"]',
+                        '[class*="popup-overlay"]',
+                        '[class*="authDialog"]',
+                        '[class*="auth-dialog"]',
+                        '[class*="auth-modal"]',
+                        '[class*="login-modal"]',
+                        '[class*="signin-modal"]',
+                        '[data-testid="modal-dialog"]',
+                        '[data-testid="modal-overlay"]',
+                        '[class*="controls-overlay"]'
+                    ];
+                    for (var i = 0; i < selectors.length; i++) {
+                        var elements = document.querySelectorAll(selectors[i]);
+                        for (var j = 0; j < elements.length; j++) {
+                            var el = elements[j];
+                            var rect = el.getBoundingClientRect();
+                            if (rect.width > 200 && rect.height > 200) {
+                                el.style.display = 'none';
+                                hidden++;
+                            }
+                        }
+                    }
+                    // Also hide any generic .modal-overlay that has high z-index AND
+                    // fixed/absolute position (require both to avoid false positives)
+                    var overlays = document.querySelectorAll('.modal-overlay');
+                    for (var k = 0; k < overlays.length; k++) {
+                        var ov = overlays[k];
+                        var style = window.getComputedStyle(ov);
+                        var zIndex = parseInt(style.zIndex) || 0;
+                        var isOverlay = zIndex > 100
+                            && (style.position === 'fixed' || style.position === 'absolute');
+                        if (isOverlay) {
+                            ov.style.display = 'none';
+                            hidden++;
+                        }
+                    }
+                    // Hide any high-z-index fixed/absolute overlay blocking the page
+                    // (catch-all for auth dialogs, signup prompts, etc.)
+                    var allDivs = document.querySelectorAll('div[class]');
+                    for (var m = 0; m < allDivs.length; m++) {
+                        var d = allDivs[m];
+                        if (d.style.display === 'none') continue;
+                        var ds = window.getComputedStyle(d);
+                        var dz = parseInt(ds.zIndex) || 0;
+                        if (dz > 500
+                            && (ds.position === 'fixed' || ds.position === 'absolute')
+                            && d.getBoundingClientRect().width > 200
+                            && d.getBoundingClientRect().height > 200) {
+                            d.style.display = 'none';
+                            hidden++;
+                        }
+                    }
+                    // Only clear body scroll lock if we actually hid overlays
+                    if (hidden > 0) {
+                        document.body.style.overflow = '';
+                        document.body.style.position = '';
+                        document.documentElement.style.overflow = '';
+                    }
+                    return hidden;
+                })()
+            """)
+            count = int(result) if result else 0
+            if count > 0:
+                logger.info(f"Force-hidden {count} blocking overlay(s)")
+            return count
+        except Exception as e:
+            logger.debug(f"Force overlay removal failed: {e}")
+            return 0
 
     async def get_search_suggestions(self) -> list[str]:
         """Get search suggestions if available (for future use).
