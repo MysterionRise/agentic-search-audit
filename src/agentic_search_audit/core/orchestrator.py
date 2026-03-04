@@ -49,7 +49,7 @@ class SearchAuditOrchestrator:
         # Adaptive throttle multiplier (increases on resistance, decays on success)
         self._throttle_multiplier: float = 1.0
 
-    async def run(self) -> list[AuditRecord]:
+    async def run(self, generate_pdf: bool = False) -> list[AuditRecord]:
         """Run the complete audit.
 
         Returns:
@@ -243,7 +243,9 @@ class SearchAuditOrchestrator:
 
         # Generate reports
         if self.records:
-            self.reporter.generate_reports(self.records, expert_insights=expert_insights)
+            self.reporter.generate_reports(
+                self.records, expert_insights=expert_insights, generate_pdf=generate_pdf
+            )
 
         logger.info(f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries")
         return self.records
@@ -380,6 +382,14 @@ class SearchAuditOrchestrator:
             raise RuntimeError("Browser client not initialized")
         if not self.judge:
             raise RuntimeError("Judge not initialized")
+
+        # Auto-classify intent if not set
+        if query.intent is None:
+            from ..judge.intent_classifier import IntentClassifier
+
+            classifier = IntentClassifier()
+            query = query.model_copy(update={"intent": classifier.classify(query.text)})
+            logger.debug(f"Auto-classified intent for '{query.text}': {query.intent}")
 
         # Use direct URL navigation if a search_url_template is configured
         if self.config.site.search.search_url_template:
@@ -751,6 +761,7 @@ async def run_audit(
     queries: list[Query],
     output_dir: str | None = None,
     resume: bool = False,
+    generate_pdf: bool = False,
 ) -> list[AuditRecord]:
     """Run a complete search audit.
 
@@ -786,6 +797,6 @@ async def run_audit(
 
     # Create orchestrator and run
     orchestrator = SearchAuditOrchestrator(config, queries, run_dir)
-    records = await orchestrator.run()
+    records = await orchestrator.run(generate_pdf=generate_pdf)
 
     return records

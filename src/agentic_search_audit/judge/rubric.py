@@ -74,6 +74,12 @@ FQI = (QU x 0.25) + (RR x 0.25) + (RP x 0.20) + (AF x 0.20) + (EH x 0.10)
 - Provide per-dimension diagnosis explaining the score
 - Be strict but fair in scoring
 
+## Tone Guidelines
+- Use professional, constructive language throughout. This report may be shared with site owners.
+- Frame issues as opportunities for improvement, not failures.
+- Avoid harsh phrases like "critically flawed", "fails to understand", "critically inadequate", or "poor". Instead use neutral language like "does not match user intent", "returns unrelated results", "could be improved".
+- In executive_summary and diagnosis fields, be factual and objective rather than judgmental.
+
 ## Output Format
 
 Return ONLY a valid JSON object with this EXACT structure:
@@ -141,6 +147,29 @@ For each result you reference, cite its rank number.
 Return ONLY the JSON object matching the FQI schema.
 Include schema_version: "2.1" in your response.
 """
+
+
+INTENT_GUIDANCE: dict[str, str] = {
+    "product": (
+        "This is a PRODUCT search. Evaluate whether product results are relevant, "
+        "well-ranked, and displayed with key product information (images, prices, ratings)."
+    ),
+    "service": (
+        "This is a SERVICE-oriented search. Evaluate whether service information pages, "
+        "fulfillment options (pickup, delivery, scheduling), or service-related content "
+        "is surfaced prominently. Product-only results may indicate poor query understanding."
+    ),
+    "navigation": (
+        "This is a NAVIGATION search. The user is trying to reach a specific page. "
+        "Evaluate whether the target page appears as the top result. "
+        "Multiple irrelevant results indicate poor navigational handling."
+    ),
+    "informational": (
+        "This is an INFORMATIONAL search. The user is seeking help or information. "
+        "Evaluate whether FAQ, help pages, guides, or informational content is surfaced. "
+        "Product-only results indicate poor query understanding for this intent."
+    ),
+}
 
 
 def get_judge_schema() -> dict[str, Any]:

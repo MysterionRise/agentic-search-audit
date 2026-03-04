@@ -234,6 +234,14 @@ class SearchQualityJudge:
             locale=locale,
         )
 
+        # Add intent-specific guidance
+        if query.intent:
+            from .rubric import INTENT_GUIDANCE
+
+            guidance = INTENT_GUIDANCE.get(query.intent.value, "")
+            if guidance:
+                prompt += f"\n\n## Intent Guidance\n\n{guidance}\n"
+
         return prompt
 
     async def _call_llm(self, user_prompt: str) -> str:

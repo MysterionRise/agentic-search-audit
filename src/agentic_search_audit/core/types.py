@@ -141,6 +141,15 @@ class QueryOrigin(str, Enum):
     GENERATED = "generated"
 
 
+class SearchIntent(str, Enum):
+    """Search intent classification for queries."""
+
+    PRODUCT = "product"  # Looking for products/categories
+    SERVICE = "service"  # Service-oriented (e.g., "same day pickup photo prints")
+    NAVIGATION = "navigation"  # Navigating to a specific page
+    INFORMATIONAL = "informational"  # Seeking information
+
+
 class Query(BaseModel):
     """A search query to evaluate."""
 
@@ -148,6 +157,9 @@ class Query(BaseModel):
     text: str = Field(description="The query text to search for")
     lang: str | None = Field(default="en", description="Language code (ISO 639-1)")
     origin: QueryOrigin = Field(default=QueryOrigin.PREDEFINED, description="Query source")
+    intent: SearchIntent | None = Field(
+        default=None, description="Search intent classification (auto-detected if not set)"
+    )
 
 
 class ResultItem(BaseModel):
@@ -215,6 +227,23 @@ def get_fqi_band(score: float) -> str:
         if score >= threshold:
             return label
     return "Broken"
+
+
+MATURITY_LABELS: list[tuple[float, str]] = [
+    (4.5, "L5_AGENTIC"),
+    (3.5, "L4_INTELLIGENT"),
+    (2.5, "L3_ENHANCED"),
+    (1.5, "L2_FUNCTIONAL"),
+    (0.0, "L1_BASIC"),
+]
+
+
+def get_maturity_label(score: float) -> str:
+    """Get maturity level label for a score."""
+    for threshold, label in MATURITY_LABELS:
+        if score >= threshold:
+            return label
+    return "L1_BASIC"
 
 
 class DimensionDiagnosis(BaseModel):
