@@ -408,10 +408,23 @@ class TestSeleniumErrorClassification:
         import sys
         from types import ModuleType
 
-        # Check if we need to inject mocks
+        # Use real selenium exceptions if available, otherwise mock them
         try:
-            from selenium.common.exceptions import TimeoutException  # noqa: F401
+            from selenium.common.exceptions import (
+                InvalidSessionIdException,
+                NoSuchWindowException,
+                SessionNotCreatedException,
+                TimeoutException,
+                WebDriverException,
+            )
 
+            self.__class__._selenium_exc_classes = {  # type: ignore[attr-defined]
+                "TimeoutException": TimeoutException,
+                "InvalidSessionIdException": InvalidSessionIdException,
+                "SessionNotCreatedException": SessionNotCreatedException,
+                "NoSuchWindowException": NoSuchWindowException,
+                "WebDriverException": WebDriverException,
+            }
             return  # Real selenium installed — no mocking needed
         except (ImportError, AttributeError):
             pass
