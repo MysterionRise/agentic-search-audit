@@ -316,6 +316,19 @@ Examples:
         help="Resume a previous audit run by reusing the most recent run directory for the site",
     )
 
+    parser.add_argument(
+        "--pdf",
+        action="store_true",
+        help="Generate a PDF version of the HTML report (requires weasyprint)",
+    )
+
+    parser.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("SITE_A", "SITE_B"),
+        help="Compare two sites' search quality (e.g., --compare mixbook shutterfly)",
+    )
+
     return parser.parse_args()
 
 
@@ -332,6 +345,100 @@ async def main_async() -> int:
     logger = logging.getLogger(__name__)
 
     try:
+        # Handle comparison mode
+        if args.compare:
+            site_a_name, site_b_name = args.compare
+            logger.info(f"Comparison mode: {site_a_name} vs {site_b_name}")
+
+            from ..core.comparison import build_comparison, find_shared_queries
+            from ..report.comparison_report import ComparisonReportGenerator
+
+            # Load queries for both sites
+            comparison_name = f"comparison_{site_a_name}_{site_b_name}.json"
+            queries_a_path = Path("data") / "queries" / comparison_name
+            if not queries_a_path.exists():
+                # Try reverse order
+                reverse_name = f"comparison_{site_b_name}_{site_a_name}.json"
+                queries_a_path = Path("data") / "queries" / reverse_name
+            if not queries_a_path.exists():
+                # Fall back to individual query files
+                queries_a_path = Path("data") / "queries" / f"{site_a_name}.json"
+
+            queries_b_path = Path("data") / "queries" / f"{site_b_name}.json"
+
+            if not queries_a_path.exists():
+                logger.error(f"Queries file not found: {queries_a_path}")
+                return 1
+
+            queries_a = load_queries(queries_a_path)
+            if queries_b_path.exists():
+                queries_b = load_queries(queries_b_path)
+            else:
+                queries_b = queries_a  # Use same queries for both sites
+
+            # Find shared queries
+            shared = find_shared_queries(queries_a, queries_b)
+            if not shared:
+                logger.error("No shared queries found between the two sites")
+                return 1
+
+            logger.info(f"Found {len(shared)} shared queries for comparison")
+
+            # Load configs for both sites
+            site_a_config_path = Path("configs") / "sites" / f"{site_a_name}.yaml"
+            site_b_config_path = Path("configs") / "sites" / f"{site_b_name}.yaml"
+
+            if not site_a_config_path.exists():
+                logger.error(f"Site config not found: {site_a_config_path}")
+                return 1
+            if not site_b_config_path.exists():
+                logger.error(f"Site config not found: {site_b_config_path}")
+                return 1
+
+            config_a = load_config(site_config_path=site_a_config_path)
+            config_b = load_config(site_config_path=site_b_config_path)
+
+            # Run audits for both sites
+            shared_query_objs = [
+                Query(id=f"q{i:03d}", text=q, origin=QueryOrigin.PREDEFINED)
+                for i, q in enumerate(shared, 1)
+            ]
+
+            logger.info(f"Running audit for {site_a_name}...")
+            records_a = await run_audit(config=config_a, queries=shared_query_objs)
+
+            logger.info(f"Running audit for {site_b_name}...")
+            records_b = await run_audit(config=config_b, queries=shared_query_objs)
+
+            # Build comparison
+            result = build_comparison(
+                site_a_name=site_a_name,
+                site_b_name=site_b_name,
+                site_a_records=records_a,
+                site_b_records=records_b,
+                shared_queries=shared,
+            )
+
+            # Generate comparison report
+            comparison_dir = (
+                Path(config_a.report.out_dir) / "comparisons" / (f"{site_a_name}_vs_{site_b_name}")
+            )
+            gen = ComparisonReportGenerator(result, comparison_dir)
+            gen.generate()
+
+            logger.info("=" * 60)
+            logger.info("COMPARISON COMPLETE")
+            logger.info("=" * 60)
+            a_fqi, a_mat = result.site_a_avg_fqi, result.site_a_maturity
+            b_fqi, b_mat = result.site_b_avg_fqi, result.site_b_maturity
+            logger.info(f"{site_a_name}: FQI {a_fqi:.2f} ({a_mat})")
+            logger.info(f"{site_b_name}: FQI {b_fqi:.2f} ({b_mat})")
+            logger.info(f"Overall Winner: {result.overall_winner}")
+            logger.info(f"Reports saved to: {comparison_dir}")
+            logger.info("=" * 60)
+
+            return 0
+
         # Determine config path
         config_path = args.config
         site_config_path = None
@@ -510,6 +617,7 @@ async def main_async() -> int:
             queries=queries,
             output_dir=str(args.output) if args.output else None,
             resume=getattr(args, "resume", False),
+            generate_pdf=getattr(args, "pdf", False),
         )
 
         # Print summary
