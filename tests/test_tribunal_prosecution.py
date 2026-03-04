@@ -392,15 +392,10 @@ class TestPDFCLIWiring:
 class TestMixbookConfig:
     """Validate Mixbook config and query files."""
 
-    MIXBOOK_CONFIG = Path(
-        "/Users/Konstantin_Perikov/projects/agentic-search-audit/configs/sites/mixbook.yaml"
-    )
-    MIXBOOK_QUERIES = Path(
-        "/Users/Konstantin_Perikov/projects/agentic-search-audit/data/queries/mixbook.json"
-    )
-    MIXBOOK_SMOKE = Path(
-        "/Users/Konstantin_Perikov/projects/agentic-search-audit/data/queries/mixbook_smoke.json"
-    )
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    MIXBOOK_CONFIG = PROJECT_ROOT / "configs" / "sites" / "mixbook.yaml"
+    MIXBOOK_QUERIES = PROJECT_ROOT / "data" / "queries" / "mixbook.json"
+    MIXBOOK_SMOKE = PROJECT_ROOT / "data" / "queries" / "mixbook_smoke.json"
 
     @pytest.mark.unit
     def test_mixbook_yaml_exists(self):
