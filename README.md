@@ -4,60 +4,36 @@
 [![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> AI-powered tool that audits e-commerce search quality using real browser automation and LLM evaluation
+Runs a set of queries against an e-commerce site's search in a real browser, captures the results
+pages, and has an LLM score each query on relevance, diversity, result quality and navigability,
+citing the results behind each score. The output is a Markdown and HTML report plus JSONL.
 
-<!-- TODO: Add demo GIF here once recorded -->
-<!-- ![Demo](docs/demo.gif) -->
+## What it does
 
-## Why This Tool?
+- Finds the search box with CSS selectors, falling back to a vision model when selectors fail
+- Dismisses cookie and consent dialogs
+- Extracts results from the DOM, with site-specific overrides in YAML
+- Scores each query with an LLM judge (OpenAI, Anthropic, OpenRouter or a local vLLM server)
+  against a fixed rubric
+- Saves screenshots and raw HTML for every results page, so each score can be checked
 
-E-commerce search quality directly impacts conversion rates and user satisfaction. This tool provides:
+Site configs are included for Nike, Amazon and eBay. In a sample run they extracted 24, 60 and
+163 products respectively.
 
-- **Automated Quality Audits**: Run reproducible search quality assessments across your site
-- **LLM-Powered Analysis**: Get structured, explainable scores with evidence-backed rationale
-- **Real Browser Testing**: Test actual user experience with Playwright stealth mode
-- **Multi-Site Support**: Configure once, audit multiple e-commerce platforms
-
-## Tested Sites
-
-| Site | Status | Products Found |
-|------|--------|----------------|
-| Nike | ✅ Working | 24 |
-| Amazon | ✅ Working | 60 |
-| eBay | ✅ Working | 163 |
-
-## Features
-
-- **Browser Automation**: Playwright with stealth mode for realistic browser interactions
-- **LLM-as-a-Judge**: Structured evaluation with reproducible scores (OpenAI, Anthropic, OpenRouter, vLLM)
-- **Vision-Based Detection**: Intelligent search box detection using vision models
-- **Rich Reports**: Generates Markdown, HTML, and JSONL reports with screenshots
-- **Configurable**: YAML-based configuration with site-specific overrides
-- **Deterministic**: Seed-based reproducibility for LLM judgements
-- **Smart Extraction**: Heuristics-based DOM parsing with fallbacks
-- **Local or Cloud**: Use local vLLM models or cloud APIs
-
-## Quick Start
+## Quick start
 
 ### Prerequisites
 
 - Python 3.10 or higher
-- Chrome/Chromium browser (Playwright will manage this)
+- Chromium (installed by Playwright)
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/MysterionRise/agentic-search-audit.git
 cd agentic-search-audit
 
-# Install Python dependencies
-pip install -e .
-
-# Or with dev dependencies
-pip install -e ".[dev]"
-
-# Install Playwright browsers
+pip install -e .            # or: pip install -e ".[dev]"
 playwright install chromium
 ```
 
@@ -68,89 +44,87 @@ playwright install chromium
 cp .env.example .env
 ```
 
-2. **Choose your LLM provider:**
+2. Choose an LLM provider:
 
-   **Option A: Use vLLM (local, free, private)**
+   **vLLM (local, needs a GPU)**
    ```bash
-   # Start vLLM server (see VLLM_SETUP.md for details)
+   # see VLLM_SETUP.md for details
    vllm serve llava-hf/llava-v1.6-mistral-7b-hf --port 8000
    ```
 
-   **Option B: Use OpenRouter (cloud, cheap, easy)**
+   **OpenRouter (cloud, one key for many models)**
    ```bash
-   # Add to .env:
+   # add to .env:
    OPENROUTER_API_KEY=sk-or-v1-...
    ```
 
-   **Option C: Use OpenAI (cloud)**
+   **OpenAI**
    ```bash
-   # Add to .env:
+   # add to .env:
    OPENAI_API_KEY=your-api-key-here
    ```
 
-   **Option D: Use Anthropic (cloud)**
+   **Anthropic**
    ```bash
-   # Add to .env:
+   # add to .env:
    ANTHROPIC_API_KEY=your-api-key-here
    ```
 
-   See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed configuration of all providers.
+   See [VLLM_SETUP.md](VLLM_SETUP.md) for all providers.
 
-### Run Your First Audit
+### Run an audit
 
 ```bash
-# Run audit on Nike.com with predefined queries
+# Nike.com with the predefined queries
 search-audit --site nike --config configs/sites/nike.yaml
 
-# Run with visible browser (non-headless)
+# with a visible browser
 search-audit --site nike --no-headless
 
-# Run with custom queries
+# with your own queries
 search-audit --site https://www.nike.com --queries data/queries/custom.json
 ```
 
-## Project Structure
+## Project structure
 
 ```
 agentic-search-audit/
-├── src/agentic_search_audit/    # Main package
-│   ├── core/                     # Orchestrator, types, policies
+├── src/agentic_search_audit/    # main package
+│   ├── core/                     # orchestrator, types, policies
 │   ├── browser/                  # Playwright browser automation
-│   ├── extractors/               # DOM parsers & heuristics
-│   ├── judge/                    # LLM client & rubric
-│   ├── report/                   # Report generators
+│   ├── extractors/               # DOM parsers and heuristics
+│   ├── judge/                    # LLM client and rubric
+│   ├── report/                   # report generators
 │   └── cli/                      # CLI entrypoint
 ├── configs/                      # YAML configurations
-│   ├── default.yaml             # Default settings
-│   └── sites/                   # Site-specific configs
-├── data/queries/                # Predefined query sets
-├── runs/                        # Audit artifacts (gitignored)
-└── tests/                       # Unit tests
+│   ├── default.yaml             # default settings
+│   └── sites/                   # site-specific configs
+├── data/queries/                # predefined query sets
+├── runs/                        # audit artifacts (gitignored)
+└── tests/                       # unit tests
 ```
 
 ## Configuration
 
-See `configs/default.yaml` for all available options. Key settings:
+See `configs/default.yaml` for all options. The main sections:
 
-- **site**: Target URL and locale
-- **search**: Selectors and strategies for search box and results
-- **modals**: Cookie/consent handling
-- **run**: Top-K results, viewport, headless mode, rate limiting
-- **llm**: Provider (vllm/openai/anthropic/openrouter), model, temperature, seed
-- **report**: Output formats and directory
+- `site`: target URL and locale
+- `search`: selectors and strategies for the search box and results
+- `modals`: cookie and consent handling
+- `run`: top-K results, viewport, headless mode, rate limiting
+- `llm`: provider (vllm, openai, anthropic, openrouter), model, temperature, seed
+- `report`: output formats and directory
 
-### Vision Provider Configuration
+### Vision providers
 
-The intelligent search box detection supports multiple vision providers:
+Search-box detection can use:
 
-- **vLLM**: Local vision models (LLaVA, Qwen-VL, etc.) - Free, private, GPU required
-- **OpenRouter**: Cloud API gateway (Qwen-VL, Claude, GPT-4V, etc.) - Cheap, easy, no GPU needed
-- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based
-- **Anthropic**: Claude 3.5 Sonnet - Direct API, cloud-based
+- vLLM: local vision models (LLaVA, Qwen-VL and others); needs a GPU
+- OpenRouter: hosted Qwen-VL, Claude, GPT-4V and others
+- OpenAI: GPT-4o, GPT-4o-mini
+- Anthropic: Claude 3.5 Sonnet
 
-**Recommended for most users**: OpenRouter with Qwen-VL-Plus (best value, excellent quality)
-
-See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions.
+Without a GPU, OpenRouter with Qwen-VL-Plus is a reasonable default. See [VLLM_SETUP.md](VLLM_SETUP.md).
 
 ## Architecture
 
@@ -171,68 +145,53 @@ Judge (judge/) - LLM evaluation with structured JSON schema
 Reporter (report/) - Markdown, HTML, JSONL output
 ```
 
-## LLM-as-a-Judge Rubric
+## Judge rubric
 
-The judge evaluates searches on:
+Each query is scored 0 to 5 on:
 
-- **Relevance**: Match to user intent (0-5)
-- **Diversity**: Coverage of brands, categories, price points (0-5)
-- **Result Quality**: Clarity, no duplicates, valid links (0-5)
-- **Navigability**: Filters, sorting, UI usability (0-5)
-- **Overall**: Aggregate user satisfaction score (0-5)
+- **Relevance**: match to user intent
+- **Diversity**: coverage of brands, categories and price points
+- **Result quality**: clarity, no duplicates, valid links
+- **Navigability**: filters, sorting, UI usability
+- **Overall**: aggregate user satisfaction
 
-Each score includes rationale and evidence citing specific results.
+Each score comes with a rationale that cites specific results.
+
+The judge runs with a fixed temperature and seed where the provider supports it. LLM scores can
+still vary between runs and between models, so compare runs made with the same model.
 
 ## Output
 
-Each audit run creates a timestamped directory in `runs/` containing:
+Each run creates a timestamped directory in `runs/`:
 
-- `audit.jsonl`: Structured results for each query
-- `report.md`: Human-readable Markdown report
+- `audit.jsonl`: structured results per query
+- `report.md`: Markdown report
 - `report.html`: HTML version of the report
-- `screenshots/`: Full-page screenshots for each query
-- `html_snapshots/`: Raw HTML for each results page
-- `audit.log`: Detailed execution log
+- `screenshots/`: full-page screenshot per query
+- `html_snapshots/`: raw HTML per results page
+- `audit.log`: execution log
 
-## Security & Compliance
+## Running it responsibly
 
-- **Rate Limiting**: Configurable RPS to avoid overloading sites
-- **Stealth Mode**: Playwright stealth to avoid bot detection
-- **Data Privacy**: Use isolated browser profiles, avoid sensitive data
+- Requests are rate-limited (configurable RPS); keep it low on sites you don't own.
+- The browser uses Playwright stealth settings, which reduce bot-detection blocks. Check a site's
+  terms of use before auditing it.
+- Use an isolated browser profile and don't audit while logged in to real accounts.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
 pip install -e ".[dev]"
-
-# Run tests
-make test
-
-# Run tests with coverage
-make test-cov
-
-# Format code
+make test        # tests
+make test-cov    # tests with coverage
 make format
-
-# Lint
 make lint
-
-# Type check
 make typecheck
-
-# Run all CI checks locally
-make ci
+make ci          # all CI checks locally
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing guide.
-
-### Testing
-
-The project has comprehensive test coverage (46%+):
-- **32 unit tests** covering core types, config, judge, extractors, reports, and CLI
-- **CI/CD** with GitHub Actions testing on Python 3.10, 3.11, 3.12, 3.13
-- **Pre-commit hooks** for code quality
+There are 32 unit tests (about 46% line coverage) and CI runs on Python 3.10 to 3.13. See
+[TESTING.md](TESTING.md) for details.
 
 ## Roadmap
 
@@ -246,8 +205,8 @@ The project has comprehensive test coverage (46%+):
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT, see [LICENSE](LICENSE).
