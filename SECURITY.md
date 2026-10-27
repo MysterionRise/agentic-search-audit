@@ -16,9 +16,9 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 Instead, please report them via one of the following methods:
 
-1. **GitHub Security Advisories** (Preferred): Use [GitHub's private vulnerability reporting](https://github.com/your-org/agentic-search-audit/security/advisories/new) to report vulnerabilities directly.
+1. **GitHub Security Advisories** (Preferred): Use [GitHub's private vulnerability reporting](https://github.com/MysterionRise/agentic-search-audit/security/advisories/new) to report vulnerabilities directly.
 
-2. **Email**: Send details to [security@example.com](mailto:security@example.com) with:
+2. **GitHub issue with the `security` label** only for non-sensitive reports, otherwise open a private advisory and include:
    - A description of the vulnerability
    - Steps to reproduce
    - Potential impact
@@ -98,22 +98,17 @@ When using this tool, follow these security guidelines:
 
 ### Compliance
 
-- **robots.txt**: Respects `robots.txt` by default (use `--ignore-robots` only for authorized testing)
-- **User-Agent**: Configurable, transparent identification
-- **Crawl-delay**: Honors site-specified delays
+- **robots.txt**: Respected by default (`--ignore-robots` only for authorized testing). `compliance.user_agent` is the agent used for that robots.txt request only.
+- **User-Agent in the browser**: the launched backends rotate spoofed Chrome user agents and apply stealth patches (`browser/stealth.py`); the bridge backends use your real browser's identity unchanged. This is not transparent identification; check a site's terms before auditing it.
+- **Crawl-delay**: parsed from robots.txt (`RobotsPolicy.get_crawl_delay`) but not applied; pacing comes from `run.throttle_rps`.
+- **Real profiles**: on a bridge backend the audit never rotates identity, clears cookies or touches tabs it did not open. Screenshots of a logged-in session can contain account details; review `runs/` before sharing.
 
 ## Dependency Security
 
 We regularly update dependencies to address known vulnerabilities. To check for vulnerabilities:
 
 ```bash
-# Using pip-audit
-pip install pip-audit
-pip-audit
-
-# Using safety
-pip install safety
-safety check
+make audit-deps        # pip-audit against the locked dependency set, as CI does
 ```
 
 ## Security Changelog
@@ -121,6 +116,7 @@ safety check
 | Date | Description |
 |------|-------------|
 | 2024-01-01 | Initial security policy |
+| 2026-10-27 | Corrected the user-agent and crawl-delay claims; pip-audit in CI |
 
 ---
 

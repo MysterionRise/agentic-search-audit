@@ -6,19 +6,19 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/agentic-search-audit.git
+git clone https://github.com/MysterionRise/agentic-search-audit.git
 cd agentic-search-audit
 ```
 
-2. Install with development dependencies:
+2. Install everything with uv (dev, saas and undetected extras, Playwright Chromium, git hooks):
 ```bash
-pip install -e ".[dev]"
+make bootstrap
 ```
+   Without uv: `pip install -e ".[dev]"` and `playwright install chromium`.
 
-3. Install pre-commit hooks:
-```bash
-pre-commit install
-```
+3. Dependencies and tool versions live in `pyproject.toml` only. After editing them run
+   `uv lock` and commit `uv.lock`; the pre-commit hooks, the Makefile and CI run the pinned
+   black, ruff and mypy through `uv run`.
 
 4. Set up environment variables:
 ```bash
@@ -35,30 +35,18 @@ This project uses:
 
 Run all checks:
 ```bash
-# Format code
-black src/ tests/
-
-# Lint
-ruff check src/ tests/
-
-# Type check
-mypy src/
+make format       # black
+make lint         # ruff and black --check
+make typecheck    # mypy src/
 ```
 
 ## Running Tests
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=agentic_search_audit --cov-report=html
-
-# Run specific test file
-pytest tests/test_config.py
-
-# Run with verbose output
-pytest -v
+make test                                  # uv run pytest tests/
+make test-cov                              # with coverage
+uv run pytest tests/test_config.py         # one file
+uv run pytest tests/integration -m browser # needs Playwright Chromium
 ```
 
 ## Making Changes
@@ -72,10 +60,7 @@ git checkout -b feature/your-feature-name
 
 3. Run tests and linters:
 ```bash
-pytest
-black src/ tests/
-ruff check src/ tests/
-mypy src/
+make ci
 ```
 
 4. Commit your changes:
@@ -111,7 +96,9 @@ git push origin feature/your-feature-name
 agentic-search-audit/
 ├── src/agentic_search_audit/    # Main package
 │   ├── core/                     # Core types and orchestration
-│   ├── mcp/                      # MCP client wrapper
+│   ├── browser/                  # backends, bridge/, session, stealth
+│   ├── analysis/                 # maturity, benchmarks, findings
+│   ├── generators/               # LLM-generated queries
 │   ├── extractors/               # DOM extraction logic
 │   ├── judge/                    # LLM judge implementation
 │   ├── report/                   # Report generation

@@ -1,246 +1,107 @@
-# Quick Start Guide
+# Quick start
 
-Get up and running with Agentic Search Audit in 5 minutes.
+## 1. Install
 
-## Prerequisites
-
-- **Python 3.10+** installed
-- **Node.js** installed (for chrome-devtools-mcp)
-- **OpenAI API key** (sign up at [platform.openai.com](https://platform.openai.com))
-
-## Installation
-
-### 1. Clone and Install
+Python 3.10 or newer. With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/agentic-search-audit.git
+git clone https://github.com/MysterionRise/agentic-search-audit.git
 cd agentic-search-audit
-
-# Install the package
-pip install -e .
+make bootstrap
 ```
 
-### 2. Set Up Environment Variables
+`make bootstrap` runs `uv sync` with the `dev`, `saas` and `undetected` extras, installs
+Playwright's Chromium and the git hooks. Without uv:
 
 ```bash
-# Copy the example environment file
+pip install -e ".[dev,undetected]"
+playwright install chromium
+```
+
+Prefix commands with `uv run` when using uv (or activate `.venv`).
+
+## 2. Choose an LLM provider
+
+```bash
 cp .env.example .env
-
-# Edit .env and add your OpenAI API key
-echo "OPENAI_API_KEY=your-api-key-here" > .env
 ```
 
-### 3. Verify Installation
+The shipped site configs use OpenRouter, so add `OPENROUTER_API_KEY`. `OPENAI_API_KEY`
+and `ANTHROPIC_API_KEY` work for configs that select those providers, and
+`configs/default.yaml` points at a local vLLM server. [VLLM_SETUP.md](VLLM_SETUP.md)
+covers every provider and the vision models used for search-box detection.
+
+## 3. Run an audit
 
 ```bash
-# Check that the CLI is available
-search-audit --help
-
-# Verify MCP server is accessible
-npx chrome-devtools-mcp@latest --help
+uv run search-audit --site nike --max-queries 3          # quick check, headless
+uv run search-audit --site nike --no-headless            # watch the browser
+uv run search-audit --site amazon --browser undetected   # a backend that gets past Akamai
+uv run search-audit --site nike --top-k 20 --pdp         # more results, visit product pages
+uv run search-audit --site nike --output runs/nike-today # choose the output directory
+uv run search-audit --site nike --resume                 # continue the latest run
 ```
 
-## Run Your First Audit
+Run from the repository root: `--site NAME` resolves `configs/sites/NAME.yaml` and
+`data/queries/NAME.json` relative to the current directory. Sites without a query file
+(asos, carrefour, decathlon, douglas, fnac, hm, ikea, laredoute, marksandspencer,
+mediamarkt, otto, primark, sephora-uk, zara) need `--queries`, for example
+`--queries data/queries/queries_de.json`.
 
-### Nike.com Example (Predefined Queries)
+Other flags: `--url` for an ad-hoc site with the default config, `--config` to replace
+`configs/default.yaml`, `--seed`, `--vision` (vision-first extraction), `--pdf`,
+`--log-level DEBUG`, `--ignore-robots`, `--auto-generate [--dry-run]` to generate queries
+from the homepage, `--compare SITE_A SITE_B` for a side-by-side run.
 
-The easiest way to get started is with the Nike.com example:
+## 4. Read the results
 
 ```bash
-# Run audit on Nike.com with 10 predefined queries
-search-audit --site nike
-
-# Or run with just 3 queries for a quick test
-search-audit --site nike --queries examples/quick-test.json
+ls runs/www.nike.com/<timestamp>/
+open runs/www.nike.com/<timestamp>/report.html
 ```
 
-This will:
-1. Launch Chrome in headless mode
-2. Navigate to nike.com
-3. Run searches for each query
-4. Extract and evaluate results
-5. Generate reports in `./runs/nike.com/{timestamp}/`
+`report.md` and `report.html` carry the FQI per query, the site's maturity level, findings
+and expert commentary; `audit.jsonl` has every record; `failures.jsonl` lists queries that
+produced no record and why; `screenshots/` and `html_snapshots/` back each score.
 
-### View Results
+## 5. Run in your own Chrome (bridge backends)
 
-After the audit completes, check:
+The launched backends start a fresh browser. On sites that block them, or when a logged-in
+session is needed, drive the Chrome you already have open:
 
-```bash
-# Open the HTML report
-open runs/nike.com/*/report.html
+**chrome-devtools-mcp** (Google's MCP server; needs Node 20.19+, `nvm use 24`):
 
-# Or view the Markdown report
-cat runs/nike.com/*/report.md
+1. Chrome 144 or newer: open `chrome://inspect/#remote-debugging` and enable remote
+   debugging for the profile (once).
+2. `uv run search-audit --site nike --browser chrome_devtools_mcp`, then click "Allow" in
+   the Chrome dialog within 60 seconds.
 
-# Raw data in JSONL format
-cat runs/nike.com/*/audit.jsonl
-```
+Alternatives: `--bridge-mode launch` lets the server start its own Chrome (no user action);
+`--browser-url http://127.0.0.1:9222` attaches to a Chrome you started with
+`--remote-debugging-port=9222 --user-data-dir=<non-default dir>`.
 
-## Customize Your Audit
+**Kimi WebBridge** (Moonshot's local daemon plus extension):
 
-### Use a Different Site
+1. Install from <https://www.kimi.com/features/webbridge> and add its Chrome extension.
+2. `~/.kimi-webbridge/bin/kimi-webbridge start`
+3. `uv run search-audit --site nike --browser kimi_webbridge`
 
-1. Create a config file:
+On a real profile the audit opens one tab, works only there, and never rotates identity or
+clears cookies. [docs/BROWSER_BACKENDS.md](docs/BROWSER_BACKENDS.md) compares the backends.
 
-```bash
-cp examples/custom_site.yaml configs/sites/mysite.yaml
-```
+## 6. Add a site
 
-2. Edit `configs/sites/mysite.yaml`:
-   - Update `site.url`
-   - Customize CSS selectors for your site
-   - Adjust search and results extraction settings
+Copy `examples/custom_site.yaml` to `configs/sites/<name>.yaml`, set the URL, selectors
+and, if the site has one, `search_url_template` (skips search-box detection entirely). Add
+`data/queries/<name>.json` (a list of strings, or `{"queries": [...]}`). Unknown keys are
+rejected, so typos surface at load time.
 
-3. Create queries:
+## Common issues
 
-```bash
-cp examples/custom_queries.json data/queries/mysite.json
-```
-
-4. Run:
-
-```bash
-search-audit --site mysite
-```
-
-### Run in Headed Mode (Visible Browser)
-
-Watch the browser in action:
-
-```bash
-search-audit --site nike --no-headless
-```
-
-### Adjust Number of Results
-
-```bash
-# Extract top 20 results instead of default 10
-search-audit --site nike --top-k 20
-```
-
-### Change Output Directory
-
-```bash
-search-audit --site nike --output ./my-audit-results
-```
-
-## Understanding the Output
-
-Each audit run creates:
-
-```
-runs/nike.com/20241114_153045/
-├── report.md              # Markdown report
-├── report.html            # HTML report (open in browser)
-├── audit.jsonl            # Raw data (one record per line)
-├── screenshots/           # Full-page screenshots
-│   ├── q001_running_shoes.png
-│   ├── q002_air_jordan.png
-│   └── ...
-└── html_snapshots/        # Raw HTML snapshots
-    ├── q001_running_shoes.html
-    ├── q002_air_jordan.html
-    └── ...
-```
-
-### Report Contents
-
-- **Summary**: Average scores across all queries
-- **Score Distribution**: How many queries in each score range
-- **Per-Query Details**:
-  - Scores (Overall, Relevance, Diversity, Quality, Navigability)
-  - Rationale and evidence
-  - Issues identified
-  - Suggested improvements
-  - Top results table
-  - Screenshot
-
-## Advanced Usage
-
-### Custom LLM Settings
-
-```bash
-# Use GPT-4 for higher quality evaluations
-search-audit --site nike \
-  --config-override '{"llm": {"model": "gpt-4"}}'
-
-# Adjust temperature for more/less variance
-search-audit --site nike \
-  --config-override '{"llm": {"temperature": 0.0}}'
-```
-
-### Reproducible Runs
-
-```bash
-# Use a seed for deterministic LLM outputs
-search-audit --site nike --seed 12345
-```
-
-### Rate Limiting
-
-Edit `configs/sites/mysite.yaml`:
-
-```yaml
-run:
-  throttle_rps: 0.5  # 0.5 requests per second (2s between requests)
-```
-
-### Debugging
-
-```bash
-# Enable debug logging
-search-audit --site nike --log-level DEBUG
-```
-
-## Common Issues
-
-### "OPENAI_API_KEY environment variable not set"
-
-Solution: Make sure your `.env` file exists and contains:
-```
-OPENAI_API_KEY=sk-...
-```
-
-### "npx: command not found"
-
-Solution: Install Node.js from [nodejs.org](https://nodejs.org)
-
-### "No search box found"
-
-Solution: The site's search box selectors may be different. Update `configs/sites/yoursite.yaml`:
-
-```yaml
-site:
-  search:
-    input_selectors:
-      - 'input#your-search-id'
-      - 'input.your-search-class'
-```
-
-Use browser DevTools to inspect the search input element.
-
-### Browser crashes or timeouts
-
-Solution: Increase timeouts in your config:
-
-```yaml
-run:
-  network_idle_ms: 3000
-  post_submit_ms: 2000
-```
-
-## Next Steps
-
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) to learn how to extend the tool
-- Check [README.md](README.md) for full documentation
-- Explore `configs/sites/nike.yaml` to see a complete configuration
-- Run `scripts/smoke.sh` for a quick validation test
-
-## Getting Help
-
-- Check existing [issues](https://github.com/yourusername/agentic-search-audit/issues)
-- Open a new issue for bugs or feature requests
-- Read the full docs in [README.md](README.md)
-
-Happy auditing! 🎯
+- **`OPENROUTER_API_KEY environment variable not set`**: put the key in `.env` or export it.
+- **No search box found**: add selectors under `site.search.input_selectors`, set a
+  `search_url_template`, or run with `--no-headless` to see what the page shows.
+- **Challenge persists / blocked**: try `--browser undetected`, then a bridge backend.
+- **`node ... is older than 20.19.0`**: `nvm use 24` (the repo has an `.nvmrc`).
+- **Kimi WebBridge daemon is not running**: start it as above; make sure the extension is
+  installed in the Chrome that is open.

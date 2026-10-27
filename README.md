@@ -4,250 +4,138 @@
 [![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> AI-powered tool that audits e-commerce search quality using real browser automation and LLM evaluation
+Runs a set of queries against an e-commerce site's search in a real browser, captures each
+results page, and has an LLM score every query on a fixed rubric, citing the results behind
+each score. The output is a Markdown and HTML report, a JSONL record per query, and the
+screenshots and HTML that back them.
 
-<!-- TODO: Add demo GIF here once recorded -->
-<!-- ![Demo](docs/demo.gif) -->
+## What it does
 
-## Why This Tool?
+- Drives a browser through one of six backends: Playwright, undetected-chromedriver, an
+  external Chrome over CDP, or a *bridge* into the Chrome you already have open
+  (chrome-devtools-mcp, Kimi WebBridge, Playwright MCP). See
+  [docs/BROWSER_BACKENDS.md](docs/BROWSER_BACKENDS.md).
+- Dismisses cookie, consent and location dialogs; finds the search box with CSS selectors,
+  falling back to a vision model; or navigates straight to a site's search URL template.
+- Extracts the top results from the DOM in one round trip, with a vision fallback, and can
+  click into product pages (`--pdp`).
+- Scores each query with an LLM judge (OpenAI, Anthropic, OpenRouter or a local vLLM
+  server) on five dimensions combined into the Findability Quality Index (FQI), then adds
+  site-level maturity, findings and expert commentary.
+- Records queries that produced no result (bot challenge, timeout, submit failure) in
+  `failures.jsonl` and in the report instead of dropping them silently.
 
-E-commerce search quality directly impacts conversion rates and user satisfaction. This tool provides:
+43 site configs ship under `configs/sites/`, 29 of them with a query set under
+`data/queries/`.
 
-- **Automated Quality Audits**: Run reproducible search quality assessments across your site
-- **LLM-Powered Analysis**: Get structured, explainable scores with evidence-backed rationale
-- **Real Browser Testing**: Test actual user experience with Playwright stealth mode
-- **Multi-Site Support**: Configure once, audit multiple e-commerce platforms
+## Quick start
 
-## Tested Sites
-
-| Site | Status | Products Found |
-|------|--------|----------------|
-| Nike | ✅ Working | 24 |
-| Amazon | ✅ Working | 60 |
-| eBay | ✅ Working | 163 |
-
-## Features
-
-- **Browser Automation**: Playwright with stealth mode for realistic browser interactions
-- **LLM-as-a-Judge**: Structured evaluation with reproducible scores (OpenAI, Anthropic, OpenRouter, vLLM)
-- **Vision-Based Detection**: Intelligent search box detection using vision models
-- **Rich Reports**: Generates Markdown, HTML, and JSONL reports with screenshots
-- **Configurable**: YAML-based configuration with site-specific overrides
-- **Deterministic**: Seed-based reproducibility for LLM judgements
-- **Smart Extraction**: Heuristics-based DOM parsing with fallbacks
-- **Local or Cloud**: Use local vLLM models or cloud APIs
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.10 or higher
-- Chrome/Chromium browser (Playwright will manage this)
-
-### Installation
+Requirements: Python 3.10 or newer and [uv](https://docs.astral.sh/uv/). `pip install -e
+".[dev]"` works too, without the lock file.
 
 ```bash
-# Clone the repository
 git clone https://github.com/MysterionRise/agentic-search-audit.git
 cd agentic-search-audit
+make bootstrap                  # uv sync with the dev, saas and undetected extras,
+                                # Playwright Chromium, git hooks
+cp .env.example .env            # add OPENROUTER_API_KEY (or OPENAI_API_KEY / ANTHROPIC_API_KEY)
 
-# Install Python dependencies
-pip install -e .
-
-# Or with dev dependencies
-pip install -e ".[dev]"
-
-# Install Playwright browsers
-playwright install chromium
+uv run search-audit --site nike --max-queries 3            # three queries, headless
+uv run search-audit --site nike --no-headless              # watch the browser
+uv run search-audit --url https://www.example.com --queries examples/custom_queries.json
+uv run search-audit --site nike --browser chrome_devtools_mcp   # in your own Chrome
 ```
 
-### Configuration
+Run from the repository root: `--site nike` resolves `configs/sites/nike.yaml` and
+`data/queries/nike.json` relative to the current directory. Sites without a query file need
+`--queries`. The site configs use OpenRouter by default; `configs/default.yaml` uses a local
+vLLM server. See [QUICKSTART.md](QUICKSTART.md) for the walkthrough and
+[VLLM_SETUP.md](VLLM_SETUP.md) for every provider.
 
-1. Copy the example environment file:
-```bash
-cp .env.example .env
-```
-
-2. **Choose your LLM provider:**
-
-   **Option A: Use vLLM (local, free, private)**
-   ```bash
-   # Start vLLM server (see VLLM_SETUP.md for details)
-   vllm serve llava-hf/llava-v1.6-mistral-7b-hf --port 8000
-   ```
-
-   **Option B: Use OpenRouter (cloud, cheap, easy)**
-   ```bash
-   # Add to .env:
-   OPENROUTER_API_KEY=sk-or-v1-...
-   ```
-
-   **Option C: Use OpenAI (cloud)**
-   ```bash
-   # Add to .env:
-   OPENAI_API_KEY=your-api-key-here
-   ```
-
-   **Option D: Use Anthropic (cloud)**
-   ```bash
-   # Add to .env:
-   ANTHROPIC_API_KEY=your-api-key-here
-   ```
-
-   See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed configuration of all providers.
-
-### Run Your First Audit
-
-```bash
-# Run audit on Nike.com with predefined queries
-search-audit --site nike --config configs/sites/nike.yaml
-
-# Run with visible browser (non-headless)
-search-audit --site nike --no-headless
-
-# Run with custom queries
-search-audit --site https://www.nike.com --queries data/queries/custom.json
-```
-
-## Project Structure
+## How it works
 
 ```
-agentic-search-audit/
-├── src/agentic_search_audit/    # Main package
-│   ├── core/                     # Orchestrator, types, policies
-│   ├── browser/                  # Playwright browser automation
-│   ├── extractors/               # DOM parsers & heuristics
-│   ├── judge/                    # LLM client & rubric
-│   ├── report/                   # Report generators
-│   └── cli/                      # CLI entrypoint
-├── configs/                      # YAML configurations
-│   ├── default.yaml             # Default settings
-│   └── sites/                   # Site-specific configs
-├── data/queries/                # Predefined query sets
-├── runs/                        # Audit artifacts (gitignored)
-└── tests/                       # Unit tests
+cli/main.py ─► load_config (default.yaml ◄ site yaml ◄ CLI flags)
+            ─► SearchAuditOrchestrator (core/orchestrator.py)
+                 ├─ BrowserClient via create_browser_client (browser/, browser/bridge/)
+                 ├─ BrowserSession: identity rotation and recovery, gated by capabilities
+                 ├─ per query, under a time budget: modals ─► search ─► results ─► artifacts
+                 ├─ judge/: SearchQualityJudge (FQI), IntentClassifier, ExpertPanel
+                 ├─ analysis/: maturity, benchmarks, findings
+                 └─ report/: Markdown, HTML, JSON, CSV, optional PDF
 ```
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the detail.
+
+## Judge rubric
+
+Each query is scored 0 to 5 on `query_understanding`, `results_relevance`,
+`result_presentation`, `advanced_features` and `error_handling`. The weighted average
+(0.25 / 0.25 / 0.20 / 0.20 / 0.10) is the FQI, capped at 3.5 when understanding or relevance
+falls below 2, and mapped to the bands Excellent, Good, Weak, Critical and Broken. Every
+score comes with a rationale that cites specific results.
+
+The judge runs with a fixed temperature and seed where the provider supports it. LLM scores
+still vary between runs and models, so compare runs made with the same model.
 
 ## Configuration
 
-See `configs/default.yaml` for all available options. Key settings:
+`configs/default.yaml` lists every option. `--config FILE` *replaces* the defaults with
+that file; `--site NAME` deep-merges `configs/sites/NAME.yaml` on top; CLI flags win. The
+sections:
 
-- **site**: Target URL and locale
-- **search**: Selectors and strategies for search box and results
-- **modals**: Cookie/consent handling
-- **run**: Top-K results, viewport, headless mode, rate limiting
-- **llm**: Provider (vllm/openai/anthropic/openrouter), model, temperature, seed
-- **report**: Output formats and directory
+- `site`: URL, locale, `search` (selectors, submit strategy, `search_url_template`,
+  vision fallback), `results` (item and field selectors), `modals` (consent and location
+  dialogs)
+- `run`: `browser_backend` and `bridge` settings, top-K, viewport, waits, rate limit,
+  retries, time budgets, scrolling, PDP analysis, proxies, identity rotation
+- `llm`: provider, model, temperature, timeouts, concurrency
+- `report`: formats and output directory
+- `compliance`: robots.txt handling
 
-### Vision Provider Configuration
-
-The intelligent search box detection supports multiple vision providers:
-
-- **vLLM**: Local vision models (LLaVA, Qwen-VL, etc.) - Free, private, GPU required
-- **OpenRouter**: Cloud API gateway (Qwen-VL, Claude, GPT-4V, etc.) - Cheap, easy, no GPU needed
-- **OpenAI**: GPT-4o, GPT-4o-mini - Direct API, cloud-based
-- **Anthropic**: Claude 3.5 Sonnet - Direct API, cloud-based
-
-**Recommended for most users**: OpenRouter with Qwen-VL-Plus (best value, excellent quality)
-
-See [VLLM_SETUP.md](VLLM_SETUP.md) for detailed setup instructions.
-
-## Architecture
-
-```
-CLI (cli/main.py)
-    ↓
-Orchestrator (core/orchestrator.py) - manages audit flow, rate limiting
-    ↓
-Browser Automation (browser/) - Playwright with stealth mode
-    ↓
-Extractors (extractors/):
-  - search_box.py: finds search input via CSS selectors + vision fallback
-  - results.py: parses search results from DOM
-  - modals.py: dismisses cookie/consent dialogs
-    ↓
-Judge (judge/) - LLM evaluation with structured JSON schema
-    ↓
-Reporter (report/) - Markdown, HTML, JSONL output
-```
-
-## LLM-as-a-Judge Rubric
-
-The judge evaluates searches on:
-
-- **Relevance**: Match to user intent (0-5)
-- **Diversity**: Coverage of brands, categories, price points (0-5)
-- **Result Quality**: Clarity, no duplicates, valid links (0-5)
-- **Navigability**: Filters, sorting, UI usability (0-5)
-- **Overall**: Aggregate user satisfaction score (0-5)
-
-Each score includes rationale and evidence citing specific results.
+Unknown keys are rejected. `examples/custom_site.yaml` is a complete template.
 
 ## Output
 
-Each audit run creates a timestamped directory in `runs/` containing:
+Each run writes `runs/<host>/<timestamp>/`:
 
-- `audit.jsonl`: Structured results for each query
-- `report.md`: Human-readable Markdown report
-- `report.html`: HTML version of the report
-- `screenshots/`: Full-page screenshots for each query
-- `html_snapshots/`: Raw HTML for each results page
-- `audit.log`: Detailed execution log
+- `audit.jsonl`: one record per scored query (also the resume checkpoint)
+- `failures.jsonl`: queries that produced no record, with the reason
+- `report.md`, `report.html`, and `audit.json` when `json` is in `report.formats`
+- `findings.csv`: critical and high findings
+- `screenshots/` and `html_snapshots/`: full-page screenshot and raw HTML per query
+- `report.pdf` with `--pdf` (needs the `pdf` extra)
 
-## Security & Compliance
+`--resume` continues the latest run for the site; failed queries are retried.
 
-- **Rate Limiting**: Configurable RPS to avoid overloading sites
-- **Stealth Mode**: Playwright stealth to avoid bot detection
-- **Data Privacy**: Use isolated browser profiles, avoid sensitive data
+## Running it responsibly
+
+- Requests are rate-limited (`run.throttle_rps`) and robots.txt is respected unless you
+  pass `--ignore-robots`. Keep rates low on sites you do not own and check their terms.
+- The launched backends rotate spoofed Chrome user agents and apply stealth patches to
+  reduce bot-detection blocks. The bridge backends drive your real, logged-in Chrome and
+  never rotate identity, clear cookies or close your tabs; review `runs/` before sharing
+  screenshots of a logged-in session.
+- The Kimi WebBridge daemon reports usage to its vendor; see docs/BROWSER_BACKENDS.md.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-make test
-
-# Run tests with coverage
-make test-cov
-
-# Format code
-make format
-
-# Lint
-make lint
-
-# Type check
-make typecheck
-
-# Run all CI checks locally
-make ci
+make test        # unit tests (uv run pytest tests/)
+make test-cov    # with coverage
+make lint        # ruff and black
+make typecheck   # mypy
+make ci          # lint, types, tests, pip-audit
+uv lock          # after editing dependencies in pyproject.toml
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing guide.
+Tests marked `browser` need Playwright's Chromium and skip without it; `integration`
+tests are opt-in (`ASA_BRIDGE_INTEGRATION=1`). See [TESTING.md](TESTING.md) and
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-### Testing
-
-The project has comprehensive test coverage (46%+):
-- **32 unit tests** covering core types, config, judge, extractors, reports, and CLI
-- **CI/CD** with GitHub Actions testing on Python 3.10, 3.11, 3.12, 3.13
-- **Pre-commit hooks** for code quality
-
-## Roadmap
-
-- [x] P0: Nike.com support with predefined queries
-- [x] P0: Multi-site support (Amazon, eBay)
-- [x] P0: Playwright-based browser automation with stealth mode
-- [ ] P1: LLM-generated queries from site content
-- [ ] P2: Additional LLM providers (Gemini, local Ollama)
-- [ ] P3: Multi-language support
-- [ ] P4: Cross-model reliability experiments
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+The `api/`, `jobs/` and `db/` packages are an experimental hosted layer behind the `saas`
+extra; see [docs/SAAS.md](docs/SAAS.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT, see [LICENSE](LICENSE).
