@@ -40,8 +40,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install
-        run: uv sync --extra dev --extra saas
+      - name: Install (saas extra only on 3.12; the other versions prove tests/api skips cleanly)
+        run: uv sync --extra dev ${{ matrix.python-version == '3.12' && '--extra saas' || '' }}
       - name: Tests
         run: uv run pytest tests/ -m "not browser and not integration" --cov --cov-report=term-missing
 
@@ -63,6 +63,10 @@ jobs:
         run: |
           /tmp/wheel-venv/bin/search-audit --help
           /tmp/wheel-venv/bin/python -c "import agentic_search_audit; print(agentic_search_audit.__version__)"
+      - name: SaaS entry points fail with a clear message without the extra
+        run: |
+          if /tmp/wheel-venv/bin/search-audit-api --help 2>stderr.txt; then echo "expected failure"; exit 1; fi
+          grep -q "saas" stderr.txt
 
   security:
     name: Security Checks

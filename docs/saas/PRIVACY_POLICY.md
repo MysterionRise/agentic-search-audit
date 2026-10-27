@@ -1,3 +1,5 @@
+> This document applies only to the experimental hosted (SaaS) layer described in docs/SAAS.md, not to the command-line tool.
+
 # Privacy Policy
 
 **Last Updated: January 2024**

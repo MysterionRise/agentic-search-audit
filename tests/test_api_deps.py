@@ -1,6 +1,8 @@
-"""Tests for API dependencies module."""
+"""Tests for the API settings and dependencies (need the 'saas' extra)."""
 
 import pytest
+
+pytest.importorskip("fastapi", reason="SaaS tests need the 'saas' extra (uv sync --extra saas)")
 
 
 class TestGetSettings:
@@ -95,3 +97,28 @@ class TestMiddlewareConfig:
         settings = APISettings()
         assert settings.secret_key is not None
         assert len(settings.secret_key) > 0
+
+
+class TestEnvironmentConfig:
+    """Test environment-based configuration."""
+
+    def test_api_settings_defaults(self):
+        """Test APISettings has defaults."""
+        from agentic_search_audit.api.config import APISettings
+
+        settings = APISettings()
+        assert settings.environment in ["development", "staging", "production"]
+
+    def test_database_url_has_value(self):
+        """Test database URL is set."""
+        from agentic_search_audit.api.config import APISettings
+
+        settings = APISettings()
+        assert settings.database_url is not None
+
+    def test_redis_url_has_value(self):
+        """Test Redis URL is set."""
+        from agentic_search_audit.api.config import APISettings
+
+        settings = APISettings()
+        assert settings.redis_url is not None

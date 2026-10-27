@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+pytest.importorskip("sqlalchemy", reason="SaaS tests need the 'saas' extra (uv sync --extra saas)")
+
 
 class TestUserRepository:
     """Test suite for UserRepository."""

@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+
+pytest.importorskip("fastapi", reason="SaaS tests need the 'saas' extra (uv sync --extra saas)")
+
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 

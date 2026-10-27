@@ -1,4 +1,4 @@
-.PHONY: help bootstrap install install-dev lock test test-cov test-unit lint lint-fix format typecheck pre-commit audit-deps smoke clean build audit audit-debug ci all docker-build docker-run docker-shell docker-compose-up docker-compose-down docker-clean
+.PHONY: help docker-build-saas bootstrap install install-dev lock test test-cov test-unit lint lint-fix format typecheck pre-commit audit-deps smoke clean build audit audit-debug ci all docker-build docker-run docker-shell docker-compose-up docker-compose-down docker-clean
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -80,8 +80,11 @@ all: clean install-dev lint typecheck test-cov  ## Run all checks
 DOCKER_IMAGE = agentic-search-audit
 DOCKER_TAG = latest
 
-docker-build:  ## Build Docker image
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+docker-build:  ## Build the CLI image (Playwright Chromium)
+	docker build --target cli -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+
+docker-build-saas:  ## Build the image with the experimental API/worker layer
+	docker build --target saas -t $(DOCKER_IMAGE)-saas:$(DOCKER_TAG) .
 
 docker-run:  ## Run audit in Docker (use ARGS="--url https://example.com --queries queries.json")
 	docker run --rm -it \
