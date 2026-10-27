@@ -122,6 +122,7 @@ class TestServerArgs:
             "-y",
             "chrome-devtools-mcp@latest",
             "--usageStatistics=false",
+            "--performanceCrux=false",
             "--categoryPerformance=false",
             "--autoConnect",
             "--channel",
@@ -271,6 +272,19 @@ class TestPrimitives:
         assert await t.screenshot(target, True) == target and target.read_bytes() == b"png"
         # no filePath: the server only writes inside its own workspace
         assert session.calls[0][1] == {"pageId": 2, "fullPage": True, "format": "png"}
+
+    async def test_large_screenshot_is_copied_from_the_server_temp_file(
+        self, tmp_path: Path
+    ) -> None:
+        server_file = tmp_path / "server-tmp" / "screenshot.png"
+        server_file.parent.mkdir()
+        server_file.write_bytes(b"big-png")
+        message = f"Took a screenshot of the full current page.\nSaved screenshot to {server_file}."
+        t, _ = await self._open({"take_screenshot": message})
+        target = tmp_path / "out" / "big.png"
+        assert await t.screenshot(target, True) == target
+        assert target.read_bytes() == b"big-png"
+        assert not server_file.exists()  # the temporary file is cleaned up
 
     async def test_screenshot_without_image_raises(self, tmp_path: Path) -> None:
         t, _ = await self._open({"take_screenshot": "nothing"})
