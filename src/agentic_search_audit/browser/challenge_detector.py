@@ -5,6 +5,7 @@ so the orchestrator can avoid extracting garbage results and instead retry with
 increased backoff.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 
@@ -88,10 +89,34 @@ class ChallengeDetectedError(Exception):
         super().__init__(detection.message)
 
 
+def _probe_js() -> str:
+    """One in-page probe for every heuristic: title, known selectors, CAPTCHA iframes, body."""
+    return f"""(function() {{
+  var selectors = {json.dumps(CHALLENGE_SELECTORS)};
+  var patterns = {json.dumps(CAPTCHA_IFRAME_PATTERNS)};
+  var selectorHit = null;
+  for (var i = 0; i < selectors.length; i++) {{
+    try {{ if (document.querySelector(selectors[i])) {{ selectorHit = selectors[i]; break; }} }}
+    catch (e) {{}}
+  }}
+  var iframeHit = null;
+  var iframes = document.querySelectorAll('iframe');
+  for (var k = 0; k < iframes.length && !iframeHit; k++) {{
+    var src = (iframes[k].src || '').toLowerCase();
+    for (var j = 0; j < patterns.length; j++) {{
+      if (src.indexOf(patterns[j]) !== -1) {{ iframeHit = patterns[j]; break; }}
+    }}
+  }}
+  var text = document.body ? (document.body.innerText || '') : '';
+  return {{title: document.title || '', selector: selectorHit, iframe: iframeHit,
+          bodyLen: text.length, bodyText: text.substring(0, 1000)}};
+}})()"""
+
+
 async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
     """Check whether the current page is a bot-detection challenge.
 
-    Runs multiple heuristics against the current page:
+    One ``evaluate`` call collects the signals, then four heuristics run on them:
     1. Page title matches known challenge strings
     2. Known challenge-page CSS selectors exist
     3. CAPTCHA iframes present
@@ -103,101 +128,49 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
     Returns:
         ChallengeDetection with detection result.
     """
-    # 1. Check page title
     try:
-        title = await client.evaluate("document.title")
-        if isinstance(title, str) and title:
-            title_lower = title.lower()
-            for pattern in CHALLENGE_TITLE_PATTERNS:
-                if pattern in title_lower:
-                    msg = f"Challenge page detected via title: '{title}'"
-                    logger.warning(msg)
-                    return ChallengeDetection(
-                        detected=True,
-                        challenge_type="title_match",
-                        message=msg,
-                    )
+        probe = await client.evaluate(_probe_js())
     except Exception as e:
-        logger.debug(f"Title check failed: {e}")
+        logger.debug(f"Challenge probe failed: {e}")
+        probe = None
+    if not isinstance(probe, dict):
+        return ChallengeDetection(
+            detected=False, challenge_type="none", message="No challenge detected"
+        )
 
-    # 2. Check for known challenge selectors
-    for selector in CHALLENGE_SELECTORS:
-        try:
-            el = await client.query_selector(selector)
-            if el:
-                msg = f"Challenge page detected via selector: {selector}"
+    title = probe.get("title")
+    if isinstance(title, str) and title:
+        title_lower = title.lower()
+        for pattern in CHALLENGE_TITLE_PATTERNS:
+            if pattern in title_lower:
+                msg = f"Challenge page detected via title: '{title}'"
+                logger.warning(msg)
+                return ChallengeDetection(detected=True, challenge_type="title_match", message=msg)
+
+    selector = probe.get("selector")
+    if isinstance(selector, str) and selector:
+        msg = f"Challenge page detected via selector: {selector}"
+        logger.warning(msg)
+        return ChallengeDetection(detected=True, challenge_type="selector_match", message=msg)
+
+    iframe = probe.get("iframe")
+    if isinstance(iframe, str) and iframe:
+        msg = f"CAPTCHA iframe detected: {iframe}"
+        logger.warning(msg)
+        return ChallengeDetection(detected=True, challenge_type="captcha_iframe", message=msg)
+
+    body_len = coerce_int(probe.get("bodyLen"))
+    text_value = probe.get("bodyText")
+    body_text = text_value.lower() if isinstance(text_value, str) else ""
+    if body_len < 500:
+        for keyword in BLOCK_KEYWORDS:
+            if keyword in body_text:
+                msg = f"Possible block page: body length {body_len} chars with keyword '{keyword}'"
                 logger.warning(msg)
                 return ChallengeDetection(
-                    detected=True,
-                    challenge_type="selector_match",
-                    message=msg,
+                    detected=True, challenge_type="short_body_block", message=msg
                 )
-        except Exception:
-            continue
-
-    # 3. Check for CAPTCHA iframes
-    try:
-        patterns_json = str(CAPTCHA_IFRAME_PATTERNS).replace("'", '"')
-        iframe_check_js = (
-            "(function() {"
-            "  var iframes = document.querySelectorAll('iframe');"
-            "  for (var i = 0; i < iframes.length; i++) {"
-            "    var src = (iframes[i].src || '').toLowerCase();"
-            f"    var patterns = {patterns_json};"
-            "    for (var j = 0; j < patterns.length; j++) {"
-            "      if (src.indexOf(patterns[j]) !== -1) {"
-            "        return patterns[j];"
-            "      }"
-            "    }"
-            "  }"
-            "  return '';"
-            "})()"
-        )
-        result = await client.evaluate(iframe_check_js)
-        if isinstance(result, str) and result.strip():
-            msg = f"CAPTCHA iframe detected: {result}"
-            logger.warning(msg)
-            return ChallengeDetection(
-                detected=True,
-                challenge_type="captcha_iframe",
-                message=msg,
-            )
-    except Exception as e:
-        logger.debug(f"Iframe check failed: {e}")
-
-    # 4. Short body with block keywords
-    try:
-        body_info = await client.evaluate(
-            "(function() {"
-            "  var body = document.body;"
-            "  if (!body) return {len: 0, text: ''};"
-            "  var text = body.innerText || '';"
-            "  return {len: text.length, text: text.substring(0, 1000)};"
-            "})()"
-        )
-        if isinstance(body_info, dict):
-            body_len = coerce_int(body_info.get("len"))
-            text_value = body_info.get("text")
-            body_text = text_value.lower() if isinstance(text_value, str) else ""
-
-            if body_len < 500:
-                for keyword in BLOCK_KEYWORDS:
-                    if keyword in body_text:
-                        msg = (
-                            f"Possible block page: body length {body_len} chars "
-                            f"with keyword '{keyword}'"
-                        )
-                        logger.warning(msg)
-                        return ChallengeDetection(
-                            detected=True,
-                            challenge_type="short_body_block",
-                            message=msg,
-                        )
-    except Exception as e:
-        logger.debug(f"Body text check failed: {e}")
 
     return ChallengeDetection(
-        detected=False,
-        challenge_type="none",
-        message="No challenge detected",
+        detected=False, challenge_type="none", message="No challenge detected"
     )

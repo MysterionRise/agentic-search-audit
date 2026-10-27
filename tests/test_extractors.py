@@ -1,5 +1,6 @@
 """Tests for extractors (search box, results, modals)."""
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -145,9 +146,12 @@ async def test_submit_search_calls_trigger_before_find():
     # Trigger click succeeds, input appears
     client.wait_for_selector = AsyncMock(return_value=True)
     # query_selector returns a match for the first default selector
-    client.query_selector = AsyncMock(return_value={"nodeId": 1})
+    client.query_selector = AsyncMock(return_value=None)
     # evaluate / type_text / press_key succeed
-    client.evaluate = AsyncMock(return_value=None)
+    # the one-call selector probe finds the first default input selector
+    client.evaluate = AsyncMock(
+        side_effect=lambda script: 'input[type="search"]' if "requireVisible" in script else None
+    )
     client.type_text = AsyncMock()
     client.press_key = AsyncMock()
 
@@ -253,8 +257,11 @@ async def test_no_results_config_field_accepts_selectors():
 async def test_submit_search_presses_escape_before_enter():
     """submit_search presses Escape to dismiss autocomplete before pressing Enter."""
     finder, client = _make_finder()
-    client.query_selector = AsyncMock(return_value={"nodeId": 1})
-    client.evaluate = AsyncMock(return_value=None)
+    client.query_selector = AsyncMock(return_value=None)
+    # the one-call selector probe finds the first default input selector
+    client.evaluate = AsyncMock(
+        side_effect=lambda script: 'input[type="search"]' if "requireVisible" in script else None
+    )
     client.type_text = AsyncMock()
     client.press_key = AsyncMock()
 
@@ -352,24 +359,18 @@ async def test_location_modal_dismissed_via_selector():
     config = ModalsConfig(location=LocationConfig(enabled=True))
     handler = ModalHandler(client, config)
 
-    # Cookie consent: nothing found
-    call_count = 0
+    client.query_selector = AsyncMock(return_value=None)
 
-    async def mock_query_selector(selector: str) -> dict | None:
-        nonlocal call_count
-        # Return None for cookie selectors, match for first location selector
-        if selector == LOCATION_MODAL_SELECTORS[0]:
-            return {"nodeId": 1}
-        return None
+    def mock_evaluate(script: str) -> object:
+        # The location probe (one call for the whole list) finds the first selector;
+        # the consent probe finds nothing; the confirm button click succeeds.
+        if "requireVisible" in script and json.dumps(LOCATION_MODAL_SELECTORS[0]) in script:
+            return LOCATION_MODAL_SELECTORS[0]
+        if "confirmPatterns" in script:
+            return {"clicked": True, "text": "Continue"}
+        return False
 
-    client.query_selector = AsyncMock(side_effect=mock_query_selector)
-
-    # _dismiss_location_dialog will try to click the confirm button
-    client.evaluate = AsyncMock(
-        side_effect=lambda script: (
-            {"clicked": True, "text": "Continue"} if "confirmPatterns" in script else False
-        )
-    )
+    client.evaluate = AsyncMock(side_effect=mock_evaluate)
 
     result = await handler.dismiss_modals()
     assert result >= 1

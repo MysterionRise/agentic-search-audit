@@ -5,6 +5,7 @@ import json
 import logging
 import re
 
+from ..browser._js import first_match_js
 from ..core.types import BrowserClient, LocationConfig, ModalsConfig
 
 logger = logging.getLogger(__name__)
@@ -236,21 +237,18 @@ class ModalHandler:
         """
         dismissed = 0
 
-        # First, try regular selectors
-        for selector in COOKIE_CONSENT_SELECTORS:
-            try:
-                # Check if selector exists and is visible
-                element = await self.client.query_selector(selector)
-                if element:
-                    logger.info(f"Found cookie consent button: {selector}")
-                    await self.client.click(selector)
-                    await asyncio.sleep(self.config.wait_after_close_ms / 1000)
-                    dismissed += 1
-                    # Usually only one consent dialog, but check for nested dialogs
-                    break
-            except Exception as e:
-                logger.debug(f"Selector {selector} not found or failed: {e}")
-                continue
+        # First, the known consent selectors: one in-page probe for the whole list
+        try:
+            selector = await self.client.evaluate(
+                first_match_js(COOKIE_CONSENT_SELECTORS, require_visible=True)
+            )
+            if isinstance(selector, str) and selector in COOKIE_CONSENT_SELECTORS:
+                logger.info(f"Found cookie consent button: {selector}")
+                await self.client.click(selector)
+                await asyncio.sleep(self.config.wait_after_close_ms / 1000)
+                dismissed += 1
+        except Exception as e:
+            logger.debug(f"Consent selector probe failed: {e}")
 
         # If no consent found, try Usercentrics API and shadow DOM search
         if dismissed == 0:
@@ -500,19 +498,18 @@ class ModalHandler:
         dismissed = 0
         location_config = self.config.location
 
-        # Step 1: Try known CSS selectors for location modals
-        for selector in LOCATION_MODAL_SELECTORS:
-            try:
-                element = await self.client.query_selector(selector)
-                if element:
-                    logger.info(f"Found location modal element: {selector}")
-                    # Found a location modal container — try to dismiss it
-                    dismissed += await self._dismiss_location_dialog(location_config)
-                    if dismissed > 0:
-                        return dismissed
-            except Exception as e:
-                logger.debug(f"Location selector {selector} not found or failed: {e}")
-                continue
+        # Step 1: known CSS selectors for location modals, one in-page probe for the list
+        try:
+            selector = await self.client.evaluate(
+                first_match_js(LOCATION_MODAL_SELECTORS, require_visible=True)
+            )
+            if isinstance(selector, str) and selector in LOCATION_MODAL_SELECTORS:
+                logger.info(f"Found location modal element: {selector}")
+                dismissed += await self._dismiss_location_dialog(location_config)
+                if dismissed > 0:
+                    return dismissed
+        except Exception as e:
+            logger.debug(f"Location selector probe failed: {e}")
 
         # Step 2: Text-based detection for location prompts
         try:

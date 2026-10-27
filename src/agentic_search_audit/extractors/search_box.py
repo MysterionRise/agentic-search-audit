@@ -5,7 +5,7 @@ import json
 import logging
 import re
 
-from ..browser._js import coerce_int
+from ..browser._js import coerce_int, first_match_js
 from ..core.types import BrowserClient, LLMConfig, SearchConfig
 from .intelligent_finder import IntelligentSearchBoxFinder
 
@@ -111,15 +111,15 @@ class SearchBoxFinder:
         """
         logger.info("Searching for search input box...")
 
-        # Try traditional CSS selectors first
-        for selector in self.config.input_selectors:
-            logger.debug(f"Trying selector: {selector}")
-
-            # Try to find element
-            element = await self.client.query_selector(selector)
-            if element:
-                logger.info(f"Found search box with selector: {selector}")
-                return selector
+        # Traditional CSS selectors first: one in-page probe for the whole list
+        try:
+            selector = await self.client.evaluate(first_match_js(self.config.input_selectors))
+        except Exception as e:
+            logger.debug(f"Search box selector probe failed: {e}")
+            selector = None
+        if isinstance(selector, str) and selector in self.config.input_selectors:
+            logger.info(f"Found search box with selector: {selector}")
+            return selector
 
         logger.warning("No search box found with configured selectors")
 

@@ -148,3 +148,30 @@ def coerce_int(value: JsValue, default: int = 0) -> int:
         except ValueError:
             return default
     return default
+
+
+def first_match_js(selectors: list[str], *, require_visible: bool = False) -> str:
+    """Expression returning the first selector in ``selectors`` that matches an element.
+
+    One ``evaluate`` call instead of one ``query_selector`` call per selector, which is
+    what makes long selector lists affordable on bridge backends (a tool call each).
+    Invalid selectors are skipped. Returns ``null`` when nothing matches.
+    """
+    return f"""(function() {{
+  var selectors = {json.dumps(list(selectors))};
+  var requireVisible = {json.dumps(bool(require_visible))};
+  for (var i = 0; i < selectors.length; i++) {{
+    var el;
+    try {{ el = document.querySelector(selectors[i]); }} catch (e) {{ continue; }}
+    if (!el) continue;
+    if (requireVisible) {{
+      var r = el.getBoundingClientRect();
+      var st = window.getComputedStyle(el);
+      if (!(r.width > 0 && r.height > 0) || st.visibility === 'hidden' || st.display === 'none') {{
+        continue;
+      }}
+    }}
+    return selectors[i];
+  }}
+  return null;
+}})()"""
