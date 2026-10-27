@@ -2,7 +2,7 @@
 
 import logging
 
-from ..core.types import BrowserBackend, BrowserClient, RunConfig
+from ..core.types import BRIDGE_BACKENDS, BrowserBackend, BrowserClient, RunConfig
 
 logger = logging.getLogger(__name__)
 
@@ -84,5 +84,11 @@ def create_browser_client(config: RunConfig, locale: str = "en-US") -> BrowserCl
             locale=locale,
             proxy_url=config.proxy_url,
         )
+
+    if backend in BRIDGE_BACKENDS:
+        from .bridge import build_bridge_client
+
+        logger.info("Using %s bridge backend (locale=%s)", backend.value, locale)
+        return build_bridge_client(config, locale=locale)
 
     raise ValueError(f"Unknown browser backend: {backend}")

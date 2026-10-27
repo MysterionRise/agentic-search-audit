@@ -69,6 +69,10 @@ run:
   # Nike uses PerimeterX bot detection; undetected-chromedriver recommended.
   # Falls back to playwright if undetected-chromedriver is not installed.
   browser_backend: undetected
+  # To run in your own logged-in Chrome instead (see docs/BROWSER_BACKENDS.md):
+  # browser_backend: chrome_devtools_mcp
+  # bridge:
+  #   mode: autoconnect
 
 llm:
   provider: "openrouter"

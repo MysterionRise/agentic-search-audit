@@ -74,7 +74,9 @@ run:
   #   - "load more"
   #   - "show more"
 
-  # Browser backend: "playwright" (default), "cdp", or "undetected"
+  # Browser backend: "playwright" (default), "undetected", "cdp", or one of the
+  # bridge backends that drive your real, already-running Chrome:
+  # "chrome_devtools_mcp", "kimi_webbridge", "playwright_mcp".
   #
   # Backend selection guide:
   #   playwright   – Fast, good for sites with light or no bot detection.
@@ -85,10 +87,27 @@ run:
   #                  Macys, Sephora, Nordstrom, Target, Walmart, Best Buy.
   #   cdp          – Connects to an external Chrome / cloud browser instance.
   #                  Good when you need a real browser profile or Browserbase.
+  #   chrome_devtools_mcp – Drives your real Chrome through Google's chrome-devtools-mcp
+  #                  (needs Node >= 20.19). bridge.mode: autoconnect (Chrome 144+; enable
+  #                  chrome://inspect/#remote-debugging once and approve the dialog),
+  #                  browser_url (Chrome started with --remote-debugging-port=9222 and a
+  #                  non-default --user-data-dir), or launch (the server starts its own
+  #                  Chrome with a disposable profile).
+  #   kimi_webbridge – Drives your real Chrome through the Kimi WebBridge daemon and
+  #                  extension (local only; the daemon reports usage to Moonshot).
+  #   playwright_mcp – Experimental: @playwright/mcp --extension.
+  # On a real profile the audit never rotates user agents, switches proxies or clears
+  # cookies unless bridge.allow_profile_mutations is true.
   browser_backend: playwright
   # cdp_endpoint: ws://localhost:9222          # required for "cdp" backend (or use browserbase)
   # browserbase_api_key: null                  # Browserbase cloud browser API key
   # browserbase_project_id: null               # Browserbase project ID
+  # bridge:                                    # settings for the bridge backends
+  #   mode: autoconnect                        # autoconnect | browser_url | launch
+  #   browser_url: http://127.0.0.1:9222       # for mode: browser_url
+  #   allow_profile_mutations: false           # keep false on a real logged-in profile
+  #   connect_timeout_s: 60                    # time to approve Chrome's dialog
+  #   session_name: null                       # kimi_webbridge tab-group name
 
   # PDP (Product Detail Page) analysis:
   #   enable_pdp_analysis: false  # Click into PDPs from search results

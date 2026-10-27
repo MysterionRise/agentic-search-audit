@@ -170,6 +170,79 @@ class BrowserBackend(str, Enum):
     PLAYWRIGHT = "playwright"
     CDP = "cdp"
     UNDETECTED = "undetected"
+    # Bridge backends drive a real, already-running Chrome through a local bridge.
+    CHROME_DEVTOOLS_MCP = "chrome_devtools_mcp"
+    KIMI_WEBBRIDGE = "kimi_webbridge"
+    PLAYWRIGHT_MCP = "playwright_mcp"
+
+
+BRIDGE_BACKENDS: frozenset[BrowserBackend] = frozenset(
+    {
+        BrowserBackend.CHROME_DEVTOOLS_MCP,
+        BrowserBackend.KIMI_WEBBRIDGE,
+        BrowserBackend.PLAYWRIGHT_MCP,
+    }
+)
+
+
+class BridgeMode(str, Enum):
+    """How an MCP bridge server reaches Chrome."""
+
+    AUTOCONNECT = (
+        "autoconnect"  # attach to the running Chrome (Chrome 144+, chrome://inspect toggle)
+    )
+    BROWSER_URL = "browser_url"  # attach to a Chrome started with --remote-debugging-port
+    LAUNCH = "launch"  # the server starts its own Chrome (disposable profile)
+
+
+class BridgeConfig(BaseModel):
+    """Settings for the bridge backends (chrome_devtools_mcp, kimi_webbridge, playwright_mcp)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: BridgeMode = Field(
+        default=BridgeMode.AUTOCONNECT,
+        description="chrome_devtools_mcp / playwright_mcp attach mode; ignored by kimi_webbridge",
+    )
+    browser_url: str | None = Field(
+        default=None, description="http://127.0.0.1:9222 for mode=browser_url"
+    )
+    server_command: str = Field(default="npx", description="Command that starts the MCP server")
+    server_args: list[str] | None = Field(
+        default=None, description="Full override of the MCP server argv (advanced)"
+    )
+    extra_server_args: list[str] = Field(
+        default_factory=list, description="Extra argv appended to the generated server command"
+    )
+    chrome_channel: Literal["stable", "canary", "dev", "beta"] = Field(
+        default="stable", description="Chrome channel for autoconnect / launch"
+    )
+    daemon_url: str = Field(
+        default="http://127.0.0.1:10086", description="Kimi WebBridge daemon base URL"
+    )
+    session_name: str | None = Field(
+        default=None, description="Kimi session (tab group) name; default asa-<timestamp>"
+    )
+    tab_group_title: str = Field(default="Search Audit", description="Kimi tab group label")
+    connect_timeout_s: float = Field(
+        default=60.0,
+        description="Includes the time for the user to approve Chrome's remote-debugging dialog",
+    )
+    tool_timeout_s: float = Field(default=30.0, description="Timeout per bridge tool call")
+    allow_profile_mutations: bool = Field(
+        default=False,
+        description="Permit user-agent override and cookie clearing on a real profile",
+    )
+    apply_viewport: bool | None = Field(
+        default=None,
+        description="Resize the window to the viewport; None = only disposable profiles",
+    )
+    experimental_vision_click: bool = Field(
+        default=False, description="chrome_devtools_mcp: enable click_at (trusted clicks)"
+    )
+    close_tabs_on_disconnect: bool = Field(
+        default=True, description="Close the tab(s) the run opened when it ends"
+    )
 
 
 class QueryOrigin(str, Enum):
@@ -595,6 +668,11 @@ class RunConfig(BaseModel):
         default=15000, description="Timeout for each PDP visit in milliseconds"
     )
 
+    bridge: BridgeConfig = Field(
+        default_factory=BridgeConfig,
+        description="Settings for the bridge backends (see BridgeConfig)",
+    )
+
     @model_validator(mode="after")
     def _validate_proxy_config(self) -> "RunConfig":
         """Validate proxy configuration consistency."""
@@ -619,6 +697,23 @@ class RunConfig(BaseModel):
             if not self.cdp_endpoint and not self.browserbase_api_key:
                 raise ValueError(
                     "CDP backend requires either 'cdp_endpoint' or 'browserbase_api_key'"
+                )
+
+        if self.browser_backend in BRIDGE_BACKENDS and (
+            self.browser_backend != BrowserBackend.KIMI_WEBBRIDGE
+        ):
+            if (
+                self.bridge.mode == BridgeMode.BROWSER_URL
+                and not (self.bridge.browser_url or "").strip()
+            ):
+                raise ValueError(
+                    "bridge.mode 'browser_url' requires 'bridge.browser_url' "
+                    "(e.g. http://127.0.0.1:9222)"
+                )
+            if self.bridge.mode != BridgeMode.LAUNCH and self.proxy_url:
+                raise ValueError(
+                    "proxy_url is only supported with bridge.mode 'launch'; attach modes use "
+                    "the browser's own network settings"
                 )
         return self
 
