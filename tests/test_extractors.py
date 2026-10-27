@@ -364,8 +364,12 @@ async def test_location_modal_dismissed_via_selector():
 
     client.query_selector = AsyncMock(side_effect=mock_query_selector)
 
-    # _dismiss_location_dialog will try to click confirm button
-    client.evaluate = AsyncMock(return_value="Continue")
+    # _dismiss_location_dialog will try to click the confirm button
+    client.evaluate = AsyncMock(
+        side_effect=lambda script: (
+            {"clicked": True, "text": "Continue"} if "confirmPatterns" in script else False
+        )
+    )
 
     result = await handler.dismiss_modals()
     assert result >= 1
@@ -383,19 +387,19 @@ async def test_location_modal_dismissed_via_text_pattern():
 
     call_index = 0
 
-    async def mock_evaluate(script: str) -> str | None:
+    async def mock_evaluate(script: str) -> object:
         nonlocal call_index
         call_index += 1
         # Cookie consent API calls return false
         if call_index <= 3:
-            return "false"
+            return False
         # Location text pattern detection returns true
         if "locationPatterns" in script:
-            return "true"
+            return True
         # Confirm button click
         if "confirmPatterns" in script:
-            return "Continue"
-        return "false"
+            return {"clicked": True, "text": "Continue"}
+        return False
 
     client.evaluate = AsyncMock(side_effect=mock_evaluate)
 
@@ -413,8 +417,8 @@ async def test_iframe_consent_dismissal():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    # Simulate: no regular selectors match, but iframe consent returns text
-    client.evaluate = AsyncMock(return_value="Accept All Cookies")
+    # Simulate: the iframe script clicked a button and reports its text
+    client.evaluate = AsyncMock(return_value={"clicked": True, "text": "Accept All Cookies"})
 
     result = await handler._try_iframe_consent()
     assert result == 1
@@ -479,26 +483,19 @@ async def test_escape_dismissal_as_last_resort():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    # No cookie consent selectors match
+    # No consent selectors match, no consent API or text button, no close button
     client.query_selector = AsyncMock(return_value=None)
-    # No consent API works
-    client.evaluate = AsyncMock(return_value=False)
+    client.evaluate = AsyncMock(return_value=None)
 
-    call_count = 0
-
-    # Override _check_modal_overlay to detect overlay then clear it
+    # Overlay is visible until Escape has been pressed
     async def mock_overlay():
-        nonlocal call_count
-        call_count += 1
-        # On first check (from _try_escape_dismissal): overlay present
-        # On second check (after Escape): overlay gone
-        return call_count == 1
+        return client.press_key.await_count == 0
 
     handler._check_modal_overlay = mock_overlay
 
     result = await handler.dismiss_modals()
-    # Escape-based dismissal should have fired
-    assert result >= 1
+    assert result == 1
+    client.press_key.assert_awaited_once_with("Escape")
 
 
 # --- Modal overlay detection tests ---
