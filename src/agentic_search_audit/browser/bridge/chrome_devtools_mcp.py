@@ -247,21 +247,21 @@ class ChromeDevtoolsMcpTransport(McpStdioTransportBase):
         await self._call("click_at", self._page_args(x=x, y=y))
 
     async def screenshot(self, output_path: Path, full_page: bool) -> Path:
+        # Ask for the image inline and write it ourselves: the server only writes files
+        # inside its own workspace (the spike hit "Access denied" for a run dir elsewhere).
         result = await self._call_raw(
             "take_screenshot",
-            self._page_args(fullPage=full_page, format="png", filePath=str(output_path)),
+            self._page_args(fullPage=full_page, format="png"),
             self.tool_timeout_s * 2,
         )
-        if output_path.exists():
-            return output_path
-        # The server may refuse the path (workspace restriction) and return the image inline.
         for item in getattr(result, "content", None) or []:
             if getattr(item, "type", None) == "image" and getattr(item, "data", None):
                 import base64
 
+                output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_bytes(base64.b64decode(item.data))
                 return output_path
-        raise BridgeToolError("take_screenshot", f"no file written to {output_path}")
+        raise BridgeToolError("take_screenshot", "the server returned no image content")
 
     async def set_viewport(self, width: int, height: int) -> None:
         await self._call("resize_page", self._page_args(width=width, height=height))
