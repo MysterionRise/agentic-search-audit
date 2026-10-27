@@ -541,25 +541,22 @@ async def test_url_verification_rejects_invalid_scheme():
 
     extractor = ResultsExtractor(client, config, "https://example.com")
 
-    # Mock: 1 item found, then extract returns javascript: URL
+    # The batched extraction script returns one item with a javascript: URL
     client.evaluate = AsyncMock(
-        side_effect=[
-            "1",  # count of items
-            None,  # title extraction attempt 1
-            None,  # title extraction attempt 2
-            None,  # title extraction attempt 3
-            None,  # title extraction attempt 4
-            None,  # title extraction attempt 5
-            "javascript:alert(1)",  # URL extraction
-            None,  # snippet
-            None,  # snippet
-            None,  # snippet
-            None,  # price
-            None,  # price
-            None,  # price
-            None,  # image
-            None,  # image
-        ]
+        return_value={
+            "selector": ".product",
+            "total": 1,
+            "items": [
+                {
+                    "index": 0,
+                    "title": None,
+                    "url": "javascript:alert(1)",
+                    "snippet": None,
+                    "price": None,
+                    "image": None,
+                }
+            ],
+        }
     )
 
     results = await extractor.extract_results(top_k=1)
@@ -579,21 +576,22 @@ async def test_url_verification_flags_off_domain():
 
     extractor = ResultsExtractor(client, config, "https://www.example.com")
 
-    # Mock: 1 item found, then extract returns off-domain URL
+    # The batched extraction script returns one item with an off-domain URL
     client.evaluate = AsyncMock(
-        side_effect=[
-            "1",  # count of items
-            "Product Title",  # title from h2
-            "https://ad-network.com/track/product",  # URL extraction
-            None,  # snippet attempts
-            None,
-            None,
-            None,  # price attempts
-            None,
-            None,
-            None,  # image
-            None,
-        ]
+        return_value={
+            "selector": ".product",
+            "total": 1,
+            "items": [
+                {
+                    "index": 0,
+                    "title": "Product Title",
+                    "url": "https://ad-network.com/track/product",
+                    "snippet": None,
+                    "price": None,
+                    "image": None,
+                }
+            ],
+        }
     )
 
     results = await extractor.extract_results(top_k=1)

@@ -1,417 +1,180 @@
-"""Integration tests for extractors using HTML snapshots.
+"""Extractor tests against saved HTML snapshots, rendered in a real Chromium.
 
-These tests use pre-captured HTML snapshots to test extraction logic
-without requiring browser automation.
+The browser-backed tests carry the ``browser`` marker and skip when Playwright's
+Chromium is not installed; the snapshot-integrity tests always run.
 """
 
-import re
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 import pytest
+import pytest_asyncio
 
 from agentic_search_audit.core.types import LLMConfig, ResultsConfig, SearchConfig
 from agentic_search_audit.extractors.results import ResultsExtractor
 from agentic_search_audit.extractors.search_box import SearchBoxFinder
 
-
-@pytest.fixture
-def snapshots_dir():
-    """Get path to HTML snapshots directory."""
-    return Path(__file__).parent.parent / "data" / "snapshots"
+SNAPSHOTS_DIR = Path(__file__).parent.parent / "data" / "snapshots"
 
 
-@pytest.fixture
-def books_toscrape_html(snapshots_dir):
-    """Load Books to Scrape search results HTML."""
-    html_path = snapshots_dir / "books_toscrape_search.html"
-    if html_path.exists():
-        return html_path.read_text(encoding="utf-8")
-    pytest.skip("Snapshot file not found")
+def _load(name: str) -> str:
+    path = SNAPSHOTS_DIR / name
+    if not path.exists():
+        pytest.skip(f"Snapshot file not found: {path}")
+    return path.read_text(encoding="utf-8")
 
 
 @pytest.fixture
-def fashion_store_html(snapshots_dir):
-    """Load fashion store homepage HTML."""
-    html_path = snapshots_dir / "fashion_store_homepage.html"
-    if html_path.exists():
-        return html_path.read_text(encoding="utf-8")
-    pytest.skip("Snapshot file not found")
+def books_toscrape_html() -> str:
+    return _load("books_toscrape_search.html")
 
 
 @pytest.fixture
-def mock_llm_config():
-    """Create a mock LLM config for testing."""
-    return LLMConfig(
-        provider="openai",
-        model="gpt-4o-mini",
-        api_key="test-key",
-    )
+def fashion_store_html() -> str:
+    return _load("fashion_store_homepage.html")
 
 
-class MockMCPClient:
-    """Mock MCP browser client for testing with HTML snapshots."""
-
-    def __init__(self, html_content: str):
-        """Initialize with HTML content.
-
-        Args:
-            html_content: HTML content to return
-        """
-        self.html_content = html_content
-        self._elements: dict[str, list[dict]] = {}
-        self._element_count: dict[str, int] = {}
-        self._parse_html()
-
-    def _parse_html(self) -> None:
-        """Parse HTML to simulate DOM queries."""
-        # Extract product cards
-        product_pattern = r'<article class="product-card"[^>]*>(.*?)</article>'
-        products = re.findall(product_pattern, self.html_content, re.DOTALL)
-
-        self._elements["article.product-card"] = []
-        self._elements[".product-card"] = []
-        self._element_count["article.product-card"] = len(products)
-        self._element_count[".product-card"] = len(products)
-
-        for i, product_html in enumerate(products):
-            # Extract title
-            title_match = re.search(r"<h3[^>]*>(.*?)</h3>", product_html)
-            title = title_match.group(1) if title_match else f"Product {i+1}"
-
-            # Extract price
-            price_match = re.search(r'class="product-price"[^>]*>\$([\d.]+)', product_html)
-            price = f"${price_match.group(1)}" if price_match else None
-
-            # Extract URL
-            url_match = re.search(r'href="([^"]+)"', product_html)
-            url = url_match.group(1) if url_match else None
-
-            element = {
-                "title": title,
-                "price": price,
-                "url": url,
-                "html": product_html,
-            }
-            self._elements["article.product-card"].append(element)
-            self._elements[".product-card"].append(element)
-
-        # Extract search input
-        search_pattern = r'<input[^>]*type="search"[^>]*>'
-        search_inputs = re.findall(search_pattern, self.html_content, re.IGNORECASE)
-        self._elements['input[type="search"]'] = [{"html": s} for s in search_inputs]
-        self._element_count['input[type="search"]'] = len(search_inputs)
-
-    async def get_html(self) -> str:
-        """Return the HTML content."""
-        return self.html_content
-
-    async def query_selector_all(self, selector: str) -> list[dict]:
-        """Simulate querySelectorAll with parsed elements."""
-        # Direct match
-        if selector in self._elements:
-            return self._elements[selector]
-
-        # Try to match partial selectors
-        for key, elements in self._elements.items():
-            if selector in key or key in selector:
-                return elements
-
-        return []
-
-    async def query_selector(self, selector: str) -> dict | None:
-        """Simulate querySelector."""
-        elements = await self.query_selector_all(selector)
-        return elements[0] if elements else None
-
-    async def evaluate(self, script: str) -> str | None:
-        """Simulate JavaScript evaluation."""
-        if "window.location.href" in script:
-            return "https://example.com/search"
-
-        # Handle counting elements with querySelectorAll(...).length
-        match = re.search(r"querySelectorAll\('([^']+)'\)", script)
-        if match and "length" in script and "querySelector(" not in script.split("length")[0]:
-            selector = match.group(1)
-            # Check for exact match
-            if selector in self._element_count:
-                return str(self._element_count[selector])
-            # Check for partial match
-            for key, count in self._element_count.items():
-                if selector in key or key in selector:
-                    return str(count)
-            return "0"
-
-        # Handle querySelectorAll(base)[index].querySelector(child) patterns
-        idx_match = re.search(r"querySelectorAll\('([^']+)'\)\[(\d+)\]", script)
-        if idx_match:
-            base_selector = idx_match.group(1)
-            index = int(idx_match.group(2))
-
-            # Find matching elements
-            elements = self._elements.get(base_selector)
-            if not elements:
-                for key, elems in self._elements.items():
-                    if base_selector in key or key in base_selector:
-                        elements = elems
-                        break
-            if not elements or index >= len(elements):
-                return None
-
-            element = elements[index]
-
-            # Check for child querySelector
-            child_match = re.search(r"\.querySelector\('([^']+)'\)", script)
-            if child_match:
-                child_selector = child_match.group(1)
-
-                # Check for getAttribute call
-                attr_match = re.search(r"getAttribute\('([^']+)'\)", script)
-                if attr_match:
-                    attr = attr_match.group(1)
-                    if attr in ("src", "data-src"):
-                        return element.get("image")
-                    if attr == "href":
-                        return element.get("url")
-                    return None
-
-                # textContent extraction
-                if "textContent" in script:
-                    if "h3" in child_selector:
-                        return element.get("title")
-                    if "price" in child_selector.lower():
-                        return element.get("price")
-                    return None
-
-            # No child selector — getAttribute on parent
-            attr_match = re.search(r"getAttribute\('([^']+)'\)", script)
-            if attr_match:
-                attr = attr_match.group(1)
-                if attr == "href":
-                    return element.get("url")
-                return None
-
-        return None
-
-    async def get_element_text(self, selector: str) -> str | None:
-        """Get element text content."""
-        # Parse nth-of-type selectors
-        nth_match = re.match(r"(.+):nth-of-type\((\d+)\)\s*(.*)$", selector)
-        if nth_match:
-            base_selector = nth_match.group(1)
-            index = int(nth_match.group(2)) - 1  # Convert to 0-indexed
-            child_selector = nth_match.group(3).strip()
-
-            elements = self._elements.get(base_selector, [])
-            if 0 <= index < len(elements):
-                element = elements[index]
-                if child_selector:
-                    if "h3" in child_selector:
-                        return element.get("title")
-                    if "price" in child_selector.lower():
-                        return element.get("price")
-                return element.get("title")
-        return None
-
-    async def get_element_attribute(self, selector: str, attr: str) -> str | None:
-        """Get element attribute."""
-        # Parse nth-of-type selectors
-        nth_match = re.match(r"(.+):nth-of-type\((\d+)\)\s*(.*)$", selector)
-        if nth_match:
-            base_selector = nth_match.group(1)
-            index = int(nth_match.group(2)) - 1  # Convert to 0-indexed
-
-            elements = self._elements.get(base_selector, [])
-            if 0 <= index < len(elements):
-                element = elements[index]
-                if attr == "href":
-                    return element.get("url")
-        return None
-
-    async def screenshot(self, path, full_page=False) -> None:
-        """Mock screenshot - does nothing."""
-        pass
-
-    async def wait_for_network_idle(self, timeout=1000) -> None:
-        """Mock wait - does nothing."""
-        pass
+@pytest.fixture
+def mock_llm_config() -> LLMConfig:
+    return LLMConfig(provider="openai", model="gpt-4o-mini", api_key="test-key")
 
 
+browser_tests = [pytest.mark.browser, pytest.mark.asyncio(loop_scope="module")]
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def browser() -> AsyncIterator[Any]:
+    playwright = pytest.importorskip("playwright.async_api")
+    pw = await playwright.async_playwright().start()
+    try:
+        chromium = await pw.chromium.launch(headless=True)
+    except Exception as exc:  # browser binary missing
+        await pw.stop()
+        pytest.skip(f"Chromium not available: {exc}")
+    try:
+        yield chromium
+    finally:
+        await chromium.close()
+        await pw.stop()
+
+
+async def _client_for(browser: Any, html: str) -> Any:
+    """A PlaywrightBrowserClient whose page shows ``html``."""
+    from agentic_search_audit.browser.playwright_client import PlaywrightBrowserClient
+
+    page = await browser.new_page()
+    await page.set_content(html)
+    client = PlaywrightBrowserClient()
+    client._page = page
+    return client
+
+
+BOOKS_CONFIG = ResultsConfig(
+    item_selectors=["article.product-card", ".product-card"],
+    title_selectors=["h3.product-title", "h3"],
+    price_selectors=[".product-price"],
+    url_attr="href",
+)
+
+FASHION_CONFIG = ResultsConfig(
+    item_selectors=["article.product-card", ".product-card"],
+    title_selectors=["h3"],
+    price_selectors=[".product-price"],
+    url_attr="href",
+)
+
+
+@pytest.mark.parametrize("marker", [None], ids=[""])
 class TestResultsExtractorWithSnapshots:
-    """Tests for ResultsExtractor using HTML snapshots."""
+    pytestmark = browser_tests
 
-    @pytest.fixture
-    def books_results_config(self):
-        """Results config for Books to Scrape."""
-        return ResultsConfig(
-            item_selectors=[
-                "article.product-card",
-                ".product-card",
-            ],
-            title_selectors=[
-                "h3.product-title",
-                "h3",
-            ],
-            price_selectors=[
-                ".product-price",
-            ],
-            url_attr="href",
-        )
-
-    @pytest.mark.asyncio
     async def test_extract_results_from_books_snapshot(
-        self, books_toscrape_html, books_results_config
-    ):
-        """Test extracting results from Books to Scrape snapshot."""
-        mock_client = MockMCPClient(books_toscrape_html)
+        self, browser: Any, books_toscrape_html: str, marker: None
+    ) -> None:
+        client = await _client_for(browser, books_toscrape_html)
+        try:
+            extractor = ResultsExtractor(client, BOOKS_CONFIG, "https://books.toscrape.com")
+            results = await extractor.extract_results(top_k=10)
+        finally:
+            await client._page.close()
 
-        extractor = ResultsExtractor(
-            client=mock_client,
-            config=books_results_config,
-            base_url="https://books.toscrape.com",
-        )
-
-        results = await extractor.extract_results(top_k=10)
-
-        # Should extract 5 products from the snapshot
         assert len(results) == 5
+        assert results[0].rank == 1
+        assert results[0].title is not None
+        assert results[0].url is not None and results[0].url.startswith("https://")
+        assert all(r.price is not None and "$" in r.price for r in results)
+        assert [r.rank for r in results] == [1, 2, 3, 4, 5]
 
-        # Check first result
-        first_result = results[0]
-        assert first_result.rank == 1
-        assert first_result.title is not None
+    async def test_top_k_limits_results(
+        self, browser: Any, books_toscrape_html: str, marker: None
+    ) -> None:
+        client = await _client_for(browser, books_toscrape_html)
+        try:
+            extractor = ResultsExtractor(client, BOOKS_CONFIG, "https://books.toscrape.com")
+            results = await extractor.extract_results(top_k=3)
+            count = await extractor.count_visible_results()
+        finally:
+            await client._page.close()
+        assert len(results) == 3
+        assert count == 5
 
-    @pytest.mark.asyncio
-    async def test_extract_preserves_ranking_order(self, books_toscrape_html, books_results_config):
-        """Test that results maintain correct ranking order."""
-        mock_client = MockMCPClient(books_toscrape_html)
-
-        extractor = ResultsExtractor(
-            client=mock_client,
-            config=books_results_config,
-            base_url="https://books.toscrape.com",
-        )
-
-        results = await extractor.extract_results(top_k=10)
-
-        # Check ranking is sequential
-        for i, result in enumerate(results, 1):
-            assert result.rank == i
-
-    @pytest.mark.asyncio
-    async def test_top_k_limits_results(self, books_toscrape_html, books_results_config):
-        """Test that top_k parameter limits results."""
-        mock_client = MockMCPClient(books_toscrape_html)
-
-        extractor = ResultsExtractor(
-            client=mock_client,
-            config=books_results_config,
-            base_url="https://books.toscrape.com",
-        )
-
-        results = await extractor.extract_results(top_k=3)
-
-        # Should be limited to min(top_k, available)
-        assert len(results) <= 3
-
-
-class TestSearchBoxFinderWithSnapshots:
-    """Tests for SearchBoxFinder using HTML snapshots."""
-
-    @pytest.fixture
-    def fashion_search_config(self):
-        """Search config for fashion store."""
-        return SearchConfig(
-            input_selectors=[
-                'input[type="search"]',
-                "#search-input",
-                'input[aria-label*="Search"]',
-            ],
-            submit_strategy="enter",
-        )
-
-    @pytest.mark.asyncio
-    async def test_find_search_box_in_fashion_store(
-        self, fashion_store_html, fashion_search_config, mock_llm_config
-    ):
-        """Test finding search box in fashion store snapshot."""
-        mock_client = MockMCPClient(fashion_store_html)
-
-        # Verify SearchBoxFinder can be instantiated with the mock client
-        _finder = SearchBoxFinder(
-            client=mock_client,
-            config=fashion_search_config,
-            llm_config=mock_llm_config,
-            use_intelligent_fallback=False,
-        )
-
-        # Test that selector detection works via mock client
-        found = await mock_client.query_selector('input[type="search"]')
-        assert found is not None
-
-
-class TestResultsExtractorWithFashionStore:
-    """Tests for ResultsExtractor with fashion store snapshot."""
-
-    @pytest.fixture
-    def fashion_results_config(self):
-        """Results config for fashion store."""
-        return ResultsConfig(
-            item_selectors=[
-                "article.product-card",
-                ".product-card",
-            ],
-            title_selectors=[
-                "h3",
-            ],
-            price_selectors=[
-                ".product-price",
-            ],
-            url_attr="href",
-        )
-
-    @pytest.mark.asyncio
-    async def test_extract_trending_products(self, fashion_store_html, fashion_results_config):
-        """Test extracting trending products from fashion store."""
-        mock_client = MockMCPClient(fashion_store_html)
-
-        extractor = ResultsExtractor(
-            client=mock_client,
-            config=fashion_results_config,
-            base_url="https://fashion-store.example.com",
-        )
-
-        results = await extractor.extract_results(top_k=10)
-
-        # Should extract 4 trending products
+    async def test_extract_trending_products(
+        self, browser: Any, fashion_store_html: str, marker: None
+    ) -> None:
+        client = await _client_for(browser, fashion_store_html)
+        try:
+            extractor = ResultsExtractor(
+                client, FASHION_CONFIG, "https://fashion-store.example.com"
+            )
+            results = await extractor.extract_results(top_k=10)
+        finally:
+            await client._page.close()
         assert len(results) == 4
-
-        # Check prices are extracted
         for result in results:
             assert result.price is not None
             assert "$" in result.price
 
+    async def test_search_box_is_found_by_selector(
+        self,
+        browser: Any,
+        fashion_store_html: str,
+        mock_llm_config: LLMConfig,
+        marker: None,
+    ) -> None:
+        client = await _client_for(browser, fashion_store_html)
+        try:
+            config = SearchConfig(
+                input_selectors=['input[type="search"]', "#search-input"],
+                submit_strategy="enter",
+            )
+            finder = SearchBoxFinder(
+                client=client,
+                config=config,
+                llm_config=mock_llm_config,
+                use_intelligent_fallback=False,
+            )
+            selector = await finder.find_search_box()
+        finally:
+            await client._page.close()
+        assert selector == 'input[type="search"]'
+
 
 class TestSnapshotDataIntegrity:
-    """Tests to verify snapshot data integrity."""
+    """Tests to verify snapshot data integrity (no browser needed)."""
 
-    def test_books_snapshot_exists(self, snapshots_dir):
-        """Verify Books to Scrape snapshot exists."""
-        html_path = snapshots_dir / "books_toscrape_search.html"
-        assert html_path.exists(), f"Snapshot not found: {html_path}"
+    def test_books_snapshot_exists(self) -> None:
+        assert (SNAPSHOTS_DIR / "books_toscrape_search.html").exists()
 
-    def test_fashion_snapshot_exists(self, snapshots_dir):
-        """Verify fashion store snapshot exists."""
-        html_path = snapshots_dir / "fashion_store_homepage.html"
-        assert html_path.exists(), f"Snapshot not found: {html_path}"
+    def test_fashion_snapshot_exists(self) -> None:
+        assert (SNAPSHOTS_DIR / "fashion_store_homepage.html").exists()
 
-    def test_books_snapshot_contains_products(self, books_toscrape_html):
-        """Verify Books snapshot contains expected products."""
+    def test_books_snapshot_contains_products(self, books_toscrape_html: str) -> None:
         assert "Python Crash Course" in books_toscrape_html
         assert "product-card" in books_toscrape_html
         assert "$29.99" in books_toscrape_html
 
-    def test_fashion_snapshot_contains_brands(self, fashion_store_html):
-        """Verify fashion snapshot contains expected brands."""
+    def test_fashion_snapshot_contains_brands(self, fashion_store_html: str) -> None:
         assert "Nike" in fashion_store_html
         assert "Adidas" in fashion_store_html
         assert "Zara" in fashion_store_html
