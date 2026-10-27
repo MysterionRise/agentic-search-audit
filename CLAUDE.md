@@ -56,6 +56,9 @@ Failures become `QueryFailure` rows in `failures.jsonl`.
   `isinstance`. Embed selectors with `json.dumps`.
 - Backends declare `BrowserCapabilities`; bridges on a real profile report no UA override,
   proxy or cookie clearing, and the orchestrator skips those steps.
+- Batch page probes: one `evaluate` per decision (`first_match_js()` for selector lists,
+  one script for a whole result list). A bridge tool call costs about 0.7 s, so a loop of
+  `query_selector` calls is unusable there.
 - Site config models (`SearchConfig`, `ResultsConfig`, `ModalsConfig`, `LocationConfig`,
   `SiteConfig`, `RunConfig`, `BridgeConfig`) reject unknown keys.
 - `load_config()` loads `configs/default.yaml` only when `--config` is not given; `--config`

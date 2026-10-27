@@ -33,7 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stringified results before, which silently disabled the consent fallbacks, the close-button
   finder and PDP dropdown probing on every real backend.
 - Results are extracted in one `evaluate` round trip instead of one per field per item;
-  selectors are embedded with `json.dumps`.
+  selectors are embedded with `json.dumps`. Consent, location-modal and search-box selector
+  lists and the challenge checks are probed in one call each (`first_match_js`), which took
+  chrome_devtools_mcp from 138 s to 35 s per query on Nike.
 - Modal fallbacks are scoped to consent and overlay containers and return objects, so a
   second `dismiss_modals()` on a clean page clicks nothing.
 - The orchestrator accepts an injected client, builds its extractors once, runs the first
