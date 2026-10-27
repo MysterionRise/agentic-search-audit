@@ -93,6 +93,9 @@ class SearchBoxFinder:
         """
         self.client = client
         self.config = config
+        # A site can pick a cheaper or more capable vision model for search-box detection
+        if config.intelligent_detection_model:
+            llm_config = llm_config.model_copy(update={"model": config.intelligent_detection_model})
         self.llm_config = llm_config
         self.use_intelligent_fallback = use_intelligent_fallback
         self._intelligent_finder: IntelligentSearchBoxFinder | None = None

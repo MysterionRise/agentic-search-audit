@@ -10,7 +10,14 @@ from typing import TextIO
 from ..analysis.benchmarks import Industry, get_industry_benchmark
 from ..analysis.maturity import MaturityEvaluator, MaturityReport
 from ..analysis.uplift_planner import FindingsAnalyzer, FindingsReport, Severity
-from ..core.types import AuditConfig, AuditRecord, ExpertInsight, get_fqi_band, get_maturity_label
+from ..core.types import (
+    AuditConfig,
+    AuditRecord,
+    ExpertInsight,
+    QueryFailure,
+    get_fqi_band,
+    get_maturity_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +69,7 @@ class ReportGenerator:
         include_findings: bool = True,
         generate_pdf: bool = False,
         expert_insights: list[ExpertInsight] | None = None,
+        failures: list[QueryFailure] | None = None,
     ) -> None:
         """Generate all configured report formats.
 
@@ -71,6 +79,7 @@ class ReportGenerator:
             include_findings: Include findings section
             generate_pdf: Generate PDF version of the HTML report
             expert_insights: Optional list of expert commentary insights
+            failures: Queries that produced no record (rendered as a Failed Queries table)
         """
         logger.info(f"Generating reports in {self.run_dir}")
 
@@ -111,19 +120,27 @@ class ReportGenerator:
         insights = expert_insights or []
 
         if "md" in self.config.report.formats:
-            self._generate_markdown(records, maturity_report, findings_report, insights)
+            self._generate_markdown(
+                records, maturity_report, findings_report, insights, failures=failures
+            )
 
         if "html" in self.config.report.formats:
-            self._generate_html(records, maturity_report, findings_report, insights)
+            self._generate_html(
+                records, maturity_report, findings_report, insights, failures=failures
+            )
 
         if "json" in self.config.report.formats:
-            self._generate_json(records, maturity_report, findings_report, insights)
+            self._generate_json(
+                records, maturity_report, findings_report, insights, failures=failures
+            )
 
         # Generate PDF if requested (auto-enable HTML if needed)
         if generate_pdf:
             if "html" not in self.config.report.formats:
                 logger.info("HTML format auto-enabled for PDF generation")
-                self._generate_html(records, maturity_report, findings_report, insights)
+                self._generate_html(
+                    records, maturity_report, findings_report, insights, failures=failures
+                )
             self._generate_pdf()
 
         # Export findings to CSV (already filtered above)
@@ -141,6 +158,7 @@ class ReportGenerator:
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
         expert_insights: list[ExpertInsight] | None = None,
+        failures: list[QueryFailure] | None = None,
     ) -> None:
         """Generate Markdown report.
 
@@ -159,6 +177,8 @@ class ReportGenerator:
             f.write(f"**Site:** {self.config.site.url}\n\n")
             f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write(f"**Total Queries:** {len(records)}\n\n")
+            if failures:
+                f.write(f"**Failed Queries:** {len(failures)}\n\n")
 
             # Combined opening (Executive Summary + Maturity)
             if maturity_report and records:
@@ -172,6 +192,10 @@ class ReportGenerator:
             # Industry benchmark comparison
             if records:
                 self._write_markdown_benchmark_comparison(f, records)
+
+            # Queries that produced no record
+            if failures:
+                self._write_markdown_failures(f, failures)
 
             # Dimension descriptions
             self._write_markdown_dimension_descriptions(f)
@@ -612,6 +636,7 @@ class ReportGenerator:
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
         expert_insights: list[ExpertInsight] | None = None,
+        failures: list[QueryFailure] | None = None,
     ) -> None:
         """Generate HTML report.
 
@@ -1196,14 +1221,20 @@ class ReportGenerator:
 """)
 
             # Header
+            failed_line = (
+                f"<p><strong>Failed Queries:</strong> {len(failures)}</p>" if failures else ""
+            )
             f.write(f"""
     <div class="header">
         <h1>Search Quality Audit Report</h1>
         <p><strong>Site:</strong> {escape_html(str(self.config.site.url))}</p>
         <p><strong>Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p><strong>Total Queries:</strong> {len(records)}</p>
+        {failed_line}
     </div>
 """)
+            if failures:
+                self._write_html_failures(f, failures)
             # FQI Hero Score
             if records:
                 fqi_band = get_maturity_label(avg_fqi)
@@ -1955,6 +1986,7 @@ class ReportGenerator:
         maturity_report: MaturityReport | None = None,
         findings_report: FindingsReport | None = None,
         expert_insights: list[ExpertInsight] | None = None,
+        failures: list[QueryFailure] | None = None,
     ) -> None:
         """Generate JSON report.
 
@@ -2025,10 +2057,51 @@ class ReportGenerator:
         if expert_insights:
             data["expert_insights"] = [i.model_dump() for i in expert_insights]
 
+        # Queries that produced no record
+        if failures:
+            data["failed_queries"] = len(failures)
+            data["failures"] = [failure.model_dump(mode="json") for failure in failures]
+
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"JSON report saved to {report_path}")
+
+    @staticmethod
+    def _write_markdown_failures(f: TextIO, failures: list[QueryFailure]) -> None:
+        """Table of queries that produced no record and why."""
+        f.write("## Failed Queries\n\n")
+        f.write(
+            "These queries produced no result record; they count against coverage but "
+            "not against the scores above.\n\n"
+        )
+        f.write("| Query | Reason | Attempts | Detail |\n")
+        f.write("|-------|--------|----------|--------|\n")
+        for failure in failures:
+            query_text = failure.query.text.replace("|", "\\|")
+            detail = failure.message.replace("|", "\\|").replace("\n", " ")[:160]
+            f.write(f"| {query_text} | {failure.error_kind} | {failure.attempts} | {detail} |\n")
+        f.write("\n")
+
+    @staticmethod
+    def _write_html_failures(f: TextIO, failures: list[QueryFailure]) -> None:
+        """HTML counterpart of ``_write_markdown_failures``."""
+        rows = "".join(
+            "<tr>"
+            f"<td>{escape_html(failure.query.text)}</td>"
+            f"<td>{escape_html(failure.error_kind)}</td>"
+            f"<td>{failure.attempts}</td>"
+            f"<td>{escape_html(failure.message[:160])}</td>"
+            "</tr>"
+            for failure in failures
+        )
+        f.write(
+            '<div class="section"><h2>Failed Queries</h2>'
+            "<p>These queries produced no result record; they count against coverage "
+            "but not against the scores above.</p>"
+            "<table><thead><tr><th>Query</th><th>Reason</th><th>Attempts</th><th>Detail</th>"
+            f"</tr></thead><tbody>{rows}</tbody></table></div>\n"
+        )
 
     def _get_score_class(self, score: float) -> str:
         """Get CSS class for score.

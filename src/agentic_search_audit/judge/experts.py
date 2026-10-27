@@ -309,7 +309,7 @@ class ExpertPanel:
         """
         assert self.client is not None
 
-        timeout = getattr(self.config, "timeout", None) or DEFAULT_EXPERT_TIMEOUT_SECONDS
+        timeout = self.config.timeout or DEFAULT_EXPERT_TIMEOUT_SECONDS
 
         try:
             response = await asyncio.wait_for(

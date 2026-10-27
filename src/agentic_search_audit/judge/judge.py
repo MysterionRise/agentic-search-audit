@@ -77,15 +77,18 @@ class SearchQualityJudge:
         self,
         config: LLMConfig,
         rate_limiter: "LLMRateLimiter | None" = None,
+        seed: int | None = None,
     ):
         """Initialize judge.
 
         Args:
             config: LLM configuration
             rate_limiter: Optional shared rate limiter for LLM API calls
+            seed: Sampling seed passed to providers that support it (run.seed)
         """
         self.config = config
         self.rate_limiter = rate_limiter
+        self.seed = seed
         self.client: Any = None
         self._anthropic_client: Any = None
 
@@ -297,7 +300,7 @@ class SearchQualityJudge:
         """
         logger.debug("Calling LLM for evaluation...")
 
-        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_LLM_TIMEOUT_SECONDS
+        timeout_seconds = self.config.timeout or DEFAULT_LLM_TIMEOUT_SECONDS
 
         if self.config.provider in ["openai", "openrouter", "vllm"]:
             try:
@@ -314,7 +317,7 @@ class SearchQualityJudge:
                         temperature=self.config.temperature,
                         max_tokens=self.config.max_tokens,
                         response_format={"type": "json_object"},
-                        seed=self.config.seed if hasattr(self.config, "seed") else None,
+                        seed=self.seed,
                     ),
                     timeout=timeout_seconds,
                 )

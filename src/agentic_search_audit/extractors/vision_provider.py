@@ -160,7 +160,7 @@ class OpenAIVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenAI vision model."""
-        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+        timeout_seconds = self.config.vision_timeout or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
             response = await asyncio.wait_for(
@@ -240,7 +240,7 @@ class VLLMVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using vLLM vision model."""
-        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+        timeout_seconds = self.config.vision_timeout or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
             # vLLM uses OpenAI-compatible format
@@ -327,7 +327,7 @@ class OpenRouterVisionProvider(VisionProvider):
         self, screenshot_base64: str, prompt: str, max_tokens: int = 1000, temperature: float = 0.1
     ) -> dict[str, Any] | None:
         """Analyze image using OpenRouter vision model."""
-        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+        timeout_seconds = self.config.vision_timeout or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
             # OpenRouter uses OpenAI-compatible format
@@ -421,7 +421,7 @@ class AnthropicVisionProvider(VisionProvider):
         Returns:
             Parsed JSON response or None on error
         """
-        timeout_seconds = getattr(self.config, "timeout", None) or DEFAULT_VISION_TIMEOUT_SECONDS
+        timeout_seconds = self.config.vision_timeout or DEFAULT_VISION_TIMEOUT_SECONDS
 
         try:
             response = await asyncio.wait_for(
