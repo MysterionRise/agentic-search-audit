@@ -1,16 +1,14 @@
 """Fixtures for API tests."""
 
-import asyncio
-
 # Mock environment variables before importing app
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 os.environ.update(
     {
@@ -36,14 +34,6 @@ try:
             pass
 except Exception:
     pass
-
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(autouse=True)
@@ -98,7 +88,7 @@ def mock_redis():
 @pytest.fixture
 def mock_user():
     """Mock user object."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     class MockUser:
         id = uuid4()
@@ -110,8 +100,8 @@ def mock_user():
         is_active = True
         is_admin = False
         organization_id = None
-        created_at = datetime.utcnow()
-        updated_at = datetime.utcnow()
+        created_at = datetime.now(timezone.utc)
+        updated_at = datetime.now(timezone.utc)
 
     return MockUser()
 
@@ -162,5 +152,7 @@ def client(app_with_mocks):
 @pytest.fixture
 async def async_client(app_with_mocks) -> AsyncGenerator:
     """Async test client."""
-    async with AsyncClient(app=app_with_mocks, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_mocks), base_url="http://test"
+    ) as ac:
         yield ac

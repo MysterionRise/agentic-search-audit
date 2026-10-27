@@ -19,6 +19,7 @@ from playwright.async_api import (
 )
 
 from .stealth import (
+    apply_playwright_stealth,
     build_stealth_js,
     get_client_hints_headers,
     human_typing_delay,
@@ -117,20 +118,11 @@ class PlaywrightBrowserClient:
         # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
         await self._context.set_extra_http_headers(get_client_hints_headers(ua))
 
-        # Add stealth scripts to hide automation detection
-        try:
-            from playwright_stealth import stealth_async  # type: ignore[import-untyped]
-
-            self._page = await self._context.new_page()
-            try:
-                await stealth_async(self._page)
-            except Exception as stealth_err:
-                logger.warning(f"playwright-stealth failed ({stealth_err}), using built-in JS")
-                await self._context.add_init_script(build_stealth_js(self.locale))
-        except ImportError:
-            logger.warning("playwright-stealth not installed, using built-in stealth JS")
+        # Stealth: playwright-stealth on the context (covers every page it creates),
+        # built-in JS as the fallback.
+        if not await apply_playwright_stealth(self._context):
             await self._context.add_init_script(build_stealth_js(self.locale))
-            self._page = await self._context.new_page()
+        self._page = await self._context.new_page()
 
         # Set higher default timeout for slow sites (60 seconds)
         self._page.set_default_timeout(60000)
@@ -498,18 +490,10 @@ class PlaywrightBrowserClient:
         # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
         await self._context.set_extra_http_headers(get_client_hints_headers(ua))
 
-        # Re-apply stealth scripts
-        try:
-            from playwright_stealth import stealth_async  # type: ignore[import-untyped]
-
-            self._page = await self._context.new_page()
-            try:
-                await stealth_async(self._page)
-            except Exception:
-                await self._context.add_init_script(build_stealth_js(self.locale))
-        except ImportError:
+        # Re-apply stealth
+        if not await apply_playwright_stealth(self._context):
             await self._context.add_init_script(build_stealth_js(self.locale))
-            self._page = await self._context.new_page()
+        self._page = await self._context.new_page()
 
         self._page.set_default_timeout(60000)
         self._page.set_default_navigation_timeout(60000)

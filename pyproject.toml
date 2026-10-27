@@ -25,44 +25,48 @@ classifiers = [
 ]
 
 dependencies = [
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
     "pyyaml>=6.0",
-    "openai>=1.0.0",
-    "anthropic>=0.18.0",
-    "jinja2>=3.1.0",
-    "aiohttp>=3.9.0",
-    "python-dotenv>=1.0.0",
-    "pillow>=10.0.0",
-    "mcp>=0.9.0",
-    "playwright>=1.40.0",
-    "playwright-stealth>=1.0.0",
-    # API dependencies
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "sqlalchemy[asyncio]>=2.0.0",
-    "asyncpg>=0.29.0",
-    "redis>=5.0.0",
-    "pyjwt>=2.8.0",
-    "bcrypt>=4.1.0",
-    "python-multipart>=0.0.6",
-    # Observability
-    "prometheus-client>=0.19.0",
-    "sentry-sdk[fastapi]>=1.39.0",
+    "python-dotenv>=1.0",
+    "aiohttp>=3.9",                   # robots.txt fetching and the --auto-generate homepage fetch
+    "openai>=1.0",                    # judge and vision providers; also OpenRouter and vLLM endpoints
+    "anthropic>=0.18",
+    "mcp>=1.26,<2",                   # 2.x renames CallToolResult.isError -> is_error and raises from call_tool
+    "playwright>=1.40",
+    "playwright-stealth>=2.0.3,<3",   # 2.x API: Stealth().apply_stealth_async(); see browser/stealth.py
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "pytest-mock>=3.12.0",
-    "black==26.1.0",
-    "ruff==0.9.6",
-    "mypy==1.15.0",
-    "pre-commit>=3.0.0",
-    "types-pyyaml>=6.0.0",
-    "build>=1.0.0",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+    "pytest-cov>=7.0",
+    "pytest-mock>=3.15",
+    # Formatter, linter and type checker are pinned exactly. pre-commit, the Makefile
+    # and CI all run them through `uv run`, so this is the single place to bump them.
+    "black==26.10.1",
+    "ruff==0.14.14",
+    "mypy==1.19.1",
+    "types-pyyaml>=6.0",
+    "pre-commit>=4.2",
+    "build>=1.2",
+]
+saas = [  # experimental REST API, worker and database layer (see docs/SAAS.md)
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "redis>=5.0",
+    "pyjwt>=2.8",
+    "bcrypt>=4.1",
+    "python-multipart>=0.0.6",
+    "prometheus-client>=0.19",
+    "sentry-sdk[fastapi]>=1.39",
+    "stripe>=10.0",
+    "httpx>=0.28",                    # fastapi.testclient and tests/api
 ]
 pdf = [
     "weasyprint>=60.0",
@@ -70,14 +74,15 @@ pdf = [
 undetected = [
     "undetected-chromedriver>=3.5.0",
     "selenium>=4.15.0",
+    # undetected-chromedriver 3.5.x imports distutils, which Python 3.12 removed;
+    # setuptools provides the compatibility shim.
+    "setuptools>=68; python_version >= '3.12'",
 ]
 browserbase = [
     "browserbase>=0.3.0",
 ]
 all-browsers = [
-    "undetected-chromedriver>=3.5.0",
-    "selenium>=4.15.0",
-    "browserbase>=0.3.0",
+    "agentic-search-audit[undetected,browserbase]",
 ]
 
 [project.scripts]
@@ -90,7 +95,7 @@ where = ["src"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py310', 'py311', 'py312']
 
 [tool.ruff]
 line-length = 100
@@ -113,6 +118,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "-v",
     "--strict-markers",
@@ -129,3 +135,11 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
+
+[tool.coverage.run]
+source = ["agentic_search_audit"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

@@ -85,16 +85,10 @@ class CDPBrowserClient:
         else:
             self._page = await self._context.new_page()
 
-        # Apply stealth
-        try:
-            from playwright_stealth import stealth_async  # type: ignore[import-untyped]
+        # Apply stealth to the page only: the context may belong to an external Chrome.
+        from .stealth import apply_playwright_stealth
 
-            try:
-                await stealth_async(self._page)
-            except Exception as stealth_err:
-                logger.warning(f"playwright-stealth failed ({stealth_err}), skipping stealth")
-        except ImportError:
-            logger.warning("playwright-stealth not installed, skipping stealth for CDP")
+        await apply_playwright_stealth(self._page)
 
         self._page.set_default_timeout(60000)
         self._page.set_default_navigation_timeout(60000)

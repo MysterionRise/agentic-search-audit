@@ -48,7 +48,7 @@ class TestCDPConnect:
         ):
             # Mock stealth module with an async stealth_async function
             mock_stealth_mod = MagicMock()
-            mock_stealth_mod.stealth_async = AsyncMock()
+            mock_stealth_mod.Stealth.return_value.apply_stealth_async = AsyncMock()
             with patch.dict("sys.modules", {"playwright_stealth": mock_stealth_mod}):
                 await client.connect()
 
