@@ -4,10 +4,22 @@ import asyncio
 import logging
 import re
 
+from ..browser._js import coerce_int
 from ..core.types import BrowserClient, LLMConfig, SearchConfig
 from .intelligent_finder import IntelligentSearchBoxFinder
 
 logger = logging.getLogger(__name__)
+
+
+def _is_click_blocked(exc: BaseException) -> bool:
+    """True when a click failed because another element covers the target.
+
+    Selenium reports "element click intercepted"; Playwright times out with
+    "<element> intercepts pointer events".
+    """
+    msg = str(exc).lower()
+    return "click intercepted" in msg or "intercepts pointer events" in msg
+
 
 # Pattern to validate CSS selectors - only allow safe characters
 # This prevents JavaScript injection via malicious selectors
@@ -252,7 +264,7 @@ class SearchBoxFinder:
             try:
                 await self.client.click(safe_selector)
             except Exception as click_err:
-                if "element click intercepted" in str(click_err):
+                if _is_click_blocked(click_err):
                     logger.warning(
                         "Click intercepted by overlay — force-removing overlays and retrying"
                     )
@@ -261,7 +273,7 @@ class SearchBoxFinder:
                     try:
                         await self.client.click(safe_selector)
                     except Exception as retry_err:
-                        if "element click intercepted" in str(retry_err):
+                        if _is_click_blocked(retry_err):
                             logger.warning(
                                 "Click still intercepted — using JavaScript click as fallback"
                             )
@@ -282,7 +294,7 @@ class SearchBoxFinder:
             try:
                 await self.client.type_text(safe_selector, query_text, delay=30)
             except Exception as type_err:
-                if "element click intercepted" in str(type_err):
+                if _is_click_blocked(type_err):
                     logger.warning("type_text intercepted by overlay — using JS input fallback")
                     escaped_text = query_text.replace("\\", "\\\\").replace('"', '\\"')
                     await self.client.evaluate(f"""
@@ -425,7 +437,7 @@ class SearchBoxFinder:
                     return hidden;
                 })()
             """)
-            count = int(result) if result else 0
+            count = coerce_int(result)
             if count > 0:
                 logger.info(f"Force-hidden {count} blocking overlay(s)")
             return count

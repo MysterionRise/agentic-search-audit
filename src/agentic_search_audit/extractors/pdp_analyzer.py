@@ -8,11 +8,27 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..browser.challenge_detector import ChallengeDetectedError, detect_challenge
-from ..core.types import BrowserClient, LLMConfig, Query, ResultItem
+from ..core.types import BrowserClient, JsValue, LLMConfig, Query, ResultItem
 from ..extractors.modals import ModalHandler, ModalsConfig
 from ..extractors.vision_provider import VisionProvider, create_vision_provider
 
 logger = logging.getLogger(__name__)
+
+
+def _stringify_values(data: dict[str, JsValue]) -> dict[str, str]:
+    """Flatten a JavaScript object of scalars into the ``dict[str, str]`` PDP attributes use."""
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if value is None:
+            out[key] = ""
+        elif value is True:
+            out[key] = "true"
+        elif value is False:
+            out[key] = "false"
+        else:
+            out[key] = str(value)
+    return out
+
 
 PDP_EXTRACTION_PROMPT = """\
 You are a product data extraction assistant performing a legitimate e-commerce search quality audit.
@@ -329,8 +345,8 @@ class PdpAnalyzer:
         }})()
         """
         result = await self.client.evaluate(js)
-        if result and isinstance(result, dict) and result.get("found") == "true":
-            return dict(result)
+        if isinstance(result, dict) and result.get("found") in ("true", True):
+            return _stringify_values(result)
         return None
 
     async def _extract_expanded_options(
@@ -400,8 +416,8 @@ class PdpAnalyzer:
             }})()
             """
             result = await self.client.evaluate(js)
-            if result and isinstance(result, dict) and result.get("found") == "true":
-                return dict(result)
+            if isinstance(result, dict) and result.get("found") in ("true", True):
+                return _stringify_values(result)
         except Exception as e:
             logger.debug("Failed to extract expanded options for %s: %s", variant_type, e)
         return None

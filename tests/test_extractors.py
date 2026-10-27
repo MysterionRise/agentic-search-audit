@@ -176,7 +176,7 @@ def _make_results_extractor(
 async def test_no_results_explicit_selector_visible():
     """Explicit no_results_selectors: returns True when element is visible."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="true")
+    client.evaluate = AsyncMock(return_value=True)
 
     assert await ext.check_for_no_results() is True
 
@@ -185,7 +185,7 @@ async def test_no_results_explicit_selector_visible():
 async def test_no_results_explicit_selector_hidden():
     """Explicit no_results_selectors: returns False when element is hidden."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     assert await ext.check_for_no_results() is False
 
@@ -194,7 +194,7 @@ async def test_no_results_explicit_selector_hidden():
 async def test_no_results_explicit_selector_missing():
     """Explicit no_results_selectors: returns False when element doesn't exist."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     assert await ext.check_for_no_results() is False
 
@@ -228,7 +228,7 @@ async def test_no_results_heuristic_ignores_footer_text():
 async def test_no_results_heuristic_null_text():
     """Heuristic fallback: returns False when evaluate returns null."""
     ext, client = _make_results_extractor()
-    client.evaluate = AsyncMock(return_value="null")
+    client.evaluate = AsyncMock(return_value=None)
 
     assert await ext.check_for_no_results() is False
 
@@ -427,7 +427,7 @@ async def test_iframe_consent_not_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     result = await handler._try_iframe_consent()
     assert result == 0
@@ -482,7 +482,7 @@ async def test_escape_dismissal_as_last_resort():
     # No cookie consent selectors match
     client.query_selector = AsyncMock(return_value=None)
     # No consent API works
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     call_count = 0
 
@@ -511,7 +511,7 @@ async def test_check_modal_overlay_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="true")
+    client.evaluate = AsyncMock(return_value=True)
 
     result = await handler._check_modal_overlay()
     assert result is True
@@ -524,7 +524,7 @@ async def test_check_modal_overlay_not_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     result = await handler._check_modal_overlay()
     assert result is False

@@ -241,14 +241,23 @@ class TestUndetectedDOMMethods:
         assert result is None
 
     async def test_evaluate(self, connected_client: UndetectedBrowserClient) -> None:
-        connected_client._driver.execute_script = MagicMock(return_value="hello")
+        connected_client._driver.execute_script = MagicMock(
+            return_value='{"ok": true, "v": "hello"}'
+        )
         result = await connected_client.evaluate("'hello'")
         assert result == "hello"
 
     async def test_evaluate_returns_none(self, connected_client: UndetectedBrowserClient) -> None:
-        connected_client._driver.execute_script = MagicMock(return_value=None)
+        connected_client._driver.execute_script = MagicMock(return_value='{"ok": true}')
         result = await connected_client.evaluate("void 0")
         assert result is None
+
+    async def test_evaluate_propagates_driver_errors(
+        self, connected_client: UndetectedBrowserClient
+    ) -> None:
+        connected_client._driver.execute_script = MagicMock(side_effect=RuntimeError("gone"))
+        with pytest.raises(RuntimeError):
+            await connected_client.evaluate("1")
 
     async def test_get_html(self, connected_client: UndetectedBrowserClient) -> None:
         connected_client._driver.page_source = "<html></html>"

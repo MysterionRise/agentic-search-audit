@@ -43,7 +43,7 @@ jobs:
       - name: Install
         run: uv sync --extra dev --extra saas
       - name: Tests
-        run: uv run pytest tests/ --cov --cov-report=term-missing
+        run: uv run pytest tests/ -m "not browser and not integration" --cov --cov-report=term-missing
 
   test-package:
     name: Test Package Installation

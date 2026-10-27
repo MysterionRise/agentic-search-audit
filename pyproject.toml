@@ -127,7 +127,8 @@ addopts = [
 ]
 markers = [
     "unit: Unit tests",
-    "integration: Integration tests",
+    "integration: Integration tests (opt-in; need a real browser or external service)",
+    "browser: Tests that launch Playwright's Chromium (skipped when it is not installed)",
     "slow: Slow tests that may take a while",
 ]
 filterwarnings = [

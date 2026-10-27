@@ -358,12 +358,30 @@ class TestPlaywrightClientErrorPropagation:
         result = await client.query_selector("div")
         assert result is None
 
-    async def test_evaluate_swallows_non_playwright_exception(
+    async def test_evaluate_propagates_non_playwright_exception(
         self, client: PlaywrightBrowserClient
     ) -> None:
         client._page.evaluate = AsyncMock(side_effect=ValueError("weird"))
-        result = await client.evaluate("1+1")
-        assert result is None
+        with pytest.raises(ValueError):
+            await client.evaluate("1+1")
+
+    async def test_evaluate_decodes_envelope(self, client: PlaywrightBrowserClient) -> None:
+        from agentic_search_audit.browser._js import wrap_expression
+
+        client._page.evaluate = AsyncMock(return_value='{"ok": true, "v": true}')
+        assert await client.evaluate("1 === 1") is True
+        client._page.evaluate.assert_awaited_once_with(wrap_expression("1 === 1"))
+
+    async def test_evaluate_script_error_raises(self, client: PlaywrightBrowserClient) -> None:
+        from agentic_search_audit.browser.errors import BrowserScriptError
+
+        client._page.evaluate = AsyncMock(
+            return_value='{"ok": false, "kind": "script", "name": "TypeError", "message": "boom"}'
+        )
+        with pytest.raises(BrowserScriptError) as info:
+            await client.evaluate("null.x")
+        assert info.value.kind == "script"
+        assert info.value.name == "TypeError"
 
 
 # ---------------------------------------------------------------------------

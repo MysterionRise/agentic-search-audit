@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass
 
 from ..core.types import BrowserClient
+from ._js import coerce_int
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +106,8 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
     # 1. Check page title
     try:
         title = await client.evaluate("document.title")
-        if title:
-            title_lower = str(title).lower()
+        if isinstance(title, str) and title:
+            title_lower = title.lower()
             for pattern in CHALLENGE_TITLE_PATTERNS:
                 if pattern in title_lower:
                     msg = f"Challenge page detected via title: '{title}'"
@@ -153,7 +154,7 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
             "})()"
         )
         result = await client.evaluate(iframe_check_js)
-        if result and str(result).strip():
+        if isinstance(result, str) and result.strip():
             msg = f"CAPTCHA iframe detected: {result}"
             logger.warning(msg)
             return ChallengeDetection(
@@ -169,34 +170,29 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
         body_info = await client.evaluate(
             "(function() {"
             "  var body = document.body;"
-            "  if (!body) return JSON.stringify({len: 0, text: ''});"
+            "  if (!body) return {len: 0, text: ''};"
             "  var text = body.innerText || '';"
-            "  return JSON.stringify({len: text.length, text: text.substring(0, 1000)});"
+            "  return {len: text.length, text: text.substring(0, 1000)};"
             "})()"
         )
-        if body_info:
-            import json
+        if isinstance(body_info, dict):
+            body_len = coerce_int(body_info.get("len"))
+            text_value = body_info.get("text")
+            body_text = text_value.lower() if isinstance(text_value, str) else ""
 
-            try:
-                info = json.loads(str(body_info))
-                body_len = info.get("len", 0)
-                body_text = info.get("text", "").lower()
-
-                if body_len < 500:
-                    for keyword in BLOCK_KEYWORDS:
-                        if keyword in body_text:
-                            msg = (
-                                f"Possible block page: body length {body_len} chars "
-                                f"with keyword '{keyword}'"
-                            )
-                            logger.warning(msg)
-                            return ChallengeDetection(
-                                detected=True,
-                                challenge_type="short_body_block",
-                                message=msg,
-                            )
-            except (json.JSONDecodeError, TypeError):
-                pass
+            if body_len < 500:
+                for keyword in BLOCK_KEYWORDS:
+                    if keyword in body_text:
+                        msg = (
+                            f"Possible block page: body length {body_len} chars "
+                            f"with keyword '{keyword}'"
+                        )
+                        logger.warning(msg)
+                        return ChallengeDetection(
+                            detected=True,
+                            challenge_type="short_body_block",
+                            message=msg,
+                        )
     except Exception as e:
         logger.debug(f"Body text check failed: {e}")
 

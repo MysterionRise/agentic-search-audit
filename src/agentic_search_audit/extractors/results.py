@@ -3,6 +3,7 @@
 import logging
 from urllib.parse import urljoin
 
+from ..browser._js import coerce_int
 from ..core.types import BrowserClient, ResultItem, ResultsConfig
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,7 @@ class ResultsExtractor:
             }})()
             """
             try:
-                count_str = await self.client.evaluate(script)
-                if not count_str or count_str in ("undefined", "null"):
-                    continue
-                count = int(count_str)
+                count = coerce_int(await self.client.evaluate(script))
                 if count > 0:
                     return count
             except (ValueError, TypeError):
@@ -103,14 +101,8 @@ class ResultsExtractor:
             """
 
             try:
-                count_str = await self.client.evaluate(script)
-                logger.debug(f"Selector {selector} returned: {count_str!r}")
-                # Handle undefined/null responses
-                if not count_str or count_str in ["undefined", "null"]:
-                    logger.debug(f"Selector {selector} returned empty/undefined, trying next")
-                    count = 0
-                else:
-                    count = int(count_str)
+                count = coerce_int(await self.client.evaluate(script))
+                logger.debug(f"Selector {selector} returned: {count!r}")
 
                 if count > 0:
                     logger.info(f"Found {count} items with selector: {selector}")
@@ -118,7 +110,7 @@ class ResultsExtractor:
                 else:
                     logger.debug(f"Selector {selector} found 0 items")
             except (ValueError, TypeError) as e:
-                logger.debug(f"Selector {selector} failed to parse count '{count_str}': {e}")
+                logger.debug(f"Selector {selector} failed to parse count: {e}")
                 continue
             except Exception as e:
                 logger.debug(f"Selector {selector} failed: {e}")
@@ -312,7 +304,7 @@ class ResultsExtractor:
                 }})()
                 """
                 result = await self.client.evaluate(script)
-                if result and str(result).lower() == "true":
+                if result is True:
                     logger.info(f"Detected no-results element via selector: '{selector}'")
                     return True
             return False
@@ -331,20 +323,20 @@ class ResultsExtractor:
         scope_script = """
         (function() {
             var container = document.querySelector('main, [role="main"], #content, .content');
-            if (container) return container.textContent.toLowerCase();
+            if (container) return container.textContent.toLowerCase().slice(0, 50000);
             // Fallback: body text minus header/footer/nav
             var clone = document.body.cloneNode(true);
             var exclude = clone.querySelectorAll('header, footer, nav, [role="banner"], [role="contentinfo"], [role="navigation"]');
             for (var i = 0; i < exclude.length; i++) exclude[i].remove();
-            return clone.textContent.toLowerCase();
+            return clone.textContent.toLowerCase().slice(0, 50000);
         })()
         """
 
         scoped_text = await self.client.evaluate(scope_script)
-        if not scoped_text or scoped_text in ("null", "undefined"):
+        if not isinstance(scoped_text, str) or not scoped_text:
             return False
 
-        scoped_text_lower = str(scoped_text).lower()
+        scoped_text_lower = scoped_text.lower()
         for pattern in no_results_patterns:
             if pattern in scoped_text_lower:
                 logger.info(f"Detected no results message: '{pattern}'")

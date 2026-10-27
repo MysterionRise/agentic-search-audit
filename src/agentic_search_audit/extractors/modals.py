@@ -195,8 +195,8 @@ class ModalHandler:
         for selector in COOKIE_CONSENT_SELECTORS:
             try:
                 # Check if selector exists and is visible
-                result = await self.client.query_selector(selector)
-                if result:
+                element = await self.client.query_selector(selector)
+                if element:
                     logger.info(f"Found cookie consent button: {selector}")
                     await self.client.click(selector)
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
@@ -249,7 +249,7 @@ class ModalHandler:
                         return false;
                     })()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
+                if isinstance(result, str) and result:
                     logger.info(f"Dismissed consent via Usercentrics API: {result}")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
@@ -297,7 +297,7 @@ class ModalHandler:
                         return false;
                     })()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
+                if isinstance(result, str) and result:
                     logger.info(f"Clicked consent button with text: {result}")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
@@ -343,7 +343,7 @@ class ModalHandler:
                         return false;
                     })()
                 """)
-                if result == "true":
+                if result is True:
                     logger.info("Found and clicked consent button via shadow DOM search")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
@@ -400,7 +400,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
+            if isinstance(result, str) and result:
                 logger.info(f"Dismissed consent via iframe: {result}")
                 await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                 return 1
@@ -425,8 +425,8 @@ class ModalHandler:
         # Step 1: Try known CSS selectors for location modals
         for selector in LOCATION_MODAL_SELECTORS:
             try:
-                result = await self.client.query_selector(selector)
-                if result:
+                element = await self.client.query_selector(selector)
+                if element:
                     logger.info(f"Found location modal element: {selector}")
                     # Found a location modal container — try to dismiss it
                     dismissed += await self._dismiss_location_dialog(location_config)
@@ -460,7 +460,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
+            if result is True:
                 logger.info("Detected location modal via text pattern matching")
                 dismissed += await self._dismiss_location_dialog(location_config)
         except Exception as e:
@@ -511,7 +511,7 @@ class ModalHandler:
                         return false;
                     }})()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
+                if result is True:
                     logger.info(f"Entered ZIP code: {location_config.default_zip_code}")
                     await asyncio.sleep(0.3)
             except Exception as e:
@@ -572,7 +572,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
+            if isinstance(result, str) and result:
                 logger.info(f"Dismissed location modal by clicking: {result}")
                 await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                 return 1
@@ -603,7 +603,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            return result and result not in ["false", "undefined", "null"]
+            return result is True
         except Exception as e:
             logger.debug(f"Modal overlay check failed: {e}")
             return False
@@ -680,17 +680,15 @@ class ModalHandler:
             """
 
             try:
-                result = await self.client.evaluate(script)
-                if result and isinstance(result, str):
-                    import json
-
-                    data = json.loads(result)
-                    if data:
-                        logger.debug(
-                            f"Found close button: {data['selector']}[{data['index']}]"
-                            f" with text '{data['text']}'"
-                        )
-                        return (data["selector"], data["index"])
+                found = await self.client.evaluate(script)
+                index = found.get("index") if isinstance(found, dict) else None
+                if isinstance(found, dict) and isinstance(index, int) and index is not True:
+                    selector = str(found.get("selector") or base_selector)
+                    logger.debug(
+                        f"Found close button: {selector}[{index}]"
+                        f" with text '{found.get('text', '')}'"
+                    )
+                    return (selector, index)
             except Exception as e:
                 logger.debug(f"Error evaluating script for {base_selector}: {e}")
                 continue

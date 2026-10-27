@@ -24,26 +24,36 @@ class TestUndetectedEvaluateASI:
         return c
 
     async def test_evaluate_strips_leading_newline(self, connected_client) -> None:
-        """A leading newline would cause JS ASI to produce `return;`."""
-        connected_client._driver.execute_script = MagicMock(return_value="42")
+        """A leading newline used to make JS ASI produce `return;`; the wrapper prevents it."""
+        from agentic_search_audit.browser._js import wrap_expression
+
+        connected_client._driver.execute_script = MagicMock(return_value='{"ok": true, "v": 42}')
         result = await connected_client.evaluate("\n42")
-        connected_client._driver.execute_script.assert_called_once_with("return 42")
-        assert result == "42"
+        connected_client._driver.execute_script.assert_called_once_with(
+            "return " + wrap_expression("42")
+        )
+        assert result == 42
 
     async def test_evaluate_strips_trailing_whitespace(self, connected_client) -> None:
-        connected_client._driver.execute_script = MagicMock(return_value="ok")
+        from agentic_search_audit.browser._js import wrap_expression
+
+        connected_client._driver.execute_script = MagicMock(return_value='{"ok": true, "v": "ok"}')
         result = await connected_client.evaluate("  'ok'  \n")
-        connected_client._driver.execute_script.assert_called_once_with("return 'ok'")
+        connected_client._driver.execute_script.assert_called_once_with(
+            "return " + wrap_expression("'ok'")
+        )
         assert result == "ok"
 
     async def test_evaluate_multiline_expression(self, connected_client) -> None:
-        """Multi-line expressions must be collapsed via strip()."""
+        """Multi-line expressions sit on their own line inside the wrapper."""
+        from agentic_search_audit.browser._js import wrap_expression
+
         expr = "\ndocument.querySelector('input')\n"
-        connected_client._driver.execute_script = MagicMock(return_value=None)
-        await connected_client.evaluate(expr)
-        connected_client._driver.execute_script.assert_called_once_with(
-            "return document.querySelector('input')"
-        )
+        connected_client._driver.execute_script = MagicMock(return_value='{"ok": true}')
+        assert await connected_client.evaluate(expr) is None
+        script = connected_client._driver.execute_script.call_args.args[0]
+        assert script == "return " + wrap_expression("document.querySelector('input')")
+        assert "\ndocument.querySelector('input')\n" in script
 
 
 # ---------------------------------------------------------------------------

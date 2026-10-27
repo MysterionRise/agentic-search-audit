@@ -3,12 +3,17 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 if TYPE_CHECKING:
     pass
+
+# What ``BrowserClient.evaluate`` returns: the JavaScript result after a JSON round trip.
+# ``undefined``, ``null``, functions and non-finite numbers become ``None``; DOM nodes become
+# small ``{"__node__": ...}`` descriptors; everything else is the natural JSON type.
+JsValue: TypeAlias = None | bool | int | float | str | list["JsValue"] | dict[str, "JsValue"]
 
 
 @runtime_checkable
@@ -47,8 +52,13 @@ class BrowserClient(Protocol):
         """Query DOM for all matching elements."""
         ...
 
-    async def evaluate(self, expression: str) -> Any:
-        """Evaluate JavaScript in the page context."""
+    async def evaluate(self, expression: str) -> JsValue:
+        """Evaluate a synchronous JavaScript expression in the page context.
+
+        Every backend returns the same Python value for the same JavaScript result
+        (see ``JsValue``). Script errors raise ``BrowserScriptError``; a dead page or
+        browser raises the backend's native exception so ``classify_error`` can route it.
+        """
         ...
 
     async def click(self, selector: str) -> None:

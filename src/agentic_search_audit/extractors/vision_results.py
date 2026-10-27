@@ -180,7 +180,8 @@ class VisionResultsExtractor:
 
         try:
             # Get the current page URL for resolving relative hrefs
-            page_url = await self.client.evaluate("window.location.href") or ""
+            raw_url = await self.client.evaluate("window.location.href")
+            page_url = raw_url if isinstance(raw_url, str) else ""
 
             # Find all <a> elements with href and visible text, return title→href mapping
             result = await self.client.evaluate(f"""
@@ -240,14 +241,15 @@ class VisionResultsExtractor:
                             mapping[t.toString()] = bestHref;
                         }}
                     }}
-                    return JSON.stringify(mapping);
+                    return mapping;
                 }})()
             """)
 
-            if result and result not in ("null", "undefined", "{}"):
-                mapping = _json.loads(result) if isinstance(result, str) else result
+            if isinstance(result, dict) and result:
                 enriched = 0
-                for idx_str, href in mapping.items():
+                for idx_str, href in result.items():
+                    if not isinstance(href, str):
+                        continue
                     idx = int(idx_str)
                     if 0 <= idx < len(items) and not items[idx].url:
                         abs_url = urljoin(page_url, href) if page_url else href

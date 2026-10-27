@@ -139,8 +139,8 @@ async def test_detect_challenge_short_body_with_block_keyword(mock_client):
             return "Normal Title"
         if "iframe" in expression:  # iframe check
             return ""
-        # body check
-        return json.dumps({"len": 200, "text": "access denied by cloudflare. ray id: abc123"})
+        # body check (the script returns an object, not JSON text)
+        return {"len": 200, "text": "access denied by cloudflare. ray id: abc123"}
 
     mock_client.evaluate = AsyncMock(side_effect=evaluate_side_effect)
     mock_client.query_selector = AsyncMock(return_value=None)
