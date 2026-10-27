@@ -1,6 +1,7 @@
 """Search box detection and interaction."""
 
 import asyncio
+import json
 import logging
 import re
 
@@ -242,17 +243,19 @@ class SearchBoxFinder:
                 logger.error(f"Invalid search selector: {e}")
                 return False
 
-            # Escape selector for use in JavaScript string
-            # Replace backslashes first, then quotes
-            escaped_selector = safe_selector.replace("\\", "\\\\").replace('"', '\\"')
+            # json.dumps output is a valid JS string literal, so the selector is safe to embed
+            sel_js = json.dumps(safe_selector)
 
             # Clear any existing text using multiple approaches for reliability
             # 1. Set value to empty (works for simple inputs)
-            await self.client.evaluate(f'document.querySelector("{escaped_selector}").value = ""')
+            await self.client.evaluate(
+                f"(function() {{ const el = document.querySelector({sel_js});"
+                f" if (el) el.value = ''; return !!el; }})()"
+            )
             # 2. Also dispatch input event for React/Angular frameworks
             await self.client.evaluate(f"""
                 (function() {{
-                    const input = document.querySelector("{escaped_selector}");
+                    const input = document.querySelector({sel_js});
                     if (input) {{
                         input.value = "";
                         input.dispatchEvent(new Event("input", {{ bubbles: true }}));
@@ -278,7 +281,8 @@ class SearchBoxFinder:
                                 "Click still intercepted — using JavaScript click as fallback"
                             )
                             await self.client.evaluate(
-                                f'document.querySelector("{escaped_selector}").click()'
+                                f"(function() {{ const el = document.querySelector({sel_js});"
+                                f" if (el) el.click(); return !!el; }})()"
                             )
                         else:
                             raise
@@ -286,7 +290,10 @@ class SearchBoxFinder:
                     raise
             await asyncio.sleep(0.2)
             # Select all and delete using keyboard
-            await self.client.evaluate(f'document.querySelector("{escaped_selector}").select()')
+            await self.client.evaluate(
+                f"(function() {{ const el = document.querySelector({sel_js});"
+                f" if (el && el.select) el.select(); return !!el; }})()"
+            )
             await self.client.press_key("Backspace")
             await asyncio.sleep(0.2)
 
@@ -296,13 +303,13 @@ class SearchBoxFinder:
             except Exception as type_err:
                 if _is_click_blocked(type_err):
                     logger.warning("type_text intercepted by overlay — using JS input fallback")
-                    escaped_text = query_text.replace("\\", "\\\\").replace('"', '\\"')
+                    text_js = json.dumps(query_text)
                     await self.client.evaluate(f"""
                         (function() {{
-                            var el = document.querySelector("{escaped_selector}");
+                            var el = document.querySelector({sel_js});
                             if (el) {{
                                 el.focus();
-                                el.value = "{escaped_text}";
+                                el.value = {text_js};
                                 el.dispatchEvent(new Event("input", {{bubbles: true}}));
                                 el.dispatchEvent(new Event("change", {{bubbles: true}}));
                             }}
@@ -326,7 +333,7 @@ class SearchBoxFinder:
                 # Focus the input element first
                 await self.client.evaluate(f"""
                     (function() {{
-                        const input = document.querySelector("{escaped_selector}");
+                        const input = document.querySelector({sel_js});
                         if (input) {{
                             input.focus();
                             return true;
