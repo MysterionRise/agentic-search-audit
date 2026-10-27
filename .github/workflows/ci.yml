@@ -3,8 +3,7 @@ name: CI
 on:
   push:
     branches: [main, develop, "claude/**"]
-  pull_request:
-    branches: [main, develop]
+  pull_request:   # every PR, including ones stacked on a feature branch
 
 env:
   UV_LOCKED: "1"   # uv sync/run fail if uv.lock does not match pyproject.toml
