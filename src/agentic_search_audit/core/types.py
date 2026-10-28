@@ -128,8 +128,36 @@ class BrowserClient(Protocol):
         ...
 
 
+class BrowserCapabilities(BaseModel):
+    """What a browser backend can do, consulted by the orchestrator before each query.
+
+    Defaults are all-capable (a disposable, fully controlled browser). Backends that
+    drive a real, logged-in profile report ``user_agent_override``, ``proxy``,
+    ``clear_cookies`` and ``isolated_profile`` as False so the orchestrator skips
+    those steps instead of mutating the user's profile.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    user_agent_override: bool = True
+    proxy: bool = True
+    clear_cookies: bool = True
+    full_page_screenshot: bool = True
+    trusted_input: bool = True
+    trusted_click: bool = True
+    network_idle: bool = True
+    isolated_profile: bool = True
+    snapshot: bool = False
+
+
+def get_capabilities(client: object) -> BrowserCapabilities:
+    """Return a client's capabilities, defaulting to all-capable for clients without any."""
+    caps = getattr(client, "capabilities", None)
+    return caps if isinstance(caps, BrowserCapabilities) else BrowserCapabilities()
+
+
 class ProxyRotationStrategy(str, Enum):
-    """Proxy rotation strategies for IP rotation."""
+    """Rotation strategies, used for proxies and for user agents."""
 
     NONE = "none"
     PER_SITE = "per-site"
@@ -316,6 +344,19 @@ class ExpertInsight(BaseModel):
     risk_level: str = Field(default="medium", description="Risk level: low/medium/high/critical")
 
 
+class QueryFailure(BaseModel):
+    """A query that produced no AuditRecord, with the reason, written to failures.jsonl."""
+
+    site: str = Field(description="Site URL")
+    query: Query = Field(description="The query that failed")
+    error_kind: str = Field(
+        description="challenge, query_timeout, submit_failed, judge, or a BrowserErrorKind value"
+    )
+    message: str = Field(default="", description="Last error message")
+    attempts: int = Field(default=1, description="Attempts made before giving up")
+    ts: datetime = Field(default_factory=datetime.now, description="When the query was abandoned")
+
+
 class AuditRecord(BaseModel):
     """Complete audit record for a single query."""
 
@@ -331,6 +372,8 @@ class AuditRecord(BaseModel):
 
 class SearchConfig(BaseModel):
     """Search interaction configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     input_selectors: list[str] = Field(
         default=[
@@ -359,10 +402,16 @@ class SearchConfig(BaseModel):
         default=True,
         description="Use LLM-based intelligent detection if CSS selectors fail",
     )
+    intelligent_detection_model: str | None = Field(
+        default=None,
+        description="Model for the vision-based search-box detection; defaults to llm.model",
+    )
 
 
 class ResultsConfig(BaseModel):
     """Results extraction configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     item_selectors: list[str] = Field(
         default=[
@@ -398,6 +447,8 @@ class ResultsConfig(BaseModel):
 
 
 class LocationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Location/region modal handling configuration."""
 
     default_country: str = Field(
@@ -416,6 +467,8 @@ class LocationConfig(BaseModel):
 
 class ModalsConfig(BaseModel):
     """Modal/popup handling configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     close_text_matches: list[str] = Field(
         default=["accept", "agree", "continue", "got it", "close", "dismiss"],
@@ -446,6 +499,24 @@ class RunConfig(BaseModel):
     headless: bool = Field(default=True, description="Run browser in headless mode")
     throttle_rps: float = Field(default=0.5, description="Rate limit in requests per second")
     seed: int | None = Field(default=42, description="Random seed for reproducibility")
+    query_timeout_s: float | None = Field(
+        default=None,
+        description=(
+            "Hard per-attempt budget for the browser part of a query. Default: derived from "
+            "browser_budget_s plus the vision and PDP budgets (see query_time_budget_s)."
+        ),
+    )
+    browser_budget_s: float = Field(
+        default=90.0,
+        description="Seconds allowed for navigation, search, scrolling and CSS extraction",
+    )
+    ua_rotation_strategy: ProxyRotationStrategy = Field(
+        default=ProxyRotationStrategy.PER_SITE,
+        description=(
+            "per-site: one user agent per run (chosen at launch); per-query: switch the user "
+            "agent before every query (Playwright rebuilds the context, losing consent state)"
+        ),
+    )
     max_retries: int = Field(
         default=2, description="Max retry attempts per query on transient failure"
     )
@@ -571,6 +642,12 @@ class LLMConfig(BaseModel):
     api_key: str | None = Field(
         default=None, description="API key for the provider (if not using environment variable)"
     )
+    timeout: float = Field(default=30.0, description="Seconds per judge/expert LLM call")
+    vision_timeout: float = Field(default=90.0, description="Seconds per vision LLM call")
+    max_concurrent: int = Field(default=3, description="Max concurrent LLM calls")
+    min_request_interval_s: float = Field(
+        default=0.5, description="Minimum interval between LLM calls in seconds"
+    )
 
 
 class ReportConfig(BaseModel):
@@ -599,6 +676,8 @@ class ComplianceConfig(BaseModel):
 class SiteConfig(BaseModel):
     """Site-specific configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     url: HttpUrl = Field(description="Site base URL")
     locale: str = Field(default="en-US", description="Locale/language code")
     search: SearchConfig = Field(default_factory=SearchConfig)
@@ -614,3 +693,18 @@ class AuditConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
     compliance: ComplianceConfig = Field(default_factory=ComplianceConfig)
+
+
+def query_time_budget_s(config: AuditConfig) -> float:
+    """Per-attempt time budget for the browser part of one query.
+
+    ``run.query_timeout_s`` wins when set. Otherwise the browser budget plus two vision
+    calls (the vision fallback can always fire and retries once) plus the PDP visits.
+    """
+    run = config.run
+    if run.query_timeout_s is not None:
+        return run.query_timeout_s
+    budget = run.browser_budget_s + 2 * config.llm.vision_timeout
+    if run.enable_pdp_analysis:
+        budget += run.pdp_top_k * run.pdp_timeout_ms / 1000
+    return budget

@@ -18,7 +18,7 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from ..core.types import JsValue
+from ..core.types import BrowserCapabilities, JsValue
 from ._js import decode_result, wrap_expression
 from .errors import BrowserScriptError
 from .stealth import (
@@ -59,6 +59,9 @@ class PlaywrightBrowserClient:
     This class provides a clean interface for browser automation tasks
     like navigation, DOM querying, and screenshots using Playwright.
     """
+
+    #: A launched, disposable browser: every identity mutation is allowed.
+    capabilities = BrowserCapabilities()
 
     def __init__(
         self,

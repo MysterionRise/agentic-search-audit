@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..core.types import JsValue
+from ..core.types import BrowserCapabilities, JsValue
 from ._js import decode_result, wrap_expression
 from .errors import BrowserScriptError
 from .stealth import (
@@ -87,6 +87,9 @@ class UndetectedBrowserClient:
     All synchronous Selenium calls are wrapped with ``asyncio.to_thread()``
     so the client exposes the same async interface as the Playwright backends.
     """
+
+    #: A launched, disposable browser: every identity mutation is allowed.
+    capabilities = BrowserCapabilities()
 
     def __init__(
         self,

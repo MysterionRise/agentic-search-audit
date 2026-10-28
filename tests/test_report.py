@@ -1523,3 +1523,64 @@ class TestPdfExport:
         assert (temp_run_dir / "report.html").exists()
         # MD should also exist (it's in formats)
         assert (temp_run_dir / "report.md").exists()
+
+
+# --- Failed queries section ---
+
+
+def _record_in_run_dir(record, run_dir):
+    """The HTML report links artifacts relative to the run dir, so put them inside it."""
+    page = record.page.model_copy(
+        update={
+            "html_path": str(Path(run_dir) / "html_snapshots" / "q001.html"),
+            "screenshot_path": str(Path(run_dir) / "screenshots" / "q001.png"),
+        }
+    )
+    return record.model_copy(update={"page": page})
+
+
+@pytest.mark.unit
+def test_failed_queries_are_rendered(audit_config, temp_run_dir, sample_audit_record):
+    from agentic_search_audit.core.types import QueryFailure
+
+    sample_audit_record = _record_in_run_dir(sample_audit_record, temp_run_dir)
+    audit_config.report.formats = ["md", "html", "json"]
+    generator = ReportGenerator(audit_config, temp_run_dir)
+    failure = QueryFailure(
+        site="https://example.com",
+        query=sample_audit_record.query,
+        error_kind="challenge",
+        message="Just a moment | cloudflare",
+        attempts=3,
+    )
+
+    generator.generate_reports([sample_audit_record], failures=[failure])
+
+    md = (temp_run_dir / "report.md").read_text(encoding="utf-8")
+    assert "**Failed Queries:** 1" in md
+    assert "## Failed Queries" in md
+    assert "| challenge | 3 |" in md
+    assert "Just a moment \\| cloudflare" in md  # pipes are escaped inside the table
+
+    html_report = (temp_run_dir / "report.html").read_text(encoding="utf-8")
+    assert "<strong>Failed Queries:</strong> 1" in html_report
+    assert "<h2>Failed Queries</h2>" in html_report
+
+    data = json.loads((temp_run_dir / "audit.json").read_text(encoding="utf-8"))
+    assert data["failed_queries"] == 1
+    assert data["failures"][0]["error_kind"] == "challenge"
+
+
+@pytest.mark.unit
+def test_no_failed_queries_section_without_failures(
+    audit_config, temp_run_dir, sample_audit_record
+):
+    sample_audit_record = _record_in_run_dir(sample_audit_record, temp_run_dir)
+    audit_config.report.formats = ["md", "json"]
+    generator = ReportGenerator(audit_config, temp_run_dir)
+
+    generator.generate_reports([sample_audit_record])
+
+    assert "Failed Queries" not in (temp_run_dir / "report.md").read_text(encoding="utf-8")
+    data = json.loads((temp_run_dir / "audit.json").read_text(encoding="utf-8"))
+    assert "failures" not in data

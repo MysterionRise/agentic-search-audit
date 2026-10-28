@@ -4,50 +4,198 @@ import asyncio
 import json
 import logging
 import random
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from ..browser import classify_error, create_browser_client, is_retryable
 from ..browser.challenge_detector import ChallengeDetectedError, detect_challenge
 from ..browser.errors import BrowserErrorKind
-from ..browser.proxy import ProxyRotator
-from ..browser.stealth import UserAgentRotator, inject_human_behavior
+from ..browser.session import BrowserSession
+from ..browser.stealth import inject_human_behavior
 from ..extractors import ModalHandler, ResultsExtractor, SearchBoxFinder
+from ..extractors.pdp_analyzer import PdpAnalyzer
+from ..extractors.vision_results import VisionResultsExtractor
 from ..judge import SearchQualityJudge
 from ..judge.experts import ExpertPanel
+from ..judge.intent_classifier import IntentClassifier
 from ..judge.rate_limiter import LLMRateLimiter
 from ..report import ReportGenerator
 from .compliance import ComplianceChecker, RobotsPolicy
 from .config import get_run_dir
-from .types import AuditConfig, AuditRecord, BrowserClient, PageArtifacts, Query, ResultItem
+from .errors import QuerySubmitError
+from .types import (
+    AuditConfig,
+    AuditRecord,
+    BrowserClient,
+    ExpertInsight,
+    PageArtifacts,
+    Query,
+    QueryFailure,
+    ResultItem,
+    RunConfig,
+    query_time_budget_s,
+)
 
 logger = logging.getLogger(__name__)
 
+ClientFactory = Callable[[RunConfig, str], BrowserClient]
+
+# Failure kinds beyond the BrowserErrorKind values.
+FAILURE_QUERY_TIMEOUT = "query_timeout"
+FAILURE_CHALLENGE = "challenge"
+FAILURE_SUBMIT = "submit_failed"
+FAILURE_JUDGE = "judge"
+_BROWSER_ERROR_VALUES = {kind.value for kind in BrowserErrorKind}
+
+
+@dataclass
+class CapturedQuery:
+    """Everything the browser produced for one query, before the judge sees it."""
+
+    query: Query
+    items: list[ResultItem]
+    page: PageArtifacts
+    html: str
+    url: str
+
 
 class SearchAuditOrchestrator:
-    """Orchestrates the complete search audit process."""
+    """Orchestrates the complete search audit process.
 
-    def __init__(self, config: AuditConfig, queries: list[Query], run_dir: Path):
+    The browser client is injected (``client=``) or built by ``client_factory``
+    (default: ``create_browser_client``) when ``run()`` starts. Per-query identity
+    rotation and recovery live in ``BrowserSession``; the retry loop in
+    ``_run_query_with_retries`` keeps the browser work (``_capture_query``) under a
+    time budget and runs the judge (``_judge_query``) outside it.
+    """
+
+    def __init__(
+        self,
+        config: AuditConfig,
+        queries: list[Query],
+        run_dir: Path,
+        *,
+        client: BrowserClient | None = None,
+        client_factory: ClientFactory | None = None,
+    ):
         """Initialize orchestrator.
 
         Args:
             config: Audit configuration
             queries: List of queries to evaluate
             run_dir: Output directory for this run
+            client: A ready browser client to use instead of building one
+            client_factory: Builds the client from ``(run_config, locale)``;
+                defaults to ``create_browser_client``
         """
+        if client is not None and client_factory is not None:
+            raise ValueError("Pass either client or client_factory, not both")
         self.config = config
         self.queries = queries
         self.run_dir = run_dir
         self.records: list[AuditRecord] = []
+        self.failures: list[QueryFailure] = []
 
-        # Initialize components (will be created in async context)
-        self.client: BrowserClient | None = None
+        self.client: BrowserClient | None = client
+        self._client_factory = client_factory
         self.judge: SearchQualityJudge | None = None
         self.reporter: ReportGenerator | None = None
         self.compliance_checker: ComplianceChecker | None = None
 
+        self._session: BrowserSession | None = None
+        self._modal_handler: ModalHandler | None = None
+        self._search_finder: SearchBoxFinder | None = None
+        self._results_extractor: ResultsExtractor | None = None
+        self._vision_extractor: VisionResultsExtractor | None = None
+        self._intent_classifier = IntentClassifier()
+        self._llm_rate_limiter: LLMRateLimiter | None = None
+
         # Adaptive throttle multiplier (increases on resistance, decays on success)
         self._throttle_multiplier: float = 1.0
+        self._query_timeout_s: float = query_time_budget_s(config)
+
+    # ------------------------------------------------------------------
+    # Components
+    # ------------------------------------------------------------------
+
+    def _require_client(self) -> BrowserClient:
+        if self.client is None:
+            raise RuntimeError("Browser client not initialized")
+        return self.client
+
+    @property
+    def session(self) -> BrowserSession:
+        """The per-run browser session (built on first use)."""
+        if self._session is None:
+            self._session = BrowserSession(self._require_client(), self.config.run)
+        return self._session
+
+    @property
+    def modal_handler(self) -> ModalHandler:
+        if self._modal_handler is None:
+            self._modal_handler = ModalHandler(self._require_client(), self.config.site.modals)
+        return self._modal_handler
+
+    @property
+    def search_finder(self) -> SearchBoxFinder:
+        if self._search_finder is None:
+            search = self.config.site.search
+            self._search_finder = SearchBoxFinder(
+                self._require_client(),
+                search,
+                llm_config=self.config.llm,
+                use_intelligent_fallback=search.use_intelligent_fallback,
+            )
+        return self._search_finder
+
+    @property
+    def results_extractor(self) -> ResultsExtractor:
+        if self._results_extractor is None:
+            self._results_extractor = ResultsExtractor(
+                self._require_client(), self.config.site.results, str(self.config.site.url)
+            )
+        return self._results_extractor
+
+    @property
+    def vision_extractor(self) -> VisionResultsExtractor:
+        if self._vision_extractor is None:
+            self._vision_extractor = VisionResultsExtractor(self._require_client(), self.config.llm)
+        return self._vision_extractor
+
+    def _init_components(self) -> None:
+        """Build the client (unless injected), judge, reporter, compliance and extractors."""
+        run, llm = self.config.run, self.config.llm
+        if run.seed is not None:
+            random.seed(run.seed)
+
+        self._llm_rate_limiter = LLMRateLimiter(
+            max_concurrent=llm.max_concurrent, min_interval_seconds=llm.min_request_interval_s
+        )
+        if self.client is None:
+            factory = self._client_factory or create_browser_client
+            self.client = factory(run, self.config.site.locale)
+        self.judge = SearchQualityJudge(llm, rate_limiter=self._llm_rate_limiter, seed=run.seed)
+        self.reporter = ReportGenerator(self.config, self.run_dir)
+        robots_policy = RobotsPolicy(
+            user_agent=self.config.compliance.user_agent,
+            respect_robots=self.config.compliance.respect_robots_txt,
+            timeout=self.config.compliance.robots_timeout,
+        )
+        self.compliance_checker = ComplianceChecker(robots_policy=robots_policy)
+
+        # Extractors are created once per run and reused by every query.
+        self._session = BrowserSession(self.client, run)
+        self._modal_handler = None
+        self._search_finder = None
+        self._results_extractor = None
+        self._vision_extractor = None
+
+    # ------------------------------------------------------------------
+    # Run
+    # ------------------------------------------------------------------
 
     async def run(self, generate_pdf: bool = False) -> list[AuditRecord]:
         """Run the complete audit.
@@ -58,33 +206,48 @@ class SearchAuditOrchestrator:
         logger.info(f"Starting audit with {len(self.queries)} queries")
         logger.info(f"Output directory: {self.run_dir}")
 
-        # Load checkpoint if resuming
         completed_ids = self._load_checkpoint()
+        self._init_components()
+        client = self._require_client()
+        assert self.reporter is not None
 
-        # Initialize shared LLM rate limiter
-        llm_rate_limiter = LLMRateLimiter(max_concurrent=3, min_interval_seconds=0.5)
+        await self._check_compliance()
+        self._log_time_budget()
 
-        # Initialize browser client based on configured backend
-        self.client = create_browser_client(self.config.run, locale=self.config.site.locale)
-        self.judge = SearchQualityJudge(self.config.llm, rate_limiter=llm_rate_limiter)
-        self.reporter = ReportGenerator(self.config, self.run_dir)
+        async with client:
+            for index, query in enumerate(self.queries, 1):
+                if query.id in completed_ids:
+                    logger.info(
+                        f"Skipping query {index}/{len(self.queries)} (already completed): {query.text}"
+                    )
+                    continue
 
-        # Initialize UA rotator and proxy rotator
-        ua_rotator = UserAgentRotator()
-        proxy_rotator = ProxyRotator(
-            strategy=self.config.run.proxy_rotation_strategy,
-            proxy_list=self.config.run.proxy_list,
+                logger.info(f"Processing query {index}/{len(self.queries)}: {query.text}")
+                record = await self._run_query_with_retries(query, index)
+                if record is not None:
+                    self.records.append(record)
+                    self._save_record(record)
+                    self._signal_success()
+
+        expert_insights = await self._run_expert_panel()
+
+        if self.records:
+            self.reporter.generate_reports(
+                self.records,
+                expert_insights=expert_insights,
+                generate_pdf=generate_pdf,
+                failures=self.failures,
+            )
+
+        logger.info(
+            f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries "
+            f"({len(self.failures)} failed)"
         )
+        return self.records
 
-        # Initialize compliance checker
-        robots_policy = RobotsPolicy(
-            user_agent=self.config.compliance.user_agent,
-            respect_robots=self.config.compliance.respect_robots_txt,
-            timeout=self.config.compliance.robots_timeout,
-        )
-        self.compliance_checker = ComplianceChecker(robots_policy=robots_policy)
-
-        # Check robots.txt compliance before starting
+    async def _check_compliance(self) -> None:
+        """Abort before touching the site if robots.txt disallows it."""
+        assert self.compliance_checker is not None
         site_url = str(self.config.site.url)
         compliance_result = await self.compliance_checker.check_url(site_url)
         if not compliance_result["allowed"]:
@@ -94,161 +257,303 @@ class SearchAuditOrchestrator:
                 "Use --ignore-robots to override (not recommended)."
             )
 
-        # Connect to browser
-        async with self.client:
-            # Navigate to homepage
-            await self._navigate_to_site()
-
-            # Process each query with configurable retry
-            max_attempts = 1 + self.config.run.max_retries
-            cookie_interval = self.config.run.cookie_clear_interval
-            queries_since_cookie_clear = 0
-
-            for i, query in enumerate(self.queries, 1):
-                # Skip already-completed queries (checkpoint resume)
-                if query.id in completed_ids:
-                    logger.info(
-                        f"Skipping query {i}/{len(self.queries)} (already completed): {query.text}"
-                    )
-                    continue
-
-                logger.info(f"Processing query {i}/{len(self.queries)}: {query.text}")
-
-                # Rotate user-agent before each query
-                new_ua = ua_rotator.next()
-                try:
-                    await self.client.set_user_agent(new_ua)
-                    # Re-navigate to site after UA rotation (new context)
-                    await self._navigate_to_site()
-                except Exception as e:
-                    logger.warning(f"UA rotation failed: {e}")
-
-                # Rotate proxy if configured for per-query
-                next_proxy = proxy_rotator.next_proxy()
-                if next_proxy:
-                    try:
-                        await self.client.set_proxy(next_proxy)
-                        await self._navigate_to_site()
-                    except Exception as e:
-                        logger.warning(f"Proxy rotation failed: {e}")
-
-                # Clear cookies periodically
-                if cookie_interval > 0:
-                    queries_since_cookie_clear += 1
-                    if queries_since_cookie_clear >= cookie_interval:
-                        try:
-                            await self.client.clear_cookies()
-                            queries_since_cookie_clear = 0
-                            logger.debug("Cookies cleared (periodic)")
-                            await self._navigate_to_site()
-                        except Exception as e:
-                            logger.warning(f"Cookie clearing failed: {e}")
-
-                for attempt in range(max_attempts):
-                    try:
-                        # Check page health and recover if needed
-                        if not self.client.is_page_alive():
-                            logger.warning("Page is dead before query -- recovering")
-                            if self.client.is_browser_alive():
-                                await self.client.recover_page()
-                            else:
-                                await self.client.reconnect()
-                            await self._navigate_to_site()
-                            await asyncio.sleep(random.uniform(1.0, 3.0))
-
-                        # Rate limiting on non-first queries or retries
-                        if i > 1 or attempt > 0:
-                            await self._rate_limit()
-
-                        # Execute query and evaluate
-                        record = await asyncio.wait_for(
-                            self._process_query(query),
-                            timeout=90,
-                        )
-                        self.records.append(record)
-
-                        # Save record to JSONL
-                        self._save_record(record)
-
-                        # Signal success for adaptive throttle
-                        self._signal_success()
-                        break  # success -- exit retry loop
-
-                    except asyncio.TimeoutError:
-                        logger.error(
-                            f"Query '{query.text}' timed out after 90s "
-                            f"(attempt {attempt + 1}/{max_attempts}) -- skipping"
-                        )
-                        self._signal_resistance()
-                        break  # Don't retry timeouts -- move to next query
-
-                    except ChallengeDetectedError as e:
-                        self._signal_resistance()
-                        is_last_attempt = attempt >= max_attempts - 1
-                        if not is_last_attempt:
-                            logger.warning(
-                                f"Challenge detected for '{query.text}' "
-                                f"(attempt {attempt + 1}/{max_attempts}): {e} -- "
-                                "clearing cookies and retrying with increased backoff"
-                            )
-                            # Clear cookies before retry on challenge
-                            try:
-                                await self.client.clear_cookies()
-                            except Exception:
-                                pass
-                            # Use 3x backoff multiplier for challenges
-                            backoff = self._compute_backoff(attempt) * 3
-                            await asyncio.sleep(backoff)
-                            await self._navigate_to_site()
-                        else:
-                            logger.error(
-                                f"Challenge persists for '{query.text}' after "
-                                f"{max_attempts} attempts -- skipping"
-                            )
-                            break
-
-                    except Exception as e:
-                        error_kind = classify_error(e)
-                        retryable = is_retryable(error_kind)
-                        is_last_attempt = attempt >= max_attempts - 1
-
-                        if retryable and not is_last_attempt:
-                            self._signal_resistance()
-                            logger.warning(
-                                f"Query '{query.text}' failed (attempt {attempt + 1}/{max_attempts},"
-                                f" {error_kind.value}): {e} -- retrying"
-                            )
-                            await self._recover_for_retry(error_kind)
-                            backoff = self._compute_backoff(attempt)
-                            await asyncio.sleep(backoff)
-                        else:
-                            logger.error(
-                                f"Failed to process query '{query.text}' "
-                                f"(attempt {attempt + 1}/{max_attempts}, "
-                                f"{error_kind.value}): {e}",
-                                exc_info=True,
-                            )
-                            break  # non-retryable or exhausted attempts
-
-        # Run expert panel for site-level insights
-        expert_insights = []
-        if self.records:
-            try:
-                expert_panel = ExpertPanel(self.config.llm, rate_limiter=llm_rate_limiter)
-                site_name = str(self.config.site.url)
-                expert_insights = await expert_panel.evaluate(self.records, site_name)
-                logger.info(f"Expert panel complete: {len(expert_insights)} insights generated")
-            except Exception as e:
-                logger.error(f"Expert panel failed: {e}")
-
-        # Generate reports
-        if self.records:
-            self.reporter.generate_reports(
-                self.records, expert_insights=expert_insights, generate_pdf=generate_pdf
+    def _log_time_budget(self) -> None:
+        run, llm = self.config.run, self.config.llm
+        if run.query_timeout_s is not None:
+            logger.info(
+                f"Per-query browser budget {self._query_timeout_s:.0f}s (run.query_timeout_s)"
             )
+            return
+        pdp = run.pdp_top_k * run.pdp_timeout_ms / 1000 if run.enable_pdp_analysis else 0.0
+        logger.info(
+            f"Per-query browser budget {self._query_timeout_s:.0f}s = "
+            f"browser {run.browser_budget_s:.0f} + vision {2 * llm.vision_timeout:.0f} + pdp {pdp:.0f}"
+        )
 
-        logger.info(f"Audit complete. Processed {len(self.records)}/{len(self.queries)} queries")
-        return self.records
+    async def _run_expert_panel(self) -> list[ExpertInsight]:
+        """Site-level expert commentary over the collected records (non-fatal)."""
+        if not self.records:
+            return []
+        try:
+            expert_panel = ExpertPanel(self.config.llm, rate_limiter=self._llm_rate_limiter)
+            insights = await expert_panel.evaluate(self.records, str(self.config.site.url))
+            logger.info(f"Expert panel complete: {len(insights)} insights generated")
+            return list(insights)
+        except Exception as e:
+            logger.error(f"Expert panel failed: {e}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Per-query retry loop
+    # ------------------------------------------------------------------
+
+    async def _prepare_browser_for_query(self, index: int, attempt: int) -> None:
+        """Recover a dead page, rotate identity (first attempt only) and load the site.
+
+        Raises:
+            ChallengeDetectedError: when the site shows a bot challenge on load.
+        """
+        session = self.session
+        await session.ensure_alive()
+        if attempt == 0:
+            await session.rotate_for_query(index)
+        if session.needs_navigation or not self.config.site.search.search_url_template:
+            await self._navigate_to_site()
+            session.needs_navigation = False
+
+    async def _run_query_with_retries(self, query: Query, index: int) -> AuditRecord | None:
+        """Run one query with retries; returns None (and records a failure) when it gives up."""
+        max_attempts = 1 + self.config.run.max_retries
+        failure: QueryFailure | None = None
+
+        for attempt in range(max_attempts):
+            try:
+                await self._prepare_browser_for_query(index, attempt)
+                if index > 1 or attempt > 0:
+                    await self._rate_limit()
+                captured = await asyncio.wait_for(
+                    self._capture_query(query), timeout=self._query_timeout_s
+                )
+            except asyncio.TimeoutError:
+                kind, retryable, message = (
+                    FAILURE_QUERY_TIMEOUT,
+                    True,
+                    f"exceeded the {self._query_timeout_s:.0f}s query budget",
+                )
+            except ChallengeDetectedError as e:
+                kind, retryable, message = FAILURE_CHALLENGE, True, str(e)
+            except QuerySubmitError as e:
+                kind, retryable, message = FAILURE_SUBMIT, True, str(e)
+            except Exception as e:
+                error_kind = classify_error(e)
+                kind, retryable, message = error_kind.value, is_retryable(error_kind), str(e)
+                logger.debug(f"Query '{query.text}' raised {type(e).__name__}", exc_info=True)
+            else:
+                try:
+                    return await self._judge_query(captured)
+                except Exception as e:
+                    # The judge has its own retries; never re-run the browser for it.
+                    logger.error(f"Judge failed for '{query.text}': {e}")
+                    self._record_failure(
+                        QueryFailure(
+                            site=str(self.config.site.url),
+                            query=query,
+                            error_kind=FAILURE_JUDGE,
+                            message=str(e),
+                            attempts=attempt + 1,
+                        )
+                    )
+                    return None
+
+            self._signal_resistance()
+            failure = QueryFailure(
+                site=str(self.config.site.url),
+                query=query,
+                error_kind=kind,
+                message=message,
+                attempts=attempt + 1,
+            )
+            if not retryable or attempt >= max_attempts - 1:
+                logger.error(
+                    f"Query '{query.text}' failed ({kind}) after {attempt + 1} attempt(s): {message}"
+                )
+                break
+            logger.warning(
+                f"Query '{query.text}' failed ({kind}, attempt {attempt + 1}/{max_attempts}): "
+                f"{message} -- retrying"
+            )
+            await self._recover_after_failure(kind, attempt)
+
+        if failure is not None:
+            self._record_failure(failure)
+        return None
+
+    async def _recover_after_failure(self, kind: str, attempt: int) -> None:
+        """Recover the browser for the next attempt and back off. Never raises."""
+        session = self.session
+        backoff = self._compute_backoff(attempt) * (3 if kind == FAILURE_CHALLENGE else 1)
+        try:
+            if kind == FAILURE_CHALLENGE:
+                await session.clear_cookies_if_allowed("challenge")
+                session.needs_navigation = True
+            elif kind == FAILURE_QUERY_TIMEOUT:
+                await session.recover(BrowserErrorKind.TIMEOUT)
+            elif kind in _BROWSER_ERROR_VALUES:
+                await session.recover(BrowserErrorKind(kind))
+            else:
+                session.needs_navigation = True
+        except Exception as e:
+            logger.warning(f"Recovery after {kind} failed: {e}")
+            session.needs_navigation = True
+        logger.debug(f"Backing off {backoff:.1f}s before retry")
+        await asyncio.sleep(backoff)
+
+    def _record_failure(self, failure: QueryFailure) -> None:
+        """Keep the failure for the report and append it to failures.jsonl."""
+        self.failures.append(failure)
+        path = self.run_dir / "failures.jsonl"
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                json.dump(failure.model_dump(mode="json"), f)
+                f.write("\n")
+        except OSError as e:
+            logger.warning(f"Could not write {path}: {e}")
+
+    # ------------------------------------------------------------------
+    # One query: browser part, then judge
+    # ------------------------------------------------------------------
+
+    async def _process_query(self, query: Query) -> AuditRecord:
+        """Capture and judge one query (no retries). Kept for callers of the old API."""
+        return await self._judge_query(await self._capture_query(query))
+
+    async def _capture_query(self, query: Query) -> CapturedQuery:
+        """Run the search in the browser and capture results and artifacts.
+
+        Raises:
+            ChallengeDetectedError: If a bot-detection challenge is detected.
+            QuerySubmitError: If the search could not be submitted.
+        """
+        client = self._require_client()
+
+        # Auto-classify intent if not set
+        if query.intent is None:
+            query = query.model_copy(
+                update={"intent": self._intent_classifier.classify(query.text)}
+            )
+            logger.debug(f"Auto-classified intent for '{query.text}': {query.intent}")
+
+        # Use direct URL navigation if a search_url_template is configured
+        template = self.config.site.search.search_url_template
+        if template:
+            search_url = template.replace("{query}", quote_plus(query.text))
+            logger.info(f"Navigating directly to search URL: {search_url}")
+            await client.navigate(search_url, wait_until="domcontentloaded")
+            await asyncio.sleep(2)
+            await self.modal_handler.dismiss_modals()
+        else:
+            await self.modal_handler.dismiss_modals()
+            await inject_human_behavior(client)
+            if not await self.search_finder.submit_search(query.text):
+                raise QuerySubmitError(f"Failed to submit search for query: {query.text}")
+
+        # Wait for results
+        await asyncio.sleep(self.config.run.post_submit_ms / 1000)
+        await client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
+
+        # Challenge detection: check for bot-detection pages before extraction
+        challenge = await detect_challenge(client)
+        if challenge.detected:
+            raise ChallengeDetectedError(challenge)
+
+        no_results = await self.results_extractor.check_for_no_results()
+        if no_results:
+            logger.warning(f"No results found for query: {query.text}")
+        else:
+            await self._scroll_for_results(self.results_extractor, self.config.run.top_k)
+
+        items = await self._extract_items(no_results)
+
+        # Human-like behavior after extraction
+        try:
+            await inject_human_behavior(client)
+        except Exception:
+            pass  # Non-critical
+
+        # Signal resistance if empty results on a non-empty query
+        if not items and not no_results:
+            self._signal_resistance()
+
+        if self.config.run.enable_pdp_analysis and items:
+            items = await self._analyze_pdps(query, items)
+
+        page_artifacts = await self._capture_artifacts(query)
+        html_content = await client.get_html()
+        return CapturedQuery(
+            query=query,
+            items=items,
+            page=page_artifacts,
+            html=html_content,
+            url=await self._current_url(),
+        )
+
+    async def _extract_items(self, no_results: bool) -> list[ResultItem]:
+        """CSS extraction with a vision fallback, or vision-first when configured."""
+        run = self.config.run
+        if no_results:
+            return []
+        if run.use_vision_extraction:
+            return await self.vision_extractor.extract_results(top_k=run.top_k)
+
+        items = await self.results_extractor.extract_results(top_k=run.top_k)
+        has_content = any(item.title or item.price for item in items)
+        if items and has_content:
+            return items
+        reason = (
+            "CSS extraction returned no items"
+            if not items
+            else "CSS extraction returned items with no content"
+        )
+        logger.warning(f"{reason} -- falling back to vision extraction")
+        return await self.vision_extractor.extract_results(top_k=run.top_k)
+
+    async def _analyze_pdps(self, query: Query, items: list[ResultItem]) -> list[ResultItem]:
+        """Click into the top product pages; non-fatal except for bot challenges."""
+        client = self._require_client()
+        try:
+            pdp_analyzer = PdpAnalyzer(
+                client=client,
+                llm_config=self.config.llm,
+                modals_config=self.config.site.modals,
+                run_dir=self.run_dir,
+                query=query,
+                timeout_ms=self.config.run.pdp_timeout_ms,
+            )
+            items = await pdp_analyzer.analyze_pdps(
+                items=items,
+                search_page_url=await self._current_url(),
+                top_k=self.config.run.pdp_top_k,
+            )
+            analyzed_count = sum(
+                1 for item in items if item.attributes.get("pdp_analyzed") == "true"
+            )
+            logger.info(
+                f"PDP analysis complete: {analyzed_count}/"
+                f"{min(len(items), self.config.run.pdp_top_k)} PDPs analyzed"
+            )
+            # Challenge detection after PDP navigation (may have triggered blocks)
+            challenge = await detect_challenge(client)
+            if challenge.detected:
+                raise ChallengeDetectedError(challenge)
+        except ChallengeDetectedError:
+            raise
+        except Exception as e:
+            logger.warning(f"PDP analysis failed (non-fatal): {e}")
+        return items
+
+    async def _judge_query(self, captured: CapturedQuery) -> AuditRecord:
+        """Score a captured query with the LLM judge."""
+        if self.judge is None:
+            raise RuntimeError("Judge not initialized")
+        judge_score = await self.judge.evaluate(
+            query=captured.query,
+            results=captured.items,
+            page_url=captured.url,
+            html_content=captured.html,
+            site_name=str(self.config.site.url),
+            locale=self.config.site.locale,
+        )
+        return AuditRecord(
+            site=str(self.config.site.url),
+            query=captured.query,
+            items=captured.items,
+            page=captured.page,
+            judge=judge_score,
+        )
+
+    # ------------------------------------------------------------------
+    # Checkpoint, throttle, navigation
+    # ------------------------------------------------------------------
 
     def _load_checkpoint(self) -> set[str]:
         """Load completed query IDs from existing JSONL checkpoint.
@@ -288,30 +593,6 @@ class SearchAuditOrchestrator:
 
         return completed_ids
 
-    async def _recover_for_retry(self, error_kind: BrowserErrorKind) -> None:
-        """Recover the browser/page based on error classification.
-
-        Args:
-            error_kind: The classified error kind.
-        """
-        if not self.client:
-            return
-
-        if error_kind == BrowserErrorKind.BROWSER_DEAD:
-            await self.client.reconnect()
-            await self._navigate_to_site()
-        elif error_kind in (
-            BrowserErrorKind.PAGE_CLOSED,
-            BrowserErrorKind.TIMEOUT,
-            BrowserErrorKind.TRANSIENT,
-        ):
-            if self.client.is_browser_alive():
-                await self.client.recover_page()
-                await self._navigate_to_site()
-            else:
-                await self.client.reconnect()
-                await self._navigate_to_site()
-
     def _compute_backoff(self, attempt: int) -> float:
         """Compute exponential backoff with jitter.
 
@@ -348,214 +629,32 @@ class SearchAuditOrchestrator:
 
     async def _navigate_to_site(self) -> None:
         """Navigate to the site and handle initial modals."""
-        if not self.client:
-            raise RuntimeError("Browser client not initialized")
+        client = self._require_client()
 
         logger.info(f"Navigating to {self.config.site.url}")
 
         # Use "domcontentloaded" instead of "networkidle" for faster, more reliable loading
         # Some sites (especially heavy SPAs) never reach "networkidle"
-        await self.client.navigate(str(self.config.site.url), wait_until="domcontentloaded")
+        await client.navigate(str(self.config.site.url), wait_until="domcontentloaded")
 
         # Wait for JavaScript to render (important for SPAs and dynamic content)
         logger.debug("Waiting for page JavaScript to render...")
         await asyncio.sleep(3)  # Initial wait for JS frameworks to bootstrap
-        await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
+        await client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
         # Handle modals (cookie consent, popups, etc.)
-        modal_handler = ModalHandler(self.client, self.config.site.modals)
-        await modal_handler.dismiss_modals()
+        await self.modal_handler.dismiss_modals()
 
         # Wait again after dismissing modals for any animations/transitions
         await asyncio.sleep(1)
-        await modal_handler.wait_for_page_stable()
+        await self.modal_handler.wait_for_page_stable()
 
         # Challenge detection on initial navigation (not just post-search)
-        challenge = await detect_challenge(self.client)
+        challenge = await detect_challenge(client)
         if challenge.detected:
             raise ChallengeDetectedError(challenge)
 
         logger.info("Site loaded and ready")
-
-    async def _process_query(self, query: Query) -> AuditRecord:
-        """Process a single query.
-
-        Args:
-            query: Query to process
-
-        Returns:
-            AuditRecord with results and evaluation
-
-        Raises:
-            ChallengeDetectedError: If a bot-detection challenge is detected.
-        """
-        if not self.client:
-            raise RuntimeError("Browser client not initialized")
-        if not self.judge:
-            raise RuntimeError("Judge not initialized")
-
-        # Auto-classify intent if not set
-        if query.intent is None:
-            from ..judge.intent_classifier import IntentClassifier
-
-            classifier = IntentClassifier()
-            query = query.model_copy(update={"intent": classifier.classify(query.text)})
-            logger.debug(f"Auto-classified intent for '{query.text}': {query.intent}")
-
-        # Use direct URL navigation if a search_url_template is configured
-        if self.config.site.search.search_url_template:
-            from urllib.parse import quote_plus
-
-            search_url = self.config.site.search.search_url_template.replace(
-                "{query}", quote_plus(query.text)
-            )
-            logger.info(f"Navigating directly to search URL: {search_url}")
-            await self.client.navigate(search_url, wait_until="domcontentloaded")
-            await asyncio.sleep(2)
-            # Dismiss any modals on the search results page
-            modal_handler = ModalHandler(self.client, self.config.site.modals)
-            await modal_handler.dismiss_modals()
-        else:
-            # Dismiss any modals that might be blocking the search box
-            modal_handler = ModalHandler(self.client, self.config.site.modals)
-            await modal_handler.dismiss_modals()
-
-            # Find and submit search
-            search_finder = SearchBoxFinder(
-                self.client,
-                self.config.site.search,
-                llm_config=self.config.llm,
-                use_intelligent_fallback=self.config.site.search.use_intelligent_fallback,
-            )
-            # Human-like behavior before search
-            await inject_human_behavior(self.client)
-
-            success = await search_finder.submit_search(query.text)
-
-            if not success:
-                raise RuntimeError(f"Failed to submit search for query: {query.text}")
-
-        # Wait for results
-        await asyncio.sleep(self.config.run.post_submit_ms / 1000)
-        await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
-
-        # Challenge detection: check for bot-detection pages before extraction
-        challenge = await detect_challenge(self.client)
-        if challenge.detected:
-            raise ChallengeDetectedError(challenge)
-
-        # Scroll to load all results before extraction (benefits both paths)
-        results_extractor = ResultsExtractor(
-            self.client,
-            self.config.site.results,
-            str(self.config.site.url),
-        )
-        no_results = await results_extractor.check_for_no_results()
-        if no_results:
-            logger.warning(f"No results found for query: {query.text}")
-
-        if not no_results:
-            await self._scroll_for_results(results_extractor, self.config.run.top_k)
-
-        # Extract results -- vision-based or CSS-based with vision fallback
-        items: list[ResultItem] = []
-        if self.config.run.use_vision_extraction and not no_results:
-            # Vision-first: use LLM to extract results from full-page screenshot
-            from ..extractors.vision_results import VisionResultsExtractor
-
-            vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
-            items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
-        elif not no_results:
-            # CSS-first: use DOM selectors with vision fallback
-            items = await results_extractor.extract_results(top_k=self.config.run.top_k)
-
-            # Vision fallback: if CSS extracted no items or items with no content
-            has_content = any(item.title or item.price for item in items)
-            if not items or not has_content:
-                reason = (
-                    "CSS extraction returned no items"
-                    if not items
-                    else "CSS extraction returned items with no content"
-                )
-                logger.warning(f"{reason} -- falling back to vision extraction")
-                from ..extractors.vision_results import VisionResultsExtractor
-
-                vision_extractor = VisionResultsExtractor(self.client, self.config.llm)
-                items = await vision_extractor.extract_results(top_k=self.config.run.top_k)
-
-        # Human-like behavior after extraction
-        try:
-            await inject_human_behavior(self.client)
-        except Exception:
-            pass  # Non-critical
-
-        # Signal resistance if empty results on a non-empty query
-        if not items and not no_results:
-            self._signal_resistance()
-
-        # PDP analysis: click into top product pages and extract data
-        if self.config.run.enable_pdp_analysis and items:
-            try:
-                from ..extractors.pdp_analyzer import PdpAnalyzer
-
-                pdp_analyzer = PdpAnalyzer(
-                    client=self.client,
-                    llm_config=self.config.llm,
-                    modals_config=self.config.site.modals,
-                    run_dir=self.run_dir,
-                    query=query,
-                    timeout_ms=self.config.run.pdp_timeout_ms,
-                )
-                search_page_url = await self._current_url()
-                items = await pdp_analyzer.analyze_pdps(
-                    items=items,
-                    search_page_url=search_page_url,
-                    top_k=self.config.run.pdp_top_k,
-                )
-                analyzed_count = sum(
-                    1 for item in items if item.attributes.get("pdp_analyzed") == "true"
-                )
-                logger.info(
-                    f"PDP analysis complete: {analyzed_count}/"
-                    f"{min(len(items), self.config.run.pdp_top_k)} PDPs analyzed"
-                )
-
-                # Challenge detection after PDP navigation (may have triggered blocks)
-                challenge = await detect_challenge(self.client)
-                if challenge.detected:
-                    raise ChallengeDetectedError(challenge)
-            except ChallengeDetectedError:
-                raise  # Re-raise challenge errors
-            except Exception as e:
-                logger.warning(f"PDP analysis failed (non-fatal): {e}")
-
-        # Capture artifacts (safely -- screenshot/HTML failure shouldn't kill the query)
-        page_artifacts = await self._capture_artifacts(query)
-
-        # Get HTML content
-        html_content = await self.client.get_html()
-
-        # Evaluate with LLM judge
-        current_url = await self._current_url()
-        judge_score = await self.judge.evaluate(
-            query=query,
-            results=items,
-            page_url=current_url,
-            html_content=html_content,
-            site_name=str(self.config.site.url),
-            locale=self.config.site.locale,
-        )
-
-        # Create audit record
-        record = AuditRecord(
-            site=str(self.config.site.url),
-            query=query,
-            items=items,
-            page=page_artifacts,
-            judge=judge_score,
-        )
-
-        return record
 
     async def _scroll_for_results(self, extractor: ResultsExtractor, top_k: int) -> None:
         """Scroll incrementally and click 'Load More' to gather enough results.

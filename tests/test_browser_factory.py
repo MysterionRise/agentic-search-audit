@@ -155,3 +155,23 @@ class TestFactoryUnknownBackend:
         config.browser_backend = "fake"  # type: ignore[assignment]
         with pytest.raises(ValueError, match="Unknown browser backend"):
             create_browser_client(config)
+
+
+class TestFactoryCapabilities:
+    """Each backend declares what the orchestrator may do with it."""
+
+    def test_playwright_is_fully_capable(self) -> None:
+        from agentic_search_audit.core.types import BrowserCapabilities
+
+        client = create_browser_client(RunConfig())
+        assert client.capabilities == BrowserCapabilities()
+
+    def test_cdp_drives_a_real_profile(self) -> None:
+        client = create_browser_client(
+            RunConfig(browser_backend=BrowserBackend.CDP, cdp_endpoint="ws://localhost:9222")
+        )
+        caps = client.capabilities
+        assert caps.user_agent_override is False
+        assert caps.proxy is False
+        assert caps.isolated_profile is False
+        assert caps.clear_cookies is True

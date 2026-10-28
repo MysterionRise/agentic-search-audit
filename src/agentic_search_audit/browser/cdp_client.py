@@ -17,7 +17,7 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from ..core.types import JsValue
+from ..core.types import BrowserCapabilities, JsValue
 from .playwright_client import evaluate_on_page
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 class CDPBrowserClient:
     """Client connecting to an external browser over CDP.
 
+    The profile belongs to the external browser: no user-agent or proxy switching,
+    and cookies are not treated as disposable.
+
     Use this when the target site blocks headless Playwright but works in a
     real Chrome instance (launched with ``--remote-debugging-port``) or a
     cloud browser service like Browserbase / Browserless.
@@ -33,6 +36,10 @@ class CDPBrowserClient:
     Unlike ``PlaywrightBrowserClient``, ``disconnect()`` does **not** close
     the external browser process — it only detaches the Playwright connection.
     """
+
+    capabilities = BrowserCapabilities(
+        user_agent_override=False, proxy=False, clear_cookies=True, isolated_profile=False
+    )
 
     def __init__(
         self,
