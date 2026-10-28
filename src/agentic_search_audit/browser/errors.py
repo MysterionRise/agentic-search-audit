@@ -63,6 +63,10 @@ def classify_error(exc: BaseException) -> BrowserErrorKind:
     if isinstance(exc, BrowserScriptError):
         return BrowserErrorKind.PERMANENT
 
+    bridge_kind = _classify_bridge_error(exc)
+    if bridge_kind is not None:
+        return bridge_kind
+
     # Import lazily to avoid hard dependency at module level
     try:
         from playwright.async_api import Error as PlaywrightError
@@ -119,6 +123,33 @@ def classify_error(exc: BaseException) -> BrowserErrorKind:
         return BrowserErrorKind.PERMANENT
 
     return BrowserErrorKind.PERMANENT
+
+
+def _classify_bridge_error(exc: BaseException) -> BrowserErrorKind | None:
+    """Map the bridge backends' error types; None when ``exc`` is not one of them."""
+    from .bridge.transport import (
+        BridgeConnectionError,
+        BridgeEnvironmentError,
+        BridgeNotReadyError,
+        BridgePageGoneError,
+        BridgeTimeoutError,
+        BridgeToolError,
+    )
+
+    if isinstance(exc, BridgePageGoneError):
+        return BrowserErrorKind.PAGE_CLOSED
+    if isinstance(exc, BridgeConnectionError):
+        return BrowserErrorKind.BROWSER_DEAD
+    if isinstance(exc, BridgeTimeoutError):
+        return BrowserErrorKind.TIMEOUT
+    if isinstance(exc, BridgeNotReadyError | BridgeEnvironmentError):
+        return BrowserErrorKind.PERMANENT
+    if isinstance(exc, BridgeToolError):
+        msg = str(exc).lower()
+        if "net::" in msg or "navigation" in msg or "timeout" in msg:
+            return BrowserErrorKind.TRANSIENT
+        return BrowserErrorKind.PERMANENT
+    return None
 
 
 def is_retryable(kind: BrowserErrorKind) -> bool:

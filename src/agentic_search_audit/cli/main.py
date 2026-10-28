@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -281,14 +282,51 @@ Examples:
     parser.add_argument(
         "--browser",
         type=str,
-        choices=["playwright", "cdp", "undetected"],
-        help="Browser backend: playwright (default), cdp (connect to real Chrome), undetected",
+        choices=[
+            "playwright",
+            "cdp",
+            "undetected",
+            "chrome_devtools_mcp",
+            "kimi_webbridge",
+            "playwright_mcp",
+        ],
+        help=(
+            "Browser backend: playwright (default), undetected, cdp (attach over CDP), "
+            "chrome_devtools_mcp / kimi_webbridge / playwright_mcp (drive your real Chrome "
+            "through a local bridge)"
+        ),
     )
 
     parser.add_argument(
         "--cdp-endpoint",
         type=str,
         help="CDP WebSocket endpoint, e.g. ws://localhost:9222 (requires --browser cdp)",
+    )
+
+    parser.add_argument(
+        "--bridge-mode",
+        type=str,
+        choices=["autoconnect", "browser_url", "launch"],
+        help="chrome_devtools_mcp / playwright_mcp: how to reach Chrome (default: autoconnect)",
+    )
+
+    parser.add_argument(
+        "--browser-url",
+        type=str,
+        help="Remote-debugging URL of a running Chrome, e.g. http://127.0.0.1:9222 "
+        "(implies --bridge-mode browser_url)",
+    )
+
+    parser.add_argument(
+        "--bridge-session",
+        type=str,
+        help="kimi_webbridge: session / tab-group name for this run",
+    )
+
+    parser.add_argument(
+        "--allow-profile-mutations",
+        action="store_true",
+        help="Bridge backends: permit user-agent override and cookie clearing on the real profile",
     )
 
     parser.add_argument(
@@ -501,6 +539,21 @@ async def main_async() -> int:
             if not args.browser:
                 logger.warning("--cdp-endpoint provided without --browser cdp; switching to CDP")
                 overrides["run"]["browser_backend"] = "cdp"
+
+        bridge_overrides: dict[str, Any] = {}
+        if args.bridge_mode:
+            bridge_overrides["mode"] = args.bridge_mode
+        if args.browser_url:
+            bridge_overrides["browser_url"] = args.browser_url
+            bridge_overrides.setdefault("mode", "browser_url")
+        if args.bridge_session:
+            bridge_overrides["session_name"] = args.bridge_session
+        if args.allow_profile_mutations:
+            bridge_overrides["allow_profile_mutations"] = True
+        if bridge_overrides:
+            if "run" not in overrides:
+                overrides["run"] = {}
+            overrides["run"]["bridge"] = bridge_overrides
 
         if args.ignore_robots:
             overrides["compliance"] = {"respect_robots_txt": False}
