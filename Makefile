@@ -1,69 +1,78 @@
-.PHONY: help install install-dev test test-cov lint format clean build docker-build docker-run docker-shell
+.PHONY: help bootstrap install install-dev lock test test-cov test-unit lint lint-fix format typecheck pre-commit audit-deps smoke clean build audit audit-debug ci all docker-build docker-run docker-shell docker-compose-up docker-compose-down docker-clean
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install:  ## Install package
-	pip install -e .
+bootstrap:  ## One-time setup: venv with all extras, Playwright Chromium, git hooks
+	uv sync --extra dev --extra saas --extra undetected
+	uv run playwright install chromium
+	uv run pre-commit install
 
-install-dev:  ## Install package with dev dependencies
-	pip install -e ".[dev]"
+install:  ## Runtime dependencies only
+	uv sync
+
+install-dev:  ## Dev and saas extras
+	uv sync --extra dev --extra saas
+
+lock:  ## Re-resolve uv.lock after editing pyproject.toml
+	uv lock
 
 test:  ## Run tests
-	pytest tests/ -v
+	uv run pytest tests/
 
-test-cov:  ## Run tests with coverage report
-	pytest tests/ --cov=agentic_search_audit --cov-report=term --cov-report=html -v
+test-cov:  ## Run tests with coverage report (terminal and htmlcov/)
+	uv run pytest tests/ --cov --cov-report=term-missing --cov-report=html
 
-test-unit:  ## Run only unit tests
-	pytest tests/ -v -m unit
-
-test-watch:  ## Run tests in watch mode
-	pytest-watch tests/ -v
+test-unit:  ## Run only tests marked @pytest.mark.unit
+	uv run pytest tests/ -m unit
 
 lint:  ## Run linters
-	ruff check src/ tests/
-	black --check src/ tests/
+	uv run ruff check src/ tests/
+	uv run black --check src/ tests/
 
 lint-fix:  ## Run linters and fix issues
-	ruff check --fix src/ tests/
-	black src/ tests/
+	uv run ruff check --fix src/ tests/
+	uv run black src/ tests/
 
 format:  ## Format code
-	black src/ tests/
+	uv run black src/ tests/
 
 typecheck:  ## Run type checker
-	mypy src/
+	uv run mypy src/
 
 pre-commit:  ## Run pre-commit hooks
-	pre-commit run --all-files
+	uv run pre-commit run --all-files
+
+audit-deps:  ## pip-audit against the locked dependency set (same as CI)
+	uv export --format requirements-txt --all-extras --no-emit-project --no-hashes -o .requirements-audit.txt
+	uvx --python 3.12 pip-audit --no-deps --strict --desc on -r .requirements-audit.txt; status=$$?; rm -f .requirements-audit.txt; exit $$status
+
+smoke:  ## Three-query live run against nike (needs OPENROUTER_API_KEY or OPENAI_API_KEY)
+	uv run search-audit --site nike --max-queries 3 --output runs/smoke
 
 clean:  ## Clean build artifacts
 	rm -rf build/
 	rm -rf dist/
 	rm -rf *.egg-info
-	rm -rf .pytest_cache
-	rm -rf .coverage
-	rm -rf htmlcov/
+	rm -rf .pytest_cache .ruff_cache .mypy_cache
+	rm -rf .coverage htmlcov/ .requirements-audit.txt
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
 build:  ## Build package
-	python -m build
+	uv build
 
 audit:  ## Run audit on Nike.com (example)
-	search-audit --site nike --log-level INFO
+	uv run search-audit --site nike --log-level INFO
 
 audit-debug:  ## Run audit with debug logging
-	search-audit --site nike --log-level DEBUG --no-headless
-
-smoke-test:  ## Run smoke test
-	./scripts/smoke.sh
+	uv run search-audit --site nike --log-level DEBUG --no-headless
 
 ci:  ## Run CI checks locally
-	make lint
-	make typecheck
-	make test-cov
+	$(MAKE) lint
+	$(MAKE) typecheck
+	$(MAKE) test-cov
+	$(MAKE) audit-deps
 
 all: clean install-dev lint typecheck test-cov  ## Run all checks
 
@@ -80,6 +89,7 @@ docker-run:  ## Run audit in Docker (use ARGS="--url https://example.com --queri
 		-v $(PWD)/runs:/app/runs \
 		-v $(PWD)/configs:/app/configs:ro \
 		-v $(PWD)/data/queries:/app/data/queries:ro \
+		-e OPENROUTER_API_KEY=$(OPENROUTER_API_KEY) \
 		-e OPENAI_API_KEY=$(OPENAI_API_KEY) \
 		-e ANTHROPIC_API_KEY=$(ANTHROPIC_API_KEY) \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) $(ARGS)

@@ -78,7 +78,9 @@ class TestPlaywrightStealthFallback:
 
         # stealth_async raises TypeError (not ImportError)
         mock_stealth_mod = MagicMock()
-        mock_stealth_mod.stealth_async = AsyncMock(side_effect=TypeError("bad arg"))
+        mock_stealth_mod.Stealth.return_value.apply_stealth_async = AsyncMock(
+            side_effect=TypeError("bad arg")
+        )
 
         with (
             patch(
@@ -120,7 +122,9 @@ class TestCDPStealthFallback:
         mock_cm.start = AsyncMock(return_value=mock_pw)
 
         mock_stealth_mod = MagicMock()
-        mock_stealth_mod.stealth_async = AsyncMock(side_effect=RuntimeError("stealth broke"))
+        mock_stealth_mod.Stealth.return_value.apply_stealth_async = AsyncMock(
+            side_effect=RuntimeError("stealth broke")
+        )
 
         with (
             patch(
@@ -224,7 +228,7 @@ class TestCDPContextOwnership:
         mock_cm.start = AsyncMock(return_value=mock_pw)
 
         mock_stealth_mod = MagicMock()
-        mock_stealth_mod.stealth_async = AsyncMock()
+        mock_stealth_mod.Stealth.return_value.apply_stealth_async = AsyncMock()
 
         with (
             patch(
@@ -261,7 +265,7 @@ class TestCDPContextOwnership:
         mock_cm.start = AsyncMock(return_value=mock_pw)
 
         mock_stealth_mod = MagicMock()
-        mock_stealth_mod.stealth_async = AsyncMock()
+        mock_stealth_mod.Stealth.return_value.apply_stealth_async = AsyncMock()
 
         with (
             patch(

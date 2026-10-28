@@ -138,7 +138,8 @@ class AuditWorker:
                 # Get next job
                 result = await self._redis.brpop("audit:queue", timeout=1)  # type: ignore[arg-type,misc]
                 if result:
-                    _, job_id = result
+                    _, raw_job_id = result
+                    job_id = raw_job_id.decode() if isinstance(raw_job_id, bytes) else raw_job_id
                     task = asyncio.create_task(self._process_job(job_id))
                     self._tasks.add(task)
 

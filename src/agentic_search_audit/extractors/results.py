@@ -254,7 +254,7 @@ class ResultsExtractor:
         }})()
         """
         url = await self.client.evaluate(script)
-        if url and url not in ("null", "undefined"):
+        if isinstance(url, str) and url and url not in ("null", "undefined"):
             return urljoin(self.base_url, url)
 
         return None
@@ -282,7 +282,7 @@ class ResultsExtractor:
             }})()
             """
             src = await self.client.evaluate(script)
-            if src and src not in ("null", "undefined"):
+            if isinstance(src, str) and src and src not in ("null", "undefined"):
                 return urljoin(self.base_url, src)
 
         return None

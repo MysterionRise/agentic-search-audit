@@ -6,10 +6,13 @@ to avoid triggering bot-detection systems (Akamai, PerimeterX, DataDome).
 
 import asyncio
 import json
+import logging
 import random
 import re
 from collections import deque
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Realistic Chrome user-agent pool (macOS + Windows + Linux, recent versions)
@@ -474,3 +477,22 @@ async def inject_human_behavior(client: Any) -> None:
         await client.evaluate(js)
     else:  # pause
         await asyncio.sleep(random.uniform(0.5, 2.0))
+
+
+async def apply_playwright_stealth(target: Any) -> bool:
+    """Apply playwright-stealth (2.x API) to a Playwright ``Page`` or ``BrowserContext``.
+
+    Returns ``False`` when the package is missing or raises, so callers can fall
+    back to ``build_stealth_js``.
+    """
+    try:
+        from playwright_stealth import Stealth  # type: ignore[import-untyped]
+    except ImportError:
+        logger.warning("playwright-stealth not installed, using built-in stealth JS only")
+        return False
+    try:
+        await Stealth().apply_stealth_async(target)
+        return True
+    except Exception as err:
+        logger.warning(f"playwright-stealth failed ({err}), using built-in stealth JS only")
+        return False
