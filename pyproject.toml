@@ -32,7 +32,7 @@ dependencies = [
     "aiohttp>=3.9",                   # robots.txt fetching and the --auto-generate homepage fetch
     "openai>=1.0",                    # judge and vision providers; also OpenRouter and vLLM endpoints
     "anthropic>=0.18",
-    "mcp>=1.26,<2",                   # 2.x renames CallToolResult.isError -> is_error and raises from call_tool
+    "mcp>=1.26,<3",                   # 2.x renames CallToolResult.isError -> is_error and raises from call_tool
     "playwright>=1.40",
     "playwright-stealth>=2.0.3,<3",   # 2.x API: Stealth().apply_stealth_async(); see browser/stealth.py
 ]
