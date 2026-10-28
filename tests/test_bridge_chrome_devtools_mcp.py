@@ -122,6 +122,7 @@ class TestServerArgs:
             "-y",
             "chrome-devtools-mcp@latest",
             "--usageStatistics=false",
+            "--performanceCrux=false",
             "--categoryPerformance=false",
             "--autoConnect",
             "--channel",
@@ -262,25 +263,30 @@ class TestPrimitives:
         await t2.click_at(1, 2)
         assert ("click_at", {"pageId": 2, "x": 1, "y": 2}) in session2.calls
 
-    async def test_screenshot_writes_file_via_path_or_inline_image(self, tmp_path: Path) -> None:
-        target = tmp_path / "a.png"
-
-        def write(args: dict[str, Any]) -> str:
-            Path(args["filePath"]).write_bytes(b"png")
-            return "Saved"
-
-        t, session = await self._open({"take_screenshot": write})
-        assert await t.screenshot(target, True) == target and target.read_bytes() == b"png"
-        assert session.calls[0][1]["fullPage"] is True
-
+    async def test_screenshot_is_taken_inline_and_written_locally(self, tmp_path: Path) -> None:
         inline = types.CallToolResult(
             content=[types.ImageContent(type="image", data="cG5n", mimeType="image/png")]
         )
-        t2, _ = await self._open({"take_screenshot": inline})
-        target2 = tmp_path / "b.png"
-        assert await t2.screenshot(target2, False) == target2 and target2.read_bytes() == b"png"
+        t, session = await self._open({"take_screenshot": inline})
+        target = tmp_path / "shots" / "a.png"
+        assert await t.screenshot(target, True) == target and target.read_bytes() == b"png"
+        # no filePath: the server only writes inside its own workspace
+        assert session.calls[0][1] == {"pageId": 2, "fullPage": True, "format": "png"}
 
-    async def test_screenshot_without_output_raises(self, tmp_path: Path) -> None:
+    async def test_large_screenshot_is_copied_from_the_server_temp_file(
+        self, tmp_path: Path
+    ) -> None:
+        server_file = tmp_path / "server-tmp" / "screenshot.png"
+        server_file.parent.mkdir()
+        server_file.write_bytes(b"big-png")
+        message = f"Took a screenshot of the full current page.\nSaved screenshot to {server_file}."
+        t, _ = await self._open({"take_screenshot": message})
+        target = tmp_path / "out" / "big.png"
+        assert await t.screenshot(target, True) == target
+        assert target.read_bytes() == b"big-png"
+        assert not server_file.exists()  # the temporary file is cleaned up
+
+    async def test_screenshot_without_image_raises(self, tmp_path: Path) -> None:
         t, _ = await self._open({"take_screenshot": "nothing"})
         with pytest.raises(BridgeToolError):
             await t.screenshot(tmp_path / "c.png", True)

@@ -40,9 +40,10 @@ async def test_stringified_false_from_a_broken_backend_still_counts_zero() -> No
 
 
 async def test_api_dismissal_short_circuits_the_fallbacks() -> None:
-    handler, client = _handler(AsyncMock(side_effect=["didomi_api"]))
+    # call 1: the selector probe finds nothing; call 2: the consent-platform API answers
+    handler, client = _handler(AsyncMock(side_effect=[None, "didomi_api"]))
     assert await handler._try_cookie_consent_selectors() == 1
-    assert client.evaluate.await_count == 1
+    assert client.evaluate.await_count == 2
 
 
 async def test_text_button_and_shadow_scripts_are_scoped_to_consent_containers() -> None:

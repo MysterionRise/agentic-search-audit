@@ -10,6 +10,8 @@ Modes:
 
 import logging
 import os
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,7 @@ from .mcp_base import (
     SessionFactory,
     parse_json_block,
     parse_selected_page_id,
+    result_text,
 )
 from .node import check_node_version
 from .transport import (
@@ -114,7 +117,13 @@ class ChromeDevtoolsMcpTransport(McpStdioTransportBase):
 
     def build_server_args(self) -> list[str]:
         """The npx argv for the configured mode."""
-        args = ["-y", NPM_PACKAGE, "--usageStatistics=false", "--categoryPerformance=false"]
+        args = [
+            "-y",
+            NPM_PACKAGE,
+            "--usageStatistics=false",
+            "--performanceCrux=false",
+            "--categoryPerformance=false",
+        ]
         if self.mode == BridgeMode.AUTOCONNECT:
             args += ["--autoConnect", "--channel", self.channel]
         elif self.mode == BridgeMode.BROWSER_URL:
@@ -247,21 +256,33 @@ class ChromeDevtoolsMcpTransport(McpStdioTransportBase):
         await self._call("click_at", self._page_args(x=x, y=y))
 
     async def screenshot(self, output_path: Path, full_page: bool) -> Path:
+        # Ask for the image inline and write it ourselves: the server only writes files
+        # inside its own workspace (the spike hit "Access denied" for a run dir elsewhere).
         result = await self._call_raw(
             "take_screenshot",
-            self._page_args(fullPage=full_page, format="png", filePath=str(output_path)),
+            self._page_args(fullPage=full_page, format="png"),
             self.tool_timeout_s * 2,
         )
-        if output_path.exists():
-            return output_path
-        # The server may refuse the path (workspace restriction) and return the image inline.
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         for item in getattr(result, "content", None) or []:
             if getattr(item, "type", None) == "image" and getattr(item, "data", None):
                 import base64
 
                 output_path.write_bytes(base64.b64decode(item.data))
                 return output_path
-        raise BridgeToolError("take_screenshot", f"no file written to {output_path}")
+        # Images of 2 MB or more are written to a temporary file on the server side
+        # (same machine, stdio transport) and only the path is returned.
+        match = re.search(r"Saved screenshot to (.+?)\.?\s*$", result_text(result), re.MULTILINE)
+        if match:
+            saved = Path(match.group(1).strip())
+            if saved.is_file():
+                shutil.copyfile(saved, output_path)
+                try:
+                    saved.unlink()
+                except OSError:
+                    pass
+                return output_path
+        raise BridgeToolError("take_screenshot", "the server returned no image content")
 
     async def set_viewport(self, width: int, height: int) -> None:
         await self._call("resize_page", self._page_args(width=width, height=height))
