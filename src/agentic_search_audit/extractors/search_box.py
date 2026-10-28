@@ -1,13 +1,26 @@
 """Search box detection and interaction."""
 
 import asyncio
+import json
 import logging
 import re
 
+from ..browser._js import coerce_int
 from ..core.types import BrowserClient, LLMConfig, SearchConfig
 from .intelligent_finder import IntelligentSearchBoxFinder
 
 logger = logging.getLogger(__name__)
+
+
+def _is_click_blocked(exc: BaseException) -> bool:
+    """True when a click failed because another element covers the target.
+
+    Selenium reports "element click intercepted"; Playwright times out with
+    "<element> intercepts pointer events".
+    """
+    msg = str(exc).lower()
+    return "click intercepted" in msg or "intercepts pointer events" in msg
+
 
 # Pattern to validate CSS selectors - only allow safe characters
 # This prevents JavaScript injection via malicious selectors
@@ -230,17 +243,19 @@ class SearchBoxFinder:
                 logger.error(f"Invalid search selector: {e}")
                 return False
 
-            # Escape selector for use in JavaScript string
-            # Replace backslashes first, then quotes
-            escaped_selector = safe_selector.replace("\\", "\\\\").replace('"', '\\"')
+            # json.dumps output is a valid JS string literal, so the selector is safe to embed
+            sel_js = json.dumps(safe_selector)
 
             # Clear any existing text using multiple approaches for reliability
             # 1. Set value to empty (works for simple inputs)
-            await self.client.evaluate(f'document.querySelector("{escaped_selector}").value = ""')
+            await self.client.evaluate(
+                f"(function() {{ const el = document.querySelector({sel_js});"
+                f" if (el) el.value = ''; return !!el; }})()"
+            )
             # 2. Also dispatch input event for React/Angular frameworks
             await self.client.evaluate(f"""
                 (function() {{
-                    const input = document.querySelector("{escaped_selector}");
+                    const input = document.querySelector({sel_js});
                     if (input) {{
                         input.value = "";
                         input.dispatchEvent(new Event("input", {{ bubbles: true }}));
@@ -252,7 +267,7 @@ class SearchBoxFinder:
             try:
                 await self.client.click(safe_selector)
             except Exception as click_err:
-                if "element click intercepted" in str(click_err):
+                if _is_click_blocked(click_err):
                     logger.warning(
                         "Click intercepted by overlay — force-removing overlays and retrying"
                     )
@@ -261,12 +276,13 @@ class SearchBoxFinder:
                     try:
                         await self.client.click(safe_selector)
                     except Exception as retry_err:
-                        if "element click intercepted" in str(retry_err):
+                        if _is_click_blocked(retry_err):
                             logger.warning(
                                 "Click still intercepted — using JavaScript click as fallback"
                             )
                             await self.client.evaluate(
-                                f'document.querySelector("{escaped_selector}").click()'
+                                f"(function() {{ const el = document.querySelector({sel_js});"
+                                f" if (el) el.click(); return !!el; }})()"
                             )
                         else:
                             raise
@@ -274,7 +290,10 @@ class SearchBoxFinder:
                     raise
             await asyncio.sleep(0.2)
             # Select all and delete using keyboard
-            await self.client.evaluate(f'document.querySelector("{escaped_selector}").select()')
+            await self.client.evaluate(
+                f"(function() {{ const el = document.querySelector({sel_js});"
+                f" if (el && el.select) el.select(); return !!el; }})()"
+            )
             await self.client.press_key("Backspace")
             await asyncio.sleep(0.2)
 
@@ -282,15 +301,15 @@ class SearchBoxFinder:
             try:
                 await self.client.type_text(safe_selector, query_text, delay=30)
             except Exception as type_err:
-                if "element click intercepted" in str(type_err):
+                if _is_click_blocked(type_err):
                     logger.warning("type_text intercepted by overlay — using JS input fallback")
-                    escaped_text = query_text.replace("\\", "\\\\").replace('"', '\\"')
+                    text_js = json.dumps(query_text)
                     await self.client.evaluate(f"""
                         (function() {{
-                            var el = document.querySelector("{escaped_selector}");
+                            var el = document.querySelector({sel_js});
                             if (el) {{
                                 el.focus();
-                                el.value = "{escaped_text}";
+                                el.value = {text_js};
                                 el.dispatchEvent(new Event("input", {{bubbles: true}}));
                                 el.dispatchEvent(new Event("change", {{bubbles: true}}));
                             }}
@@ -314,7 +333,7 @@ class SearchBoxFinder:
                 # Focus the input element first
                 await self.client.evaluate(f"""
                     (function() {{
-                        const input = document.querySelector("{escaped_selector}");
+                        const input = document.querySelector({sel_js});
                         if (input) {{
                             input.focus();
                             return true;
@@ -425,7 +444,7 @@ class SearchBoxFinder:
                     return hidden;
                 })()
             """)
-            count = int(result) if result else 0
+            count = coerce_int(result)
             if count > 0:
                 logger.info(f"Force-hidden {count} blocking overlay(s)")
             return count

@@ -17,6 +17,9 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from ..core.types import JsValue
+from .playwright_client import evaluate_on_page
+
 logger = logging.getLogger(__name__)
 
 
@@ -220,19 +223,10 @@ class CDPBrowserClient:
             logger.debug(f"Selector {selector} returned no results: {e}")
             return []
 
-    async def evaluate(self, expression: str) -> Any:
+    async def evaluate(self, expression: str) -> JsValue:
         if not self._page:
             raise RuntimeError("Browser not connected")
-        try:
-            result = await self._page.evaluate(expression)
-            if result is None:
-                return None
-            return str(result) if not isinstance(result, str) else result
-        except (PlaywrightTimeoutError, PlaywrightError):
-            raise
-        except Exception as e:
-            logger.debug(f"Evaluate failed: {e}")
-            return None
+        return await evaluate_on_page(self._page, expression)
 
     async def click(self, selector: str) -> None:
         if not self._page:

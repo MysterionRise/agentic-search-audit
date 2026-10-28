@@ -176,7 +176,7 @@ def _make_results_extractor(
 async def test_no_results_explicit_selector_visible():
     """Explicit no_results_selectors: returns True when element is visible."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="true")
+    client.evaluate = AsyncMock(return_value=True)
 
     assert await ext.check_for_no_results() is True
 
@@ -185,7 +185,7 @@ async def test_no_results_explicit_selector_visible():
 async def test_no_results_explicit_selector_hidden():
     """Explicit no_results_selectors: returns False when element is hidden."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     assert await ext.check_for_no_results() is False
 
@@ -194,7 +194,7 @@ async def test_no_results_explicit_selector_hidden():
 async def test_no_results_explicit_selector_missing():
     """Explicit no_results_selectors: returns False when element doesn't exist."""
     ext, client = _make_results_extractor(no_results_selectors=[".no-results-msg"])
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     assert await ext.check_for_no_results() is False
 
@@ -228,7 +228,7 @@ async def test_no_results_heuristic_ignores_footer_text():
 async def test_no_results_heuristic_null_text():
     """Heuristic fallback: returns False when evaluate returns null."""
     ext, client = _make_results_extractor()
-    client.evaluate = AsyncMock(return_value="null")
+    client.evaluate = AsyncMock(return_value=None)
 
     assert await ext.check_for_no_results() is False
 
@@ -364,8 +364,12 @@ async def test_location_modal_dismissed_via_selector():
 
     client.query_selector = AsyncMock(side_effect=mock_query_selector)
 
-    # _dismiss_location_dialog will try to click confirm button
-    client.evaluate = AsyncMock(return_value="Continue")
+    # _dismiss_location_dialog will try to click the confirm button
+    client.evaluate = AsyncMock(
+        side_effect=lambda script: (
+            {"clicked": True, "text": "Continue"} if "confirmPatterns" in script else False
+        )
+    )
 
     result = await handler.dismiss_modals()
     assert result >= 1
@@ -383,19 +387,19 @@ async def test_location_modal_dismissed_via_text_pattern():
 
     call_index = 0
 
-    async def mock_evaluate(script: str) -> str | None:
+    async def mock_evaluate(script: str) -> object:
         nonlocal call_index
         call_index += 1
         # Cookie consent API calls return false
         if call_index <= 3:
-            return "false"
+            return False
         # Location text pattern detection returns true
         if "locationPatterns" in script:
-            return "true"
+            return True
         # Confirm button click
         if "confirmPatterns" in script:
-            return "Continue"
-        return "false"
+            return {"clicked": True, "text": "Continue"}
+        return False
 
     client.evaluate = AsyncMock(side_effect=mock_evaluate)
 
@@ -413,8 +417,8 @@ async def test_iframe_consent_dismissal():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    # Simulate: no regular selectors match, but iframe consent returns text
-    client.evaluate = AsyncMock(return_value="Accept All Cookies")
+    # Simulate: the iframe script clicked a button and reports its text
+    client.evaluate = AsyncMock(return_value={"clicked": True, "text": "Accept All Cookies"})
 
     result = await handler._try_iframe_consent()
     assert result == 1
@@ -427,7 +431,7 @@ async def test_iframe_consent_not_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     result = await handler._try_iframe_consent()
     assert result == 0
@@ -479,26 +483,19 @@ async def test_escape_dismissal_as_last_resort():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    # No cookie consent selectors match
+    # No consent selectors match, no consent API or text button, no close button
     client.query_selector = AsyncMock(return_value=None)
-    # No consent API works
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=None)
 
-    call_count = 0
-
-    # Override _check_modal_overlay to detect overlay then clear it
+    # Overlay is visible until Escape has been pressed
     async def mock_overlay():
-        nonlocal call_count
-        call_count += 1
-        # On first check (from _try_escape_dismissal): overlay present
-        # On second check (after Escape): overlay gone
-        return call_count == 1
+        return client.press_key.await_count == 0
 
     handler._check_modal_overlay = mock_overlay
 
     result = await handler.dismiss_modals()
-    # Escape-based dismissal should have fired
-    assert result >= 1
+    assert result == 1
+    client.press_key.assert_awaited_once_with("Escape")
 
 
 # --- Modal overlay detection tests ---
@@ -511,7 +508,7 @@ async def test_check_modal_overlay_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="true")
+    client.evaluate = AsyncMock(return_value=True)
 
     result = await handler._check_modal_overlay()
     assert result is True
@@ -524,7 +521,7 @@ async def test_check_modal_overlay_not_found():
     config = ModalsConfig()
     handler = ModalHandler(client, config)
 
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     result = await handler._check_modal_overlay()
     assert result is False
@@ -541,25 +538,22 @@ async def test_url_verification_rejects_invalid_scheme():
 
     extractor = ResultsExtractor(client, config, "https://example.com")
 
-    # Mock: 1 item found, then extract returns javascript: URL
+    # The batched extraction script returns one item with a javascript: URL
     client.evaluate = AsyncMock(
-        side_effect=[
-            "1",  # count of items
-            None,  # title extraction attempt 1
-            None,  # title extraction attempt 2
-            None,  # title extraction attempt 3
-            None,  # title extraction attempt 4
-            None,  # title extraction attempt 5
-            "javascript:alert(1)",  # URL extraction
-            None,  # snippet
-            None,  # snippet
-            None,  # snippet
-            None,  # price
-            None,  # price
-            None,  # price
-            None,  # image
-            None,  # image
-        ]
+        return_value={
+            "selector": ".product",
+            "total": 1,
+            "items": [
+                {
+                    "index": 0,
+                    "title": None,
+                    "url": "javascript:alert(1)",
+                    "snippet": None,
+                    "price": None,
+                    "image": None,
+                }
+            ],
+        }
     )
 
     results = await extractor.extract_results(top_k=1)
@@ -579,21 +573,22 @@ async def test_url_verification_flags_off_domain():
 
     extractor = ResultsExtractor(client, config, "https://www.example.com")
 
-    # Mock: 1 item found, then extract returns off-domain URL
+    # The batched extraction script returns one item with an off-domain URL
     client.evaluate = AsyncMock(
-        side_effect=[
-            "1",  # count of items
-            "Product Title",  # title from h2
-            "https://ad-network.com/track/product",  # URL extraction
-            None,  # snippet attempts
-            None,
-            None,
-            None,  # price attempts
-            None,
-            None,
-            None,  # image
-            None,
-        ]
+        return_value={
+            "selector": ".product",
+            "total": 1,
+            "items": [
+                {
+                    "index": 0,
+                    "title": "Product Title",
+                    "url": "https://ad-network.com/track/product",
+                    "snippet": None,
+                    "price": None,
+                    "image": None,
+                }
+            ],
+        }
     )
 
     results = await extractor.extract_results(top_k=1)

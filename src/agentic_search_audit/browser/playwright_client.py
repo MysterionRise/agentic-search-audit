@@ -18,6 +18,9 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from ..core.types import JsValue
+from ._js import decode_result, wrap_expression
+from .errors import BrowserScriptError
 from .stealth import (
     apply_playwright_stealth,
     build_stealth_js,
@@ -29,6 +32,25 @@ from .stealth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def evaluate_on_page(page: Page, expression: str) -> JsValue:
+    """Run ``expression`` on ``page`` through the shared wrapper and decode the envelope.
+
+    Shared by the Playwright and CDP clients. Playwright errors that are not about the
+    script itself (closed page, navigation) propagate unchanged for ``classify_error``.
+    """
+    try:
+        raw = await page.evaluate(wrap_expression(expression))
+    except PlaywrightTimeoutError:
+        raise
+    except PlaywrightError as exc:
+        # The wrapper catches runtime errors itself, so an error escaping here means the
+        # expression did not even parse.
+        if "SyntaxError" in str(exc) or "Evaluation failed" in str(exc):
+            raise BrowserScriptError("syntax", str(exc)) from exc
+        raise
+    return decode_result(raw)
 
 
 class PlaywrightBrowserClient:
@@ -237,29 +259,14 @@ class PlaywrightBrowserClient:
             logger.debug(f"Selector {selector} returned no results: {e}")
             return []
 
-    async def evaluate(self, expression: str) -> Any:
-        """Evaluate JavaScript in the page context.
+    async def evaluate(self, expression: str) -> JsValue:
+        """Evaluate a JavaScript expression in the page context.
 
-        Args:
-            expression: JavaScript expression to evaluate
-
-        Returns:
-            Result of evaluation
+        See ``BrowserClient.evaluate`` for the value contract.
         """
         if not self._page:
             raise RuntimeError("Browser not connected")
-
-        try:
-            result = await self._page.evaluate(expression)
-            # Convert to string for compatibility with existing code
-            if result is None:
-                return None
-            return str(result) if not isinstance(result, str) else result
-        except (PlaywrightTimeoutError, PlaywrightError):
-            raise
-        except Exception as e:
-            logger.debug(f"Evaluate failed: {e}")
-            return None
+        return await evaluate_on_page(self._page, expression)
 
     async def click(self, selector: str) -> None:
         """Click an element with a small human-like delay beforehand.

@@ -1,11 +1,106 @@
-"""Search results extraction."""
+"""Search results extraction.
 
+The whole result list is read in ONE ``evaluate`` call (``EXTRACT_RESULTS_JS``): the
+configured selectors are passed in as JSON, the script finds the first item selector
+that matches, and returns the top-K items with their title, URL, snippet, price and
+image. One round trip per query instead of one per field per item matters for the
+bridge backends, where every ``evaluate`` is a tool call.
+"""
+
+import json
 import logging
-from urllib.parse import urljoin
+from typing import Final
+from urllib.parse import urljoin, urlparse
 
-from ..core.types import BrowserClient, ResultItem, ResultsConfig
+from ..browser._js import coerce_int
+from ..core.types import BrowserClient, JsValue, ResultItem, ResultsConfig
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_TEXT_CHARS: Final = 500
+"""Per-field cap on extracted text, so one noisy card cannot blow up the payload."""
+
+EXTRACT_RESULTS_JS: Final = r"""(function(cfg) {
+  function q(parent, sel) {
+    try { return parent.querySelector(sel); } catch (e) { return null; }
+  }
+  function firstText(parent, sels) {
+    for (var i = 0; i < sels.length; i++) {
+      var el = q(parent, sels[i]);
+      if (!el) continue;
+      var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) return t.slice(0, cfg.maxTextChars);
+    }
+    return null;
+  }
+  function firstAttr(parent, sels, attrs) {
+    for (var i = 0; i < sels.length; i++) {
+      var el = q(parent, sels[i]);
+      if (!el) continue;
+      for (var j = 0; j < attrs.length; j++) {
+        var v = el.getAttribute(attrs[j]);
+        if (v) return v.slice(0, cfg.maxTextChars);
+      }
+    }
+    return null;
+  }
+  var nodes = null, used = null, total = 0;
+  for (var s = 0; s < cfg.itemSelectors.length; s++) {
+    var found;
+    try { found = document.querySelectorAll(cfg.itemSelectors[s]); } catch (e) { continue; }
+    if (found.length) {
+      nodes = Array.prototype.slice.call(found, 0, cfg.topK);
+      used = cfg.itemSelectors[s];
+      total = found.length;
+      break;
+    }
+  }
+  if (!nodes) return {selector: null, total: 0, items: []};
+  return {selector: used, total: total, items: nodes.map(function(p, i) {
+    var url = cfg.urlAttr ? p.getAttribute(cfg.urlAttr) : null;
+    if (!url) {
+      var a = (p.matches && p.matches('a[href]')) ? p : q(p, 'a[href]');
+      url = a ? a.getAttribute('href') : null;
+    }
+    return {
+      index: i,
+      title: firstText(p, cfg.titleSelectors),
+      url: url,
+      snippet: firstText(p, cfg.snippetSelectors),
+      price: firstText(p, cfg.priceSelectors),
+      image: firstAttr(p, cfg.imageSelectors, ['src', 'data-src'])
+    };
+  })};
+})(__CFG__)"""
+
+
+def build_extract_results_js(
+    config: ResultsConfig, top_k: int, max_text_chars: int = DEFAULT_MAX_TEXT_CHARS
+) -> str:
+    """Return ``EXTRACT_RESULTS_JS`` with the selector config embedded as JSON.
+
+    ``json.dumps`` output is valid JavaScript literal syntax, so selectors containing
+    quotes or backslashes are safe.
+    """
+    cfg = {
+        "itemSelectors": list(config.item_selectors),
+        "titleSelectors": list(config.title_selectors),
+        "snippetSelectors": list(config.snippet_selectors),
+        "priceSelectors": list(config.price_selectors),
+        "imageSelectors": list(config.image_selectors),
+        "urlAttr": config.url_attr,
+        "topK": top_k,
+        "maxTextChars": max_text_chars,
+    }
+    return EXTRACT_RESULTS_JS.replace("__CFG__", json.dumps(cfg))
+
+
+def _text(value: JsValue) -> str | None:
+    """A non-empty string from a JS field, else None."""
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
 
 
 class ResultsExtractor:
@@ -15,7 +110,7 @@ class ResultsExtractor:
         """Initialize results extractor.
 
         Args:
-            client: MCP browser client
+            client: Browser client
             config: Results configuration
             base_url: Base URL for resolving relative URLs
         """
@@ -30,27 +125,18 @@ class ResultsExtractor:
             Number of matching result items currently in the DOM.
         """
         for selector in self.config.item_selectors:
-            script = f"""
-            (function() {{
-                var items = document.querySelectorAll('{selector}');
-                return items.length;
-            }})()
-            """
+            script = f"document.querySelectorAll({json.dumps(selector)}).length"
             try:
-                count_str = await self.client.evaluate(script)
-                if not count_str or count_str in ("undefined", "null"):
-                    continue
-                count = int(count_str)
-                if count > 0:
-                    return count
-            except (ValueError, TypeError):
+                count = coerce_int(await self.client.evaluate(script))
+            except Exception as e:
+                logger.debug(f"Counting '{selector}' failed: {e}")
                 continue
-            except Exception:
-                continue
+            if count > 0:
+                return count
         return 0
 
     async def extract_results(self, top_k: int = 10) -> list[ResultItem]:
-        """Extract top-K search results from the page.
+        """Extract top-K search results from the page in one round trip.
 
         Args:
             top_k: Maximum number of results to extract
@@ -60,112 +146,45 @@ class ResultsExtractor:
         """
         logger.info(f"Extracting top {top_k} search results...")
 
-        # Find result items
-        items = await self._find_result_items()
-        if not items:
+        try:
+            raw = await self.client.evaluate(build_extract_results_js(self.config, top_k))
+        except Exception as e:
+            logger.warning(f"Result extraction script failed: {e}")
+            return []
+
+        entries = raw.get("items") if isinstance(raw, dict) else None
+        if not isinstance(entries, list) or not entries:
             logger.warning("No result items found")
             return []
 
-        logger.info(f"Found {len(items)} result items")
+        selector = raw.get("selector") if isinstance(raw, dict) else None
+        total = coerce_int(raw.get("total")) if isinstance(raw, dict) else len(entries)
+        logger.info(f"Found {total} items with selector: {selector}")
 
-        # Extract details for each item
         results: list[ResultItem] = []
-        for rank, (base_selector, index) in enumerate(items[:top_k], start=1):
-            try:
-                result = await self._extract_result_details(rank, base_selector, index)
-                if result:
-                    results.append(result)
-            except Exception as e:
-                logger.warning(f"Failed to extract result {rank}: {e}")
+        for rank, entry in enumerate(entries, start=1):
+            if not isinstance(entry, dict):
                 continue
+            results.append(self._to_result_item(rank, entry))
 
         logger.info(f"Successfully extracted {len(results)} results")
         return results
 
-    async def _find_result_items(self) -> list[tuple[str, int]]:
-        """Find all result item elements.
-
-        Returns:
-            List of (base_selector, index) tuples for result items.
-            Uses querySelectorAll indexing to reliably access the nth match,
-            avoiding nth-of-type which counts siblings of the same tag type
-            rather than matches of the CSS selector.
-        """
-        for selector in self.config.item_selectors:
-            logger.debug(f"Trying item selector: {selector}")
-
-            # Count matching elements
-            script = f"""
-            (function() {{
-                const items = document.querySelectorAll('{selector}');
-                return items.length;
-            }})()
-            """
-
-            try:
-                count_str = await self.client.evaluate(script)
-                logger.debug(f"Selector {selector} returned: {count_str!r}")
-                # Handle undefined/null responses
-                if not count_str or count_str in ["undefined", "null"]:
-                    logger.debug(f"Selector {selector} returned empty/undefined, trying next")
-                    count = 0
-                else:
-                    count = int(count_str)
-
-                if count > 0:
-                    logger.info(f"Found {count} items with selector: {selector}")
-                    return [(selector, i) for i in range(count)]
-                else:
-                    logger.debug(f"Selector {selector} found 0 items")
-            except (ValueError, TypeError) as e:
-                logger.debug(f"Selector {selector} failed to parse count '{count_str}': {e}")
-                continue
-            except Exception as e:
-                logger.debug(f"Selector {selector} failed: {e}")
-                continue
-
-        return []
-
-    async def _extract_result_details(
-        self, rank: int, base_selector: str, index: int
-    ) -> ResultItem | None:
-        """Extract details from a single result item.
-
-        Args:
-            rank: Result rank (1-indexed)
-            base_selector: CSS selector matching all result items
-            index: Zero-based index into querySelectorAll results
-
-        Returns:
-            ResultItem or None if extraction failed
-        """
-        logger.debug(f"Extracting details for result {rank}: {base_selector}[{index}]")
-
-        # Extract title
-        title = await self._extract_text_from_selectors(
-            base_selector, index, self.config.title_selectors
-        )
-
-        # Extract URL
-        url = await self._extract_url(base_selector, index)
-
-        # Additional attributes
+    def _to_result_item(self, rank: int, entry: dict[str, JsValue]) -> ResultItem:
+        """Build a ``ResultItem`` from one entry of the extraction script's output."""
         attributes: dict[str, str] = {}
 
-        # Validate extracted URL
+        url = _text(entry.get("url"))
         if url:
-            from urllib.parse import urlparse
-
+            url = urljoin(self.base_url, url)
             parsed_url = urlparse(url)
-            # Check for valid scheme
             if parsed_url.scheme not in ("http", "https", ""):
                 logger.warning(f"Result {rank}: invalid URL scheme '{parsed_url.scheme}': {url}")
                 url = None
             elif parsed_url.netloc:
-                # Check for off-domain URLs (ad network links etc.)
+                # Flag off-domain URLs (ad network links etc.), allowing subdomains.
                 base_netloc = urlparse(self.base_url).netloc
                 if base_netloc and parsed_url.netloc != base_netloc:
-                    # Allow subdomains of the base domain
                     base_domain = ".".join(base_netloc.split(".")[-2:])
                     url_domain = ".".join(parsed_url.netloc.split(".")[-2:])
                     if base_domain != url_domain:
@@ -176,116 +195,19 @@ class ResultsExtractor:
                             f" (expected: {base_netloc})"
                         )
 
-        # Extract snippet
-        snippet = await self._extract_text_from_selectors(
-            base_selector, index, self.config.snippet_selectors
-        )
-
-        # Extract price (optional)
-        price = await self._extract_text_from_selectors(
-            base_selector, index, self.config.price_selectors
-        )
-
-        # Extract image (optional)
-        image = await self._extract_image_url(base_selector, index)
+        image = _text(entry.get("image"))
+        if image:
+            image = urljoin(self.base_url, image)
 
         return ResultItem(
             rank=rank,
-            title=title,
+            title=_text(entry.get("title")),
             url=url,
-            snippet=snippet,
-            price=price,
+            snippet=_text(entry.get("snippet")),
+            price=_text(entry.get("price")),
             image=image,
             attributes=attributes,
         )
-
-    async def _extract_text_from_selectors(
-        self, base_selector: str, index: int, selectors: list[str]
-    ) -> str | None:
-        """Extract text from first matching child selector within a result item.
-
-        Uses querySelectorAll indexing to reliably access the parent element.
-
-        Args:
-            base_selector: CSS selector matching all result items
-            index: Zero-based index into querySelectorAll results
-            selectors: List of child selectors to try
-
-        Returns:
-            Extracted text or None
-        """
-        for selector in selectors:
-            script = f"""
-            (function() {{
-                var parent = document.querySelectorAll('{base_selector}')[{index}];
-                if (!parent) return null;
-                var el = parent.querySelector('{selector}');
-                if (!el) return null;
-                return (el.textContent || '').trim();
-            }})()
-            """
-            text = await self.client.evaluate(script)
-            if text and text not in ("null", "undefined", ""):
-                return str(text).strip()
-
-        return None
-
-    async def _extract_url(self, base_selector: str, index: int) -> str | None:
-        """Extract URL from result item.
-
-        Uses querySelectorAll indexing to reliably access the element.
-
-        Args:
-            base_selector: CSS selector matching all result items
-            index: Zero-based index into querySelectorAll results
-
-        Returns:
-            Absolute URL or None
-        """
-        script = f"""
-        (function() {{
-            var parent = document.querySelectorAll('{base_selector}')[{index}];
-            if (!parent) return null;
-            var url = parent.getAttribute('{self.config.url_attr}');
-            if (url) return url;
-            var a = parent.querySelector('a');
-            if (a) return a.getAttribute('href');
-            return null;
-        }})()
-        """
-        url = await self.client.evaluate(script)
-        if isinstance(url, str) and url and url not in ("null", "undefined"):
-            return urljoin(self.base_url, url)
-
-        return None
-
-    async def _extract_image_url(self, base_selector: str, index: int) -> str | None:
-        """Extract image URL from result item.
-
-        Uses querySelectorAll indexing to reliably access the element.
-
-        Args:
-            base_selector: CSS selector matching all result items
-            index: Zero-based index into querySelectorAll results
-
-        Returns:
-            Absolute image URL or None
-        """
-        for selector in self.config.image_selectors:
-            script = f"""
-            (function() {{
-                var parent = document.querySelectorAll('{base_selector}')[{index}];
-                if (!parent) return null;
-                var el = parent.querySelector('{selector}');
-                if (!el) return null;
-                return el.getAttribute('src') || el.getAttribute('data-src') || null;
-            }})()
-            """
-            src = await self.client.evaluate(script)
-            if isinstance(src, str) and src and src not in ("null", "undefined"):
-                return urljoin(self.base_url, src)
-
-        return None
 
     async def check_for_no_results(self) -> bool:
         """Check if page shows a 'no results' message.
@@ -305,14 +227,14 @@ class ResultsExtractor:
             for selector in self.config.no_results_selectors:
                 script = f"""
                 (function() {{
-                    var el = document.querySelector('{selector}');
+                    var el = document.querySelector({json.dumps(selector)});
                     if (!el) return false;
                     var style = window.getComputedStyle(el);
                     return style.display !== 'none' && style.visibility !== 'hidden';
                 }})()
                 """
                 result = await self.client.evaluate(script)
-                if result and str(result).lower() == "true":
+                if result is True:
                     logger.info(f"Detected no-results element via selector: '{selector}'")
                     return True
             return False
@@ -331,20 +253,20 @@ class ResultsExtractor:
         scope_script = """
         (function() {
             var container = document.querySelector('main, [role="main"], #content, .content');
-            if (container) return container.textContent.toLowerCase();
+            if (container) return container.textContent.toLowerCase().slice(0, 50000);
             // Fallback: body text minus header/footer/nav
             var clone = document.body.cloneNode(true);
             var exclude = clone.querySelectorAll('header, footer, nav, [role="banner"], [role="contentinfo"], [role="navigation"]');
             for (var i = 0; i < exclude.length; i++) exclude[i].remove();
-            return clone.textContent.toLowerCase();
+            return clone.textContent.toLowerCase().slice(0, 50000);
         })()
         """
 
         scoped_text = await self.client.evaluate(scope_script)
-        if not scoped_text or scoped_text in ("null", "undefined"):
+        if not isinstance(scoped_text, str) or not scoped_text:
             return False
 
-        scoped_text_lower = str(scoped_text).lower()
+        scoped_text_lower = scoped_text.lower()
         for pattern in no_results_patterns:
             if pattern in scoped_text_lower:
                 logger.info(f"Detected no results message: '{pattern}'")

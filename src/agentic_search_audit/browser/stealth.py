@@ -145,7 +145,7 @@ def mouse_jitter_js(target_x: int, target_y: int, steps: int = 5) -> str:
         f"new MouseEvent('mousemove',{{clientX:{x},clientY:{y},bubbles:true}}));"
         for x, y in points
     )
-    return f"""(async () => {{
+    return f"""(() => {{
     {dispatches}
 }})()"""
 

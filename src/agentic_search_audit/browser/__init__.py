@@ -1,11 +1,12 @@
 """Browser automation module."""
 
-from .errors import BrowserErrorKind, classify_error, is_retryable
+from .errors import BrowserErrorKind, BrowserScriptError, classify_error, is_retryable
 from .factory import create_browser_client
 from .playwright_client import PlaywrightBrowserClient
 
 __all__ = [
     "BrowserErrorKind",
+    "BrowserScriptError",
     "PlaywrightBrowserClient",
     "classify_error",
     "create_browser_client",

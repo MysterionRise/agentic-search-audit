@@ -219,9 +219,12 @@ class TestCDPDOMMethods:
         connected_client._page.click.assert_awaited_once_with("button.submit", timeout=7000)
 
     async def test_evaluate(self, connected_client: CDPBrowserClient) -> None:
-        connected_client._page.evaluate = AsyncMock(return_value="hello")
+        from agentic_search_audit.browser._js import wrap_expression
+
+        connected_client._page.evaluate = AsyncMock(return_value='{"ok": true, "v": "hello"}')
         result = await connected_client.evaluate("'hello'")
         assert result == "hello"
+        connected_client._page.evaluate.assert_awaited_once_with(wrap_expression("'hello'"))
 
     async def test_get_html(self, connected_client: CDPBrowserClient) -> None:
         connected_client._page.content = AsyncMock(return_value="<html></html>")

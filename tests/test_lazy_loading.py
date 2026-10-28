@@ -46,7 +46,7 @@ async def test_count_visible_results_returns_count():
     from agentic_search_audit.extractors.results import ResultsExtractor
 
     client = AsyncMock()
-    client.evaluate = AsyncMock(return_value="7")
+    client.evaluate = AsyncMock(return_value=7)
     config = ResultsConfig(item_selectors=[".product-card"])
     extractor = ResultsExtractor(client, config, "https://example.com")
 
@@ -61,7 +61,7 @@ async def test_count_visible_results_fallback_selectors():
 
     client = AsyncMock()
     # First selector returns 0, second returns 3
-    client.evaluate = AsyncMock(side_effect=["0", "3"])
+    client.evaluate = AsyncMock(side_effect=[0, 3])
     config = ResultsConfig(item_selectors=[".nope", ".product-card"])
     extractor = ResultsExtractor(client, config, "https://example.com")
 
@@ -75,7 +75,7 @@ async def test_count_visible_results_returns_zero_when_none():
     from agentic_search_audit.extractors.results import ResultsExtractor
 
     client = AsyncMock()
-    client.evaluate = AsyncMock(return_value="0")
+    client.evaluate = AsyncMock(return_value=0)
     config = ResultsConfig(item_selectors=[".product-card"])
     extractor = ResultsExtractor(client, config, "https://example.com")
 
@@ -205,7 +205,7 @@ async def test_click_load_more_via_text_pattern():
     # All CSS selectors fail
     client.query_selector = AsyncMock(return_value=None)
     # Text pattern match succeeds
-    client.evaluate = AsyncMock(return_value="true")
+    client.evaluate = AsyncMock(return_value=True)
 
     result = await orch._click_load_more()
     assert result is True
@@ -216,7 +216,7 @@ async def test_click_load_more_returns_false_when_nothing_found():
     """_click_load_more returns False when no button found."""
     orch, client, _ = _make_orchestrator()
     client.query_selector = AsyncMock(return_value=None)
-    client.evaluate = AsyncMock(return_value="false")
+    client.evaluate = AsyncMock(return_value=False)
 
     result = await orch._click_load_more()
     assert result is False

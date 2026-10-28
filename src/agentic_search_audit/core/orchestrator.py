@@ -335,6 +335,17 @@ class SearchAuditOrchestrator:
         """Decay throttle multiplier toward 1.0 after successful queries."""
         self._throttle_multiplier = max(self._throttle_multiplier * 0.9, 1.0)
 
+    async def _current_url(self) -> str:
+        """Return the page's current URL, falling back to the configured site URL."""
+        if self.client is None:
+            return str(self.config.site.url)
+        try:
+            url = await self.client.evaluate("window.location.href")
+        except Exception as e:
+            logger.debug(f"Could not read window.location.href: {e}")
+            return str(self.config.site.url)
+        return url if isinstance(url, str) and url else str(self.config.site.url)
+
     async def _navigate_to_site(self) -> None:
         """Navigate to the site and handle initial modals."""
         if not self.client:
@@ -495,9 +506,7 @@ class SearchAuditOrchestrator:
                     query=query,
                     timeout_ms=self.config.run.pdp_timeout_ms,
                 )
-                search_page_url = await self.client.evaluate("window.location.href") or str(
-                    self.config.site.url
-                )
+                search_page_url = await self._current_url()
                 items = await pdp_analyzer.analyze_pdps(
                     items=items,
                     search_page_url=search_page_url,
@@ -527,11 +536,11 @@ class SearchAuditOrchestrator:
         html_content = await self.client.get_html()
 
         # Evaluate with LLM judge
-        current_url = await self.client.evaluate("window.location.href")
+        current_url = await self._current_url()
         judge_score = await self.judge.evaluate(
             query=query,
             results=items,
-            page_url=current_url or str(self.config.site.url),
+            page_url=current_url,
             html_content=html_content,
             site_name=str(self.config.site.url),
             locale=self.config.site.locale,
@@ -648,7 +657,7 @@ class SearchAuditOrchestrator:
             """
             try:
                 result = await self.client.evaluate(js)
-                if result and str(result).lower() == "true":
+                if result is True:
                     logger.debug(f"Clicked Load-More via text pattern: '{pattern}'")
                     return True
             except Exception:
@@ -693,15 +702,9 @@ class SearchAuditOrchestrator:
         except Exception as e:
             logger.warning(f"Failed to capture HTML for '{query.text}': {e}")
 
-        # Get current URL (safe)
-        try:
-            current_url = await self.client.evaluate("window.location.href")
-        except Exception:
-            current_url = None
-
         return PageArtifacts(
             url=str(self.config.site.url),
-            final_url=current_url or str(self.config.site.url),
+            final_url=await self._current_url(),
             html_path=str(html_path),
             screenshot_path=str(screenshot_path),
             ts=datetime.now(),

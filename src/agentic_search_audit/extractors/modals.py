@@ -1,11 +1,51 @@
 """Modal and popup handling."""
 
 import asyncio
+import json
 import logging
+import re
 
 from ..core.types import BrowserClient, LocationConfig, ModalsConfig
 
 logger = logging.getLogger(__name__)
+
+# Containers that count as "a modal is open" for both _check_modal_overlay and
+# _find_close_button.
+_OVERLAY_CONTAINER_SELECTOR = (
+    '[role="dialog"], [role="alertdialog"], [class*="modal"], [class*="overlay"], [class*="popup"]'
+)
+
+# Tags the consent-platform API script returns; anything else is not a dismissal.
+_CONSENT_API_TAGS = frozenset(
+    {"uc_api", "uc_cmp", "didomi_api", "didomi_ready", "axeptio_api", "iubenda_api"}
+)
+
+_FIND_CLOSE_BUTTON_JS = r"""
+(function() {
+    const pattern = new RegExp(__PATTERN__, 'i');
+    const anchored = new RegExp('^\\s*(?:' + __PATTERN__ + ')\\s*$', 'i');
+    const containers = Array.from(document.querySelectorAll(
+        '[role="dialog"], [role="alertdialog"], [class*="modal"], [class*="overlay"], [class*="popup"]'
+    )).filter(function(c) {
+        const r = c.getBoundingClientRect();
+        return r.width > 100 && r.height > 100;
+    });
+    if (!containers.length) return null;
+    const elements = Array.from(document.querySelectorAll(__SELECTOR__));
+    for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (!containers.some(function(c) { return c.contains(el); })) continue;
+        const text = (el.textContent || '').trim();
+        const label = el.getAttribute('aria-label') || '';
+        if (!(anchored.test(text) || (label && pattern.test(label)))) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            return { selector: __SELECTOR__, index: i, text: (text || label).slice(0, 80) };
+        }
+    }
+    return null;
+})()
+"""
 
 # Common location/region/shipping modal selectors for US retailers
 LOCATION_MODAL_SELECTORS = [
@@ -148,30 +188,35 @@ class ModalHandler:
             location_dismissed = await self._try_location_modals()
             dismissed_count += location_dismissed
 
-        # Then try text-based matching for other modals
+        # Then try text-based close buttons, but only while an overlay is actually visible
+        # (a second dismiss_modals() call on a clean page must not click anything).
         for attempt in range(self.config.max_auto_clicks):
-            # Look for buttons/links with close text
+            if not await self._check_modal_overlay():
+                logger.debug("No modal overlay visible")
+                break
             close_button = await self._find_close_button()
+            if not close_button:
+                logger.debug("No close button found in the visible overlay")
+                break
 
-            if close_button:
-                base_selector, index = close_button
-                try:
-                    logger.debug(f"Attempting to close modal (attempt {attempt + 1})")
-                    click_script = f"""
-                    (function() {{
-                        var el = document.querySelectorAll('{base_selector}')[{index}];
-                        if (el) {{ el.click(); return true; }}
-                        return false;
-                    }})()
-                    """
-                    await self.client.evaluate(click_script)
-                    await asyncio.sleep(self.config.wait_after_close_ms / 1000)
-                    dismissed_count += 1
-                except Exception as e:
-                    logger.debug(f"Failed to click close button: {e}")
+            base_selector, index = close_button
+            try:
+                logger.debug(f"Attempting to close modal (attempt {attempt + 1})")
+                click_script = f"""
+                (function() {{
+                    var el = document.querySelectorAll({json.dumps(base_selector)})[{index}];
+                    if (el) {{ el.click(); return true; }}
+                    return false;
+                }})()
+                """
+                clicked = await self.client.evaluate(click_script)
+                if clicked is not True:
+                    logger.debug("Close button disappeared before it could be clicked")
                     break
-            else:
-                logger.debug("No more modals found")
+                await asyncio.sleep(self.config.wait_after_close_ms / 1000)
+                dismissed_count += 1
+            except Exception as e:
+                logger.debug(f"Failed to click close button: {e}")
                 break
 
         # Last resort: try Escape key to dismiss any remaining overlay
@@ -195,8 +240,8 @@ class ModalHandler:
         for selector in COOKIE_CONSENT_SELECTORS:
             try:
                 # Check if selector exists and is visible
-                result = await self.client.query_selector(selector)
-                if result:
+                element = await self.client.query_selector(selector)
+                if element:
                     logger.info(f"Found cookie consent button: {selector}")
                     await self.client.click(selector)
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
@@ -249,8 +294,8 @@ class ModalHandler:
                         return false;
                     })()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
-                    logger.info(f"Dismissed consent via Usercentrics API: {result}")
+                if isinstance(result, str) and result in _CONSENT_API_TAGS:
+                    logger.info(f"Dismissed consent via consent-platform API: {result}")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
             except Exception as e:
@@ -261,7 +306,22 @@ class ModalHandler:
             try:
                 result = await self.client.evaluate("""
                     (function() {
-                        // Find all visible buttons and links with consent-related text
+                        // Find visible consent buttons by text, but only inside something that
+                        // looks like a consent banner: otherwise "Continue shopping" would match.
+                        const scopePattern = /cookie|consent|privacy|gdpr|cmp|onetrust|didomi|usercentrics|trustarc|quantcast|cookiebot|axeptio|iubenda/i;
+                        function inConsentContainer(el) {
+                            let node = el;
+                            for (let depth = 0; node && depth < 12; depth++) {
+                                if (node.nodeType === 1) {
+                                    const cls = typeof node.className === 'string' ? node.className : '';
+                                    const marker = [node.id || '', cls, node.getAttribute('aria-label') || '',
+                                                    node.getAttribute('data-testid') || ''].join(' ');
+                                    if (scopePattern.test(marker)) return true;
+                                }
+                                node = node.parentElement || (node.getRootNode && node.getRootNode().host) || null;
+                            }
+                            return false;
+                        }
                         const acceptPatterns = /accept|agree|allow|consent|got it|continue/i;
                         const rejectPatterns = /reject|decline|deny|necessary only|only essential/i;
 
@@ -274,11 +334,13 @@ class ModalHandler:
 
                         for (const el of candidates) {
                             const text = (el.textContent || el.innerText || '').trim();
+                            if (!text || text.length > 40) continue;
                             const rect = el.getBoundingClientRect();
 
                             // Skip if not visible
                             if (rect.width === 0 || rect.height === 0) continue;
                             if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+                            if (!inConsentContainer(el)) continue;
 
                             // Track accept and reject buttons separately
                             if (acceptPatterns.test(text) && !rejectPatterns.test(text)) {
@@ -292,13 +354,13 @@ class ModalHandler:
                         const target = acceptButton || rejectButton;
                         if (target) {
                             target.el.click();
-                            return target.text.substring(0, 50);
+                            return {clicked: true, text: target.text.substring(0, 50)};
                         }
                         return false;
                     })()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
-                    logger.info(f"Clicked consent button with text: {result}")
+                if isinstance(result, dict) and result.get("clicked") is True:
+                    logger.info(f"Clicked consent button with text: {result.get('text', '')}")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
             except Exception as e:
@@ -309,7 +371,22 @@ class ModalHandler:
             try:
                 result = await self.client.evaluate("""
                     (function() {
-                        // Try to find consent button by text in shadow DOMs
+                        // Try to find a consent button by text, including inside shadow DOMs,
+                        // but only inside something that looks like a consent banner.
+                        const scopePattern = /cookie|consent|privacy|gdpr|cmp|onetrust|didomi|usercentrics|trustarc|quantcast|cookiebot|axeptio|iubenda/i;
+                        function inConsentContainer(el) {
+                            let node = el;
+                            for (let depth = 0; node && depth < 12; depth++) {
+                                if (node.nodeType === 1) {
+                                    const cls = typeof node.className === 'string' ? node.className : '';
+                                    const marker = [node.id || '', cls, node.getAttribute('aria-label') || '',
+                                                    node.getAttribute('data-testid') || ''].join(' ');
+                                    if (scopePattern.test(marker)) return true;
+                                }
+                                node = node.parentElement || (node.getRootNode && node.getRootNode().host) || null;
+                            }
+                            return false;
+                        }
                         const acceptTexts = ['Accept All', 'Accept all', 'Agree', 'Accept'];
 
                         // Helper to search within element and its shadow DOM
@@ -317,9 +394,10 @@ class ModalHandler:
                             // Check buttons in this root
                             const buttons = root.querySelectorAll('button, [role="button"]');
                             for (const btn of buttons) {
-                                const text = btn.textContent || btn.innerText || '';
+                                const text = (btn.textContent || btn.innerText || '').trim();
+                                if (!text || text.length > 40) continue;
                                 for (const acceptText of acceptTexts) {
-                                    if (text.includes(acceptText)) {
+                                    if (text.includes(acceptText) && inConsentContainer(btn)) {
                                         return btn;
                                     }
                                 }
@@ -343,7 +421,7 @@ class ModalHandler:
                         return false;
                     })()
                 """)
-                if result == "true":
+                if result is True:
                     logger.info("Found and clicked consent button via shadow DOM search")
                     await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                     dismissed += 1
@@ -389,7 +467,7 @@ class ModalHandler:
                                 if (rect.width === 0 || rect.height === 0) continue;
                                 if (acceptPatterns.test(text)) {
                                     btn.click();
-                                    return text.substring(0, 50);
+                                    return {clicked: true, text: text.substring(0, 50)};
                                 }
                             }
                         } catch (e) {
@@ -400,8 +478,8 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
-                logger.info(f"Dismissed consent via iframe: {result}")
+            if isinstance(result, dict) and result.get("clicked") is True:
+                logger.info(f"Dismissed consent via iframe: {result.get('text', '')}")
                 await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                 return 1
         except Exception as e:
@@ -425,8 +503,8 @@ class ModalHandler:
         # Step 1: Try known CSS selectors for location modals
         for selector in LOCATION_MODAL_SELECTORS:
             try:
-                result = await self.client.query_selector(selector)
-                if result:
+                element = await self.client.query_selector(selector)
+                if element:
                     logger.info(f"Found location modal element: {selector}")
                     # Found a location modal container — try to dismiss it
                     dismissed += await self._dismiss_location_dialog(location_config)
@@ -460,7 +538,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
+            if result is True:
                 logger.info("Detected location modal via text pattern matching")
                 dismissed += await self._dismiss_location_dialog(location_config)
         except Exception as e:
@@ -511,7 +589,7 @@ class ModalHandler:
                         return false;
                     }})()
                 """)
-                if result and result not in ["false", "undefined", "null"]:
+                if result is True:
                     logger.info(f"Entered ZIP code: {location_config.default_zip_code}")
                     await asyncio.sleep(0.3)
             except Exception as e:
@@ -545,7 +623,7 @@ class ModalHandler:
                             if (btnRect.width === 0 || btnRect.height === 0) continue;
                             if (confirmPatterns.test(text)) {
                                 btn.click();
-                                return text.substring(0, 50);
+                                return {clicked: true, text: text.substring(0, 50)};
                             }
                         }
                         // Second pass: broader match
@@ -555,7 +633,7 @@ class ModalHandler:
                             if (btnRect.width === 0 || btnRect.height === 0) continue;
                             if (broadPatterns.test(text)) {
                                 btn.click();
-                                return text.substring(0, 50);
+                                return {clicked: true, text: text.substring(0, 50)};
                             }
                         }
 
@@ -566,14 +644,14 @@ class ModalHandler:
                         );
                         if (closeBtn) {
                             closeBtn.click();
-                            return 'close-button';
+                            return {clicked: true, text: 'close-button'};
                         }
                     }
                     return false;
                 })()
             """)
-            if result and result not in ["false", "undefined", "null"]:
-                logger.info(f"Dismissed location modal by clicking: {result}")
+            if isinstance(result, dict) and result.get("clicked") is True:
+                logger.info(f"Dismissed location modal by clicking: {result.get('text', '')}")
                 await asyncio.sleep(self.config.wait_after_close_ms / 1000)
                 return 1
         except Exception as e:
@@ -603,7 +681,7 @@ class ModalHandler:
                     return false;
                 })()
             """)
-            return result and result not in ["false", "undefined", "null"]
+            return result is True
         except Exception as e:
             logger.debug(f"Modal overlay check failed: {e}")
             return False
@@ -638,8 +716,10 @@ class ModalHandler:
             avoiding nth-of-type which counts siblings of the same tag type
             rather than matches of the CSS selector.
         """
-        # Build regex pattern from close text matches
-        pattern = "|".join(self.config.close_text_matches)
+        # Build regex pattern from close text matches (escaped: "×", "no thanks", ...)
+        pattern = "|".join(re.escape(text) for text in self.config.close_text_matches)
+        if not pattern:
+            return None
 
         # Common modal close button selectors
         selectors = [
@@ -653,44 +733,22 @@ class ModalHandler:
         ]
 
         for base_selector in selectors:
-            # Find all matching elements
-            script = f"""
-            (function() {{
-                const pattern = /{pattern}/i;
-                const elements = Array.from(document.querySelectorAll('{base_selector}'));
-
-                for (let i = 0; i < elements.length; i++) {{
-                    const el = elements[i];
-                    const text = el.textContent || el.getAttribute('aria-label') || '';
-
-                    if (pattern.test(text)) {{
-                        // Check if element is visible
-                        const rect = el.getBoundingClientRect();
-                        if (rect.width > 0 && rect.height > 0) {{
-                            return {{
-                                selector: '{base_selector}',
-                                index: i,
-                                text: text.trim()
-                            }};
-                        }}
-                    }}
-                }}
-                return null;
-            }})()
-            """
+            # Find a visible candidate inside a visible overlay container whose trimmed text
+            # IS one of the close words (anchored) or whose aria-label mentions one.
+            script = _FIND_CLOSE_BUTTON_JS.replace("__PATTERN__", json.dumps(pattern)).replace(
+                "__SELECTOR__", json.dumps(base_selector)
+            )
 
             try:
-                result = await self.client.evaluate(script)
-                if result and isinstance(result, str):
-                    import json
-
-                    data = json.loads(result)
-                    if data:
-                        logger.debug(
-                            f"Found close button: {data['selector']}[{data['index']}]"
-                            f" with text '{data['text']}'"
-                        )
-                        return (data["selector"], data["index"])
+                found = await self.client.evaluate(script)
+                index = found.get("index") if isinstance(found, dict) else None
+                if isinstance(found, dict) and isinstance(index, int) and index is not True:
+                    selector = str(found.get("selector") or base_selector)
+                    logger.debug(
+                        f"Found close button: {selector}[{index}]"
+                        f" with text '{found.get('text', '')}'"
+                    )
+                    return (selector, index)
             except Exception as e:
                 logger.debug(f"Error evaluating script for {base_selector}: {e}")
                 continue

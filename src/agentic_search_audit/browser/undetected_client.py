@@ -10,6 +10,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ..core.types import JsValue
+from ._js import decode_result, wrap_expression
+from .errors import BrowserScriptError
 from .stealth import (
     human_typing_delay,
     pre_action_delay,
@@ -65,6 +68,17 @@ def detect_chrome_version() -> int | None:
 
     logger.debug("Could not detect Chrome version on %s", system)
     return None
+
+
+def _is_selenium_js_error(exc: BaseException) -> bool:
+    """True for Selenium's JavascriptException (the script did not parse or run)."""
+    try:
+        from selenium.common.exceptions import (  # type: ignore[import-not-found]
+            JavascriptException,
+        )
+    except ImportError:
+        return False
+    return isinstance(exc, JavascriptException)
 
 
 class UndetectedBrowserClient:
@@ -282,21 +296,17 @@ class UndetectedBrowserClient:
 
         return await asyncio.to_thread(_query_all)
 
-    async def evaluate(self, expression: str) -> Any:
+    async def evaluate(self, expression: str) -> JsValue:
         if not self._driver:
             raise RuntimeError("Browser not connected")
-
-        def _eval() -> Any:
-            result = self._driver.execute_script(f"return {expression.strip()}")
-            if result is None:
-                return None
-            return str(result) if not isinstance(result, str) else result
-
+        script = "return " + wrap_expression(expression)
         try:
-            return await asyncio.to_thread(_eval)
-        except Exception as e:
-            logger.debug(f"Evaluate failed: {e}")
-            return None
+            raw = await asyncio.to_thread(self._driver.execute_script, script)
+        except Exception as exc:
+            if _is_selenium_js_error(exc):
+                raise BrowserScriptError("syntax", str(exc)) from exc
+            raise
+        return decode_result(raw)
 
     async def click(self, selector: str) -> None:
         if not self._driver:
