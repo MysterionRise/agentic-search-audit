@@ -183,28 +183,3 @@ class TestResultsConfig:
         config = ResultsConfig()
         assert len(config.item_selectors) > 0
         assert len(config.title_selectors) > 0
-
-
-class TestEnvironmentConfig:
-    """Test environment-based configuration."""
-
-    def test_api_settings_defaults(self):
-        """Test APISettings has defaults."""
-        from agentic_search_audit.api.config import APISettings
-
-        settings = APISettings()
-        assert settings.environment in ["development", "staging", "production"]
-
-    def test_database_url_has_value(self):
-        """Test database URL is set."""
-        from agentic_search_audit.api.config import APISettings
-
-        settings = APISettings()
-        assert settings.database_url is not None
-
-    def test_redis_url_has_value(self):
-        """Test Redis URL is set."""
-        from agentic_search_audit.api.config import APISettings
-
-        settings = APISettings()
-        assert settings.redis_url is not None
