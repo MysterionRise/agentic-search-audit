@@ -47,7 +47,7 @@ dev = [
     # and CI all run them through `uv run`, so this is the single place to bump them.
     "black==26.10.1",
     "ruff==0.14.14",
-    "mypy==1.19.1",
+    "mypy==2.4.0",
     "types-pyyaml>=6.0",
     "pre-commit>=4.2",
     "build>=1.2",
