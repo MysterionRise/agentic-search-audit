@@ -44,7 +44,7 @@ site:
 
     # Intelligent fallback settings
     use_intelligent_fallback: true  # Enable LLM-based detection
-    intelligent_detection_model: "gpt-4o-mini"  # OpenAI model to use
+    intelligent_detection_model: "gpt-4o-mini"  # optional; defaults to llm.model
 
     submit_strategy: "enter"
     submit_selector: null
@@ -52,8 +52,8 @@ site:
 
 ## Requirements
 
-- **OpenAI API Key**: Set `OPENAI_API_KEY` environment variable
-- **Vision-capable model**: Use `gpt-4o-mini` or `gpt-4o` (recommended: `gpt-4o-mini` for cost)
+- **A vision-capable provider**: the detection uses `llm.provider` with `search.intelligent_detection_model` (or `llm.model`); OpenAI, OpenRouter, vLLM and Anthropic are supported, so set the matching key (`OPENROUTER_API_KEY` for the shipped site configs)
+- **Vision-capable model**: for example `gpt-4o-mini`, `openai/gpt-4o` on OpenRouter, or a local LLaVA / Qwen-VL on vLLM
 
 ## Benefits
 

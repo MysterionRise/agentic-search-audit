@@ -9,14 +9,14 @@ The intelligent search box detection feature supports multiple vision model prov
 - **vLLM** - Local or self-hosted vision models (no API costs, full privacy)
 - **OpenRouter** - Cloud-based unified API for multiple vision models (Qwen-VL, Claude, GPT-4V, etc.)
 - **OpenAI** - Direct OpenAI API (GPT-4o, GPT-4o-mini with vision)
-- **Anthropic** - Claude 3.5 Sonnet (coming soon)
+- **Anthropic** - Claude models (judge, vision and query generation; the expert panel needs an OpenAI-compatible provider)
 
 ## Supported Providers
 
 1. **vLLM** - Local or self-hosted vision models (LLaVA, Qwen-VL, etc.)
 2. **OpenRouter** - Cloud API gateway for multiple vision models
 3. **OpenAI** - GPT-4o, GPT-4o-mini with vision
-4. **Anthropic** - Claude 3.5 Sonnet (coming soon)
+4. **Anthropic** - Claude models
 
 ## Quick Start with vLLM
 
@@ -226,7 +226,7 @@ OPENROUTER_API_KEY=sk-or-v1-...
 # For OpenAI direct API
 OPENAI_API_KEY=sk-...
 
-# For Anthropic (future)
+# For Anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 

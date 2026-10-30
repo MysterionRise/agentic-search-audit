@@ -4,9 +4,9 @@ Quick guide for presenting a live demo of the search quality audit tool.
 
 ## Prerequisites
 
-- **Python 3.11+** installed
+- **Python 3.10+** installed
 - **Google Chrome** installed (latest stable)
-- **pip install -e ".[dev]"** completed
+- **`make bootstrap`** completed (installs the `undetected` extra the demo sites use)
 - **OPENROUTER_API_KEY** exported in your shell
 
 ```bash
@@ -27,7 +27,7 @@ This runs 5 queries against Amazon with a visible browser. Takes ~3 minutes.
 ./scripts/demo.sh
 ```
 
-Runs Amazon, Target, and Best Buy sequentially (5 queries each). Takes ~10 minutes total.
+Runs the sites listed at the top of `scripts/demo.sh` sequentially (5 queries each). Takes ~10 minutes total.
 
 ## Recommended Demo Flow (~12 min)
 
@@ -41,7 +41,7 @@ Runs Amazon, Target, and Best Buy sequentially (5 queries each). Takes ~10 minut
 | 5:30   | Walk through: FQI hero score, radar chart, band distribution |
 | 7:00   | Drill into individual query cards (verdict bar, dimension scores) |
 | 8:00   | Show findings section and maturity assessment |
-| 9:00   | Mention coverage: 35+ retailer configs ready to go |
+| 9:00   | Mention coverage: 43 retailer configs ready to go |
 | 10:00  | Show the config system: YAML + query JSON |
 | 11:00  | Q&A |
 
@@ -53,7 +53,7 @@ Runs Amazon, Target, and Best Buy sequentially (5 queries each). Takes ~10 minut
 | API timeout | The tool auto-falls back to score=0 and continues. Mention this is by design. |
 | Browser won't start | Ensure Chrome is installed. Try `--browser playwright` as fallback. |
 | No results extracted | CSS selectors may have changed. Use pre-generated reports as backup. |
-| `search-audit` not found | Run `pip install -e ".[dev]"` from project root. |
+| `search-audit` not found | Run `make bootstrap` from the project root and prefix commands with `uv run`. |
 | `OPENROUTER_API_KEY` error | Export the key: `export OPENROUTER_API_KEY=sk-or-...` |
 
 ## Backup Plan

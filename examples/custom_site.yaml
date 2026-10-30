@@ -1,123 +1,112 @@
-# Example: Custom site configuration template
-# Copy this file to configs/sites/your-site.yaml and customize
+# Example: a complete site configuration.
+# Copy to configs/sites/<name>.yaml and keep only what differs from configs/default.yaml.
+# Unknown keys are rejected at load time, so typos surface immediately.
 
 site:
   url: "https://www.your-site.com"
-  locale: "en-US"
+  locale: "en-US"                     # BCP-47; feeds browser locale and judge language
 
   search:
-    # Try these selectors in order to find the search input
+    # Tried in order to find the search input
     input_selectors:
       - 'input[type="search"]'
       - 'input[aria-label*="Search" i]'
       - 'input[name="q"]'
       - 'input[placeholder*="Search" i]'
-      - '#search'
-      - '.search-input'
-
-    # How to submit the search
-    # Options: "enter" (press Enter key) or "clickSelector" (click a button)
-    submit_strategy: "enter"
-
-    # If using "clickSelector", specify the button selector
-    submit_selector: null  # e.g., 'button[type="submit"]'
+    submit_strategy: "enter"          # "enter" or "clickSelector"
+    submit_selector: null             # e.g. 'button[type="submit"]' with clickSelector
+    trigger_selector: null            # click this first on overlay-style search UIs
+    # Skip search-box detection entirely when the site has a search URL:
+    search_url_template: null         # e.g. "https://www.your-site.com/search?q={query}"
+    use_intelligent_fallback: true    # vision-model fallback when selectors fail
+    intelligent_detection_model: null # model for that fallback; defaults to llm.model
 
   results:
-    # Selectors for result item containers
-    item_selectors:
+    item_selectors:                   # result containers, first match wins
       - '[data-testid*="product"]'
       - '.product-card'
-      - '.search-result'
       - 'article'
-
-    # Selectors for result titles (within each item)
-    title_selectors:
-      - 'h2'
-      - 'h3'
-      - '.product-title'
-      - 'a[title]'
-
-    # Attribute containing the result URL
-    url_attr: 'href'
-
-    # Selectors for result descriptions/snippets
-    snippet_selectors:
-      - '.description'
-      - '.product-subtitle'
-      - 'p'
-
-    # Selectors for prices (optional)
-    price_selectors:
-      - '.price'
-      - '[data-testid*="price"]'
-      - 'span[class*="price"]'
-
-    # Selectors for images (optional)
-    image_selectors:
-      - 'img'
-      - '[data-testid*="image"]'
+    title_selectors: ['h2', 'h3', '.product-title', 'a[title]']
+    url_attr: 'href'                  # attribute on the item, else the first <a href>
+    snippet_selectors: ['.description', '.product-subtitle', 'p']
+    price_selectors: ['.price', '[data-testid*="price"]']
+    image_selectors: ['img']
+    no_results_selectors: []          # e.g. ['.no-results']; empty = text heuristic
 
   modals:
-    # Text patterns for close buttons (case-insensitive)
-    close_text_matches:
-      - "accept"
-      - "agree"
-      - "continue"
-      - "got it"
-      - "close"
-      - "dismiss"
-      - "no thanks"
-
-    # Maximum number of automatic modal dismissals
+    close_text_matches: ["accept", "agree", "continue", "got it", "close", "dismiss", "no thanks"]
     max_auto_clicks: 3
-
-    # Wait time after closing modal (milliseconds)
     wait_after_close_ms: 500
+    location:                         # "choose your country / enter ZIP" dialogs
+      enabled: true
+      default_country: "United States"
+      default_zip_code: "10001"
 
 run:
-  # Number of top results to extract
   top_k: 10
-
-  # Browser viewport size
   viewport_width: 1366
   viewport_height: 900
-
-  # Network idle timeout (milliseconds)
   network_idle_ms: 1200
-
-  # Wait after submitting search (milliseconds)
   post_submit_ms: 800
-
-  # Run browser in headless mode
   headless: true
-
-  # Rate limit (requests per second)
   throttle_rps: 0.5
-
-  # Random seed for reproducible LLM outputs
   seed: 42
+  max_retries: 2
+  retry_backoff_base: 2.0
+  click_timeout_ms: 5000
+
+  # Time budgets (seconds). query_timeout_s overrides the derived budget.
+  browser_budget_s: 90
+  query_timeout_s: null
+
+  # Lazy loading / infinite scroll
+  max_scroll_attempts: 5
+  scroll_step_px: 800
+  scroll_pause_ms: 1500
+  load_more_selectors: ['button[class*="load-more" i]', 'button[class*="show-more" i]']
+  load_more_text_patterns: ["load more", "show more"]
+
+  # Extraction
+  use_vision_extraction: false        # vision-first instead of CSS-first
+  enable_pdp_analysis: false          # click into the top product pages
+  pdp_top_k: 3
+  pdp_timeout_ms: 15000
+
+  # Browser backend: playwright | undetected | cdp | chrome_devtools_mcp | kimi_webbridge | playwright_mcp
+  browser_backend: playwright
+  cdp_endpoint: null                  # ws://localhost:9222 for cdp
+  bridge:                             # bridge backends only
+    mode: autoconnect                 # autoconnect | browser_url | launch
+    browser_url: null                 # http://127.0.0.1:9222 for mode: browser_url
+    allow_profile_mutations: false    # keep false on a real logged-in profile
+    connect_timeout_s: 60
+    tool_timeout_s: 30
+
+  # Identity (launched backends only; bridges on a real profile skip all of this)
+  ua_rotation_strategy: per-site      # per-site | per-query
+  cookie_clear_interval: 5            # queries between cookie wipes; 0 disables
+  proxy_url: null
+  proxy_rotation_strategy: none       # none | per-site | per-query (needs >= 2 proxies)
+  proxy_list: null
 
 llm:
-  # LLM provider: "openai" or "anthropic"
-  provider: "openai"
-
-  # Model identifier
-  model: "gpt-4o-mini"
-
-  # Maximum tokens in response
-  max_tokens: 800
-
-  # Sampling temperature (lower = more deterministic)
+  provider: "openrouter"              # openai | anthropic | vllm | openrouter
+  model: "openai/gpt-4o"
+  max_tokens: 2000
   temperature: 0.2
-
-  # Custom system prompt (null = use default)
   system_prompt: null
+  base_url: null                      # for vllm / openrouter
+  api_key: null                       # or the provider's environment variable
+  timeout: 30                         # seconds per judge / expert call
+  vision_timeout: 90                  # seconds per vision call
+  max_concurrent: 3
+  min_request_interval_s: 0.5
 
 report:
-  # Output formats: "md", "html", "json"
-  formats:
-    - "md"
-    - "html"
-
-  # Output directory
+  formats: ["md", "html"]             # md | html | json
   out_dir: "./runs"
+
+compliance:
+  respect_robots_txt: true
+  user_agent: "AgenticSearchAudit/1.0"
+  robots_timeout: 10.0
