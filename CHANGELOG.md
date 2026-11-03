@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chrome_devtools_mcp from 138 s to 35 s per query on Nike.
 - Modal fallbacks are scoped to consent and overlay containers and return objects, so a
   second `dismiss_modals()` on a clean page clicks nothing.
+- The bridge transports use the mcp 2.x Python SDK (`mcp>=2.3,<3`): `MCPError`, float
+  `read_timeout_seconds`, `CallToolResult.is_error`.
 - The orchestrator accepts an injected client, builds its extractors once, runs the first
   navigation inside the retry loop (a challenge there is retried instead of aborting the run),
   and runs the judge outside the browser time budget. Timeouts and submit failures are retried.
@@ -58,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and docs/GAP_ANALYSIS.md. Unused dependencies `jinja2` and `pillow`.
 
 ### Fixed
+- A bridge tool call that gets no answer now counts as a broken connection, so recovery
+  restarts the MCP server. chrome-devtools-mcp runs one call at a time, and reusing the
+  server left every later call of the run waiting behind the stuck one.
 - mypy errors in `jobs/worker.py` and the old MCP client; `tests/api` collection (`httpx`,
   `aiosqlite` declared); the dead `getattr(config, "timeout")` in the judge, experts and
   vision providers; `run.seed` now seeds `random` and reaches the judge; SECURITY.md no longer
