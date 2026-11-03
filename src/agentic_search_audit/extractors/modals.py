@@ -21,27 +21,63 @@ _CONSENT_API_TAGS = frozenset(
     {"uc_api", "uc_cmp", "didomi_api", "didomi_ready", "axeptio_api", "iubenda_api"}
 )
 
-_FIND_CLOSE_BUTTON_JS = r"""
-(function() {
+# Overlays that actually cover the page: visible, in the viewport, and either a dialog
+# (role or aria-modal) or floating (fixed, or absolute above z-index 100, on the element
+# or a close ancestor). A class name alone is not enough: Amazon wraps every product
+# image in an "s-image-overlay-grey" container.
+_VISIBLE_OVERLAYS_JS = r"""
+function visibleOverlays() {
+    function floating(el) {
+        for (let n = el, depth = 0; n && n !== document.body && depth < 6; n = n.parentElement, depth++) {
+            const st = getComputedStyle(n);
+            if (st.position === 'fixed') return true;
+            if (st.position === 'absolute' && (parseInt(st.zIndex, 10) || 0) >= 100) return true;
+        }
+        return false;
+    }
+    return Array.from(document.querySelectorAll(
+        '[role="dialog"], [role="alertdialog"], [aria-modal="true"], ' +
+        '[class*="modal"], [class*="overlay"], [class*="popup"]'
+    )).filter(function(el) {
+        const r = el.getBoundingClientRect();
+        if (!(r.width > 100 && r.height > 100)) return false;
+        if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) return false;
+        const st = getComputedStyle(el);
+        if (st.visibility === 'hidden' || st.display === 'none' || parseFloat(st.opacity) < 0.05) {
+            return false;
+        }
+        const role = el.getAttribute('role');
+        return role === 'dialog' || role === 'alertdialog' ||
+            el.getAttribute('aria-modal') === 'true' || floating(el);
+    });
+}
+"""
+
+_CHECK_MODAL_OVERLAY_JS = (
+    "(function() {\n" + _VISIBLE_OVERLAYS_JS + "\nreturn visibleOverlays().length > 0;\n})()"
+)
+
+_FIND_CLOSE_BUTTON_JS = "(function() {\n" + _VISIBLE_OVERLAYS_JS + r"""
     const pattern = new RegExp(__PATTERN__, 'i');
     const anchored = new RegExp('^\\s*(?:' + __PATTERN__ + ')\\s*$', 'i');
-    const containers = Array.from(document.querySelectorAll(
-        '[role="dialog"], [role="alertdialog"], [class*="modal"], [class*="overlay"], [class*="popup"]'
-    )).filter(function(c) {
-        const r = c.getBoundingClientRect();
-        return r.width > 100 && r.height > 100;
-    });
+    const containers = visibleOverlays();
     if (!containers.length) return null;
     const elements = Array.from(document.querySelectorAll(__SELECTOR__));
     for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         if (!containers.some(function(c) { return c.contains(el); })) continue;
-        const text = (el.textContent || '').trim();
+        const text = (el.textContent || el.value || '').trim();
         const label = el.getAttribute('aria-label') || '';
-        if (!(anchored.test(text) || (label && pattern.test(label)))) continue;
+        // Amazon's buttons are <input>s whose visible word sits in the aria-labelledby span
+        const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/)
+            .map(function(id) { const n = id && document.getElementById(id); return n ? n.textContent : ''; })
+            .join(' ').trim();
+        if (!(anchored.test(text) || anchored.test(labelledBy) || (label && pattern.test(label)))) {
+            continue;
+        }
         const rect = el.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-            return { selector: __SELECTOR__, index: i, text: (text || label).slice(0, 80) };
+            return { selector: __SELECTOR__, index: i, text: (text || labelledBy || label).slice(0, 80) };
         }
     }
     return null;
@@ -663,21 +699,7 @@ class ModalHandler:
             True if a modal/overlay is detected
         """
         try:
-            result = await self.client.evaluate("""
-                (function() {
-                    const overlays = document.querySelectorAll(
-                        '[role="dialog"], [role="alertdialog"], [class*="modal"], ' +
-                        '[class*="overlay"], [class*="popup"]'
-                    );
-                    for (const el of overlays) {
-                        const rect = el.getBoundingClientRect();
-                        if (rect.width > 100 && rect.height > 100) {
-                            return true;
-                        }
-                    }
-                    return false;
-                })()
-            """)
+            result = await self.client.evaluate(_CHECK_MODAL_OVERLAY_JS)
             return result is True
         except Exception as e:
             logger.debug(f"Modal overlay check failed: {e}")
@@ -723,6 +745,8 @@ class ModalHandler:
             "button",
             "a",
             '[role="button"]',
+            'input[type="submit"]',
+            'input[type="button"]',
             ".modal-close",
             ".close",
             '[aria-label*="close" i]',
