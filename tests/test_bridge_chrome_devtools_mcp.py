@@ -340,6 +340,27 @@ class TestErrors:
         with pytest.raises(BridgeTimeoutError) as info:
             await t.evaluate("() => 1", 0.05)
         assert classify_error(info.value) is BrowserErrorKind.TIMEOUT
+        # The server is still busy with that call, so recovery must restart it
+        assert t.connection_alive() is False
+
+    async def test_close_after_a_timeout_does_not_queue_behind_the_stuck_call(self) -> None:
+        async def never(args: dict[str, Any]) -> str:
+            await asyncio.sleep(3600)
+            return "never"
+
+        t, session = await self._open({"evaluate_script": never}, tool_timeout_s=0.05)
+        with pytest.raises(BridgeTimeoutError):
+            await t.evaluate("() => 1", 0.05)
+        await t.close()
+        assert "close_page" not in session.names()
+        assert t.connection_alive() is False
+
+    async def test_a_timeout_reported_by_the_server_keeps_the_connection(self) -> None:
+        error = MCPError(code=-32603, message="Waiting for selector timed out")
+        t, _ = await self._open({"evaluate_script": error})
+        with pytest.raises(BridgeTimeoutError):
+            await t.evaluate("() => 1", 5)
+        assert t.connection_alive() is True
 
     async def test_other_tool_errors(self) -> None:
         t, _ = await self._open(

@@ -176,9 +176,15 @@ class McpStdioTransportBase:
             result = await self._session.call_tool(name, arguments, read_timeout_seconds=timeout)
         except MCPError as exc:
             message = str(exc)
-            if exc.code == REQUEST_TIMEOUT or any(
-                marker in message.lower() for marker in _TIMEOUT_MARKERS
-            ):
+            if exc.code == REQUEST_TIMEOUT:
+                # No answer at all. chrome-devtools-mcp runs one tool call at a time, so the
+                # call still running there blocks every later one: count the connection as
+                # broken, which makes recovery restart the server instead of reusing it.
+                self._connection_broken = True
+                raise BridgeTimeoutError(
+                    f"{name} timed out after {timeout:.0f}s; the server will be restarted"
+                ) from exc
+            if any(marker in message.lower() for marker in _TIMEOUT_MARKERS):
                 raise BridgeTimeoutError(f"{name} timed out after {timeout:.0f}s") from exc
             self._raise_for_message(name, message)
         except (anyio.BrokenResourceError, anyio.ClosedResourceError, OSError) as exc:
