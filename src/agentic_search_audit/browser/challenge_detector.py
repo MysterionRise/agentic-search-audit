@@ -7,6 +7,7 @@ increased backoff.
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 
 from ..core.types import BrowserClient
@@ -54,6 +55,7 @@ CAPTCHA_IFRAME_PATTERNS: list[str] = [
     "recaptcha",
     "hcaptcha",
     "turnstile",
+    "_incapsula_resource",  # Imperva's block interstitial (boots.com)
 ]
 
 # Keywords in page body that suggest a block page (used when body is short)
@@ -69,7 +71,13 @@ BLOCK_KEYWORDS: list[str] = [
     "datadome",
     "please enable cookies",
     "enable javascript",
+    "incapsula",
 ]
+
+# Akamai edge error pages carry a reference ID instead of a vendor name: eBay's
+# "SORRY / Something went wrong on our end" shows "0.afe41602.1793671333.12568738",
+# Akamai's "Access Denied" shows "Reference #18.2f7d1402.1793671333.1a2b3c4".
+EDGE_REFERENCE_RE = re.compile(r"\b\d{1,3}\.[0-9a-f]{8}\.\d{10}\.[0-9a-f]{6,10}\b")
 
 
 @dataclass
@@ -102,7 +110,8 @@ def _probe_js() -> str:
   var iframeHit = null;
   var iframes = document.querySelectorAll('iframe');
   for (var k = 0; k < iframes.length && !iframeHit; k++) {{
-    var src = (iframes[k].src || '').toLowerCase();
+    // The raw attribute too: a relative src may not resolve (Imperva serves "/_Incapsula_Resource")
+    var src = ((iframes[k].getAttribute('src') || '') + ' ' + (iframes[k].src || '')).toLowerCase();
     for (var j = 0; j < patterns.length; j++) {{
       if (src.indexOf(patterns[j]) !== -1) {{ iframeHit = patterns[j]; break; }}
     }}
@@ -120,7 +129,7 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
     1. Page title matches known challenge strings
     2. Known challenge-page CSS selectors exist
     3. CAPTCHA iframes present
-    4. Short body with block keywords
+    4. Short body with block keywords or an edge (Akamai) reference ID
 
     Args:
         client: Active browser client with a loaded page.
@@ -170,6 +179,11 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
                 return ChallengeDetection(
                     detected=True, challenge_type="short_body_block", message=msg
                 )
+        reference = EDGE_REFERENCE_RE.search(body_text)
+        if reference:
+            msg = f"Edge block page: body length {body_len} chars, reference {reference.group(0)}"
+            logger.warning(msg)
+            return ChallengeDetection(detected=True, challenge_type="edge_block", message=msg)
 
     return ChallengeDetection(
         detected=False, challenge_type="none", message="No challenge detected"
