@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chrome_devtools_mcp from 138 s to 35 s per query on Nike.
 - Modal fallbacks are scoped to consent and overlay containers and return objects, so a
   second `dismiss_modals()` on a clean page clicks nothing.
+- The bridge transports use the mcp 2.x Python SDK (`mcp>=2.3,<3`): `MCPError`, float
+  `read_timeout_seconds`, `CallToolResult.is_error`.
 - The orchestrator accepts an injected client, builds its extractors once, runs the first
   navigation inside the retry loop (a challenge there is retried instead of aborting the run),
   and runs the judge outside the browser time budget. Timeouts and submit failures are retried.
@@ -58,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and docs/GAP_ANALYSIS.md. Unused dependencies `jinja2` and `pillow`.
 
 ### Fixed
+- A bridge tool call that gets no answer now counts as a broken connection, so recovery
+  restarts the MCP server. chrome-devtools-mcp runs one call at a time, and reusing the
+  server left every later call of the run waiting behind the stuck one.
 - The challenge detector recognises edge block pages by their Akamai-style reference ID
   (eBay's "Something went wrong on our end", `edge_block`) and Imperva's
   `/_Incapsula_Resource` iframe (Boots). Both were reported as "no results" before.

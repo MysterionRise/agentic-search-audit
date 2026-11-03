@@ -9,13 +9,13 @@ import logging
 import re
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from datetime import timedelta
 from typing import Any, NoReturn, Protocol
 
 import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
+from mcp.types import REQUEST_TIMEOUT
 
 from .transport import (
     BridgeConnectionError,
@@ -36,7 +36,7 @@ class McpSessionLike(Protocol):
         self,
         name: str,
         arguments: dict[str, Any] | None = None,
-        read_timeout_seconds: timedelta | None = None,
+        read_timeout_seconds: float | None = None,
     ) -> Any: ...
 
 
@@ -75,8 +75,8 @@ async def stdio_session(
 
 
 def result_is_error(result: Any) -> bool:
-    """``CallToolResult.isError`` (mcp 1.x) or ``is_error`` (mcp 2.x)."""
-    return bool(getattr(result, "isError", None) or getattr(result, "is_error", None))
+    """``CallToolResult.is_error`` (``isError`` on the wire)."""
+    return bool(getattr(result, "is_error", None))
 
 
 def result_text(result: Any) -> str:
@@ -173,11 +173,17 @@ class McpStdioTransportBase:
         logger.debug(f"{self.name}: {name} {arguments}")
         try:
             # The SDK's own timeout keeps the call in this task (see SessionFactory).
-            result = await self._session.call_tool(
-                name, arguments, read_timeout_seconds=timedelta(seconds=timeout)
-            )
-        except McpError as exc:
+            result = await self._session.call_tool(name, arguments, read_timeout_seconds=timeout)
+        except MCPError as exc:
             message = str(exc)
+            if exc.code == REQUEST_TIMEOUT:
+                # No answer at all. chrome-devtools-mcp runs one tool call at a time, so the
+                # call still running there blocks every later one: count the connection as
+                # broken, which makes recovery restart the server instead of reusing it.
+                self._connection_broken = True
+                raise BridgeTimeoutError(
+                    f"{name} timed out after {timeout:.0f}s; the server will be restarted"
+                ) from exc
             if any(marker in message.lower() for marker in _TIMEOUT_MARKERS):
                 raise BridgeTimeoutError(f"{name} timed out after {timeout:.0f}s") from exc
             self._raise_for_message(name, message)

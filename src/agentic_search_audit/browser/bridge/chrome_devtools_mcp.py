@@ -212,8 +212,17 @@ class ChromeDevtoolsMcpTransport(McpStdioTransportBase):
 
     async def close(self) -> None:
         if self._session is not None and self.close_tabs_on_disconnect:
-            for page_id in list(self._owned_page_ids):
-                await self._close_owned_page(page_id)
+            if self._connection_broken:
+                # Each close_page would queue behind the call that never answered.
+                if self._owned_page_ids and self.mode != BridgeMode.LAUNCH:
+                    logger.warning(
+                        f"{self.name}: the server stopped answering; leaving "
+                        f"{len(self._owned_page_ids)} tab(s) it opened in your browser"
+                    )
+            else:
+                for page_id in list(self._owned_page_ids):
+                    await self._close_owned_page(page_id)
+        self._owned_page_ids = []
         self._page_id = None
         await self._stop()
 
