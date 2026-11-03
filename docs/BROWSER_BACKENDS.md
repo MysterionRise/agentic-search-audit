@@ -96,6 +96,9 @@ summaries are in `docs/spike/20261027-launch/`).
 | ebay | undetected | none | W | W | W | F | W | W | F | 26.3 | – |
 | ebay | chrome_devtools_mcp | none | W | W | W | F | W | W | F | 52.4 | 280 |
 
+For eBay, "none" in the challenge column was wrong: the page was eBay's edge block page,
+which the detector did not recognise at the time (see below).
+
 All three sites use a `search_url_template`, so the search-box column is not applicable.
 `*` the 2 MB full-page Amazon screenshot failed in the run and was fixed afterwards (the
 server writes large images to a temp file; the transport now copies it), then verified by
@@ -103,15 +106,27 @@ hand.
 
 What the numbers say:
 
-- **No bot challenge on any backend** for these three sites from this machine and IP, so
-  this run does not separate the backends on anti-bot resistance. That needs the
-  `autoconnect` and `kimi_webbridge` runs on the sites that block Playwright today (the
-  30 configs set to `undetected`), and a residential IP.
-- **eBay fails on every backend in the same way**: results never become visible within
-  15 s, and once the page title was "Error Page | eBay". The eBay item selectors or the
-  results wait need revisiting; it is not a backend problem.
-- **Amazon consent is partial everywhere**: an overlay stays visible after the consent
-  step. Same on every backend, so a modal-handling issue, not a backend one.
+- **eBay blocks every launched browser, and the challenge column said "none"**. A
+  follow-up on 2026-11-03 showed eBay's search answers Playwright, undetected-chromedriver
+  and chrome_devtools_mcp (launch) with its edge block page ("SORRY / Something went wrong
+  on our end" and an Akamai-style reference ID, title "Error Page | eBay", about 155
+  characters). Repeated visits escalated the block to the homepage for a while. The
+  detector did not know that page, so run 1 reported "no results" instead of a challenge;
+  it now reports `edge_block`. eBay is a real anti-bot case for run 2, not a selector
+  problem. Its item selectors are unverified until a run gets past the block.
+- **Boots is blocked the same way** by Imperva (Incapsula): an empty page whose iframe
+  points at `/_Incapsula_Resource`. The detector now reports it as `captcha_iframe`.
+- **Amazon consent was a false "partial"**. The overlay check counted any large element
+  whose class contains "overlay", and every Amazon product image sits in an
+  `s-image-overlay-grey` container. Overlays now have to be visible, in the viewport and
+  either a dialog or floating above the page. The one real overlay left was Amazon's
+  delivery-location toaster for non-US visitors, whose Dismiss control is an `<input>`
+  labelled through `aria-labelledby`; the close-button finder now reads that, and the
+  consent step reports `works` on Amazon.
+- **No other bot challenge** showed up for Nike and Amazon from this machine and IP, so
+  run 1 does not separate the backends on anti-bot resistance. That needs the
+  `autoconnect` and `kimi_webbridge` runs on eBay, Boots and the other sites that block
+  launched browsers, and ideally a residential IP.
 - **chrome_devtools_mcp costs about 0.7 s per tool call** (the server waits for the page
   to settle after each). Before the one-call probes, consent handling took 18 to 90 s and
   the challenge check 3 s per query on this backend (Nike p50 138 s, Amazon 37 s); probing

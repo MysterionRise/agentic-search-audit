@@ -58,6 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and docs/GAP_ANALYSIS.md. Unused dependencies `jinja2` and `pillow`.
 
 ### Fixed
+- The challenge detector recognises edge block pages by their Akamai-style reference ID
+  (eBay's "Something went wrong on our end", `edge_block`) and Imperva's
+  `/_Incapsula_Resource` iframe (Boots). Both were reported as "no results" before.
+- The modal overlay check and close-button finder count only visible overlays that are
+  dialogs or float above the page; a class name containing "overlay" is no longer enough
+  (Amazon's product images matched). The finder also reads `<input>` buttons and
+  `aria-labelledby` text, which dismisses Amazon's delivery-location toaster.
 - mypy errors in `jobs/worker.py` and the old MCP client; `tests/api` collection (`httpx`,
   `aiosqlite` declared); the dead `getattr(config, "timeout")` in the judge, experts and
   vision providers; `run.seed` now seeds `random` and reaches the judge; SECURITY.md no longer
