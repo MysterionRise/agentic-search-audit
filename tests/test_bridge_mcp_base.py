@@ -22,7 +22,7 @@ pytestmark = pytest.mark.unit
 
 def _result(text: str, is_error: bool = False) -> types.CallToolResult:
     return types.CallToolResult(
-        content=[types.TextContent(type="text", text=text)], isError=is_error
+        content=[types.TextContent(type="text", text=text)], is_error=is_error
     )
 
 
@@ -51,17 +51,16 @@ class TestParsing:
         with pytest.raises(BridgeToolError):
             parse_json_block("```json\n{oops\n```")
 
-    def test_result_is_error_both_spellings(self) -> None:
+    def test_result_is_error(self) -> None:
         assert result_is_error(_result("x", is_error=True)) is True
         assert result_is_error(_result("x")) is False
-        assert result_is_error(SimpleNamespace(is_error=True)) is True
         assert result_is_error(SimpleNamespace()) is False
 
     def test_result_text_joins_text_items(self) -> None:
         result = types.CallToolResult(
             content=[
                 types.TextContent(type="text", text="a"),
-                types.ImageContent(type="image", data="AA==", mimeType="image/png"),
+                types.ImageContent(type="image", data="AA==", mime_type="image/png"),
                 types.TextContent(type="text", text="b"),
             ]
         )

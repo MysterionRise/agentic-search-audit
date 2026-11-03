@@ -3,14 +3,13 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import anyio
 import pytest
 from mcp import types
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from agentic_search_audit.browser.bridge.chrome_devtools_mcp import (
     AUTOCONNECT_HELP,
@@ -34,7 +33,7 @@ PAGES_ONE = "## Pages\n1: Shop (https://shop.example/) [selected]\n"
 
 def text_result(text: str, is_error: bool = False) -> types.CallToolResult:
     return types.CallToolResult(
-        content=[types.TextContent(type="text", text=text)], isError=is_error
+        content=[types.TextContent(type="text", text=text)], is_error=is_error
     )
 
 
@@ -58,7 +57,7 @@ class FakeMcpSession:
         self,
         name: str,
         arguments: dict[str, Any] | None = None,
-        read_timeout_seconds: timedelta | None = None,
+        read_timeout_seconds: float | None = None,
     ) -> Any:
         arguments = arguments or {}
         self.calls.append((name, arguments))
@@ -71,16 +70,11 @@ class FakeMcpSession:
         value = handler(arguments) if callable(handler) else handler
         if asyncio.iscoroutine(value):
             try:
-                value = await asyncio.wait_for(
-                    value, read_timeout_seconds.total_seconds() if read_timeout_seconds else None
-                )
+                value = await asyncio.wait_for(value, read_timeout_seconds)
             except asyncio.TimeoutError:
                 # What the real SDK raises when read_timeout_seconds expires
-                raise McpError(
-                    types.ErrorData(
-                        code=-32001,  # REQUEST_TIMEOUT
-                        message="Timed out while waiting for response to ClientRequest.",
-                    )
+                raise MCPError(
+                    code=types.REQUEST_TIMEOUT, message="Request 'tools/call' timed out"
                 ) from None
         if isinstance(value, BaseException):
             raise value
@@ -265,7 +259,7 @@ class TestPrimitives:
 
     async def test_screenshot_is_taken_inline_and_written_locally(self, tmp_path: Path) -> None:
         inline = types.CallToolResult(
-            content=[types.ImageContent(type="image", data="cG5n", mimeType="image/png")]
+            content=[types.ImageContent(type="image", data="cG5n", mime_type="image/png")]
         )
         t, session = await self._open({"take_screenshot": inline})
         target = tmp_path / "shots" / "a.png"

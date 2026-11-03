@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chrome_devtools_mcp from 138 s to 35 s per query on Nike.
 - Modal fallbacks are scoped to consent and overlay containers and return objects, so a
   second `dismiss_modals()` on a clean page clicks nothing.
+- The bridge transports use the mcp 2.x Python SDK (`mcp>=2.3,<3`): `MCPError`, float
+  `read_timeout_seconds`, `CallToolResult.is_error`.
 - The orchestrator accepts an injected client, builds its extractors once, runs the first
   navigation inside the retry loop (a challenge there is retried instead of aborting the run),
   and runs the judge outside the browser time budget. Timeouts and submit failures are retried.
