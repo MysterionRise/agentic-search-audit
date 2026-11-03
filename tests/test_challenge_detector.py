@@ -71,6 +71,31 @@ async def test_short_body_with_block_keyword() -> None:
     assert result.detected is True and result.challenge_type == "short_body_block"
 
 
+EBAY_BLOCK_TEXT = (
+    "SORRY\nSomething went wrong on our end\n0.afe41602.1793671333.12568738\n"
+    "Please go back and try again.\nCopyright © 1995-2026 eBay Inc. All Rights Reserved."
+)
+
+
+async def test_edge_block_page_with_reference_id() -> None:
+    probe = _probe(title="Error Page | eBay", bodyLen=155, bodyText=EBAY_BLOCK_TEXT)
+    result = await detect_challenge(_client(probe))
+    assert result.detected is True and result.challenge_type == "edge_block"
+    assert "0.afe41602.1793671333.12568738" in result.message
+
+
+async def test_akamai_access_denied_reference() -> None:
+    text = "access denied\nyou don't have permission\nreference #18.2f7d1402.1793671333.1a2b3c4"
+    result = await detect_challenge(_client(_probe(bodyLen=120, bodyText=text)))
+    assert result.detected is True
+
+
+async def test_reference_like_number_on_a_long_page_is_ignored() -> None:
+    text = "order 0.afe41602.1793671333.12568738 shipped " * 50
+    result = await detect_challenge(_client(_probe(bodyLen=len(text), bodyText=text[:1000])))
+    assert result.detected is False
+
+
 async def test_long_body_with_keyword_is_ignored() -> None:
     probe = _probe(bodyLen=20000, bodyText="we use cloudflare for performance " * 10)
     result = await detect_challenge(_client(probe))
