@@ -17,29 +17,29 @@ site:
     use_intelligent_fallback: true
 
   results:
+    # eBay's card layout (checked 2026-11-04). Two hidden "Shop on eBay" placeholders sit
+    # in a 1px-wide div.s-clipped before the list, so match listings that are children of
+    # the results list. The .s-item selectors cover the older layout.
     item_selectors:
-      - '.s-item'
-      - 'li[class*="s-item"]'
-      - 'div[class*="s-item__wrapper"]'
+      - 'ul.srp-results > li[data-listingid]'
+      - 'li.s-card[data-item-pos]'
       - '.srp-results .s-item'
+      - '.s-item'
     title_selectors:
-      - '.s-item__title'
+      - '.s-card__title .su-styled-text'
+      - '.s-card__title'
       - '.s-item__title span'
-      - 'h3[class*="s-item__title"]'
-      - 'h3'
+      - '.s-item__title'
     url_attr: 'href'
     snippet_selectors:
+      - '.s-card__subtitle'
       - '.s-item__subtitle'
-      - '.s-item__dynamic'
-      - '.s-item__caption'
-      - 'p'
     price_selectors:
+      - '.s-card__price'
       - '.s-item__price'
-      - 'span[class*="s-item__price"]'
-      - 'span[class*="price"]'
     image_selectors:
+      - 'img.s-card__image'
       - '.s-item__image img'
-      - 'img[class*="s-item__image"]'
       - 'img'
 
   modals:
@@ -63,9 +63,10 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  # eBay has bot detection; undetected-chromedriver recommended.
+  # eBay serves its edge block page to launched browsers, undetected-chromedriver included
+  # (2026-11-03). Run it in your own Chrome instead: --browser kimi_webbridge or
+  # --browser chrome_devtools_mcp (both pass, docs/BROWSER_BACKENDS.md run 2).
   browser_backend: undetected
-  # To run in your own logged-in Chrome instead (see docs/BROWSER_BACKENDS.md):
   # browser_backend: chrome_devtools_mcp
   # bridge:
   #   mode: autoconnect
