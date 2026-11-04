@@ -47,7 +47,8 @@ inside the page as one call each. `mcp_base.py` holds the stdio MCP plumbing. Se
 docs/BROWSER_BACKENDS.md.
 
 `BrowserCapabilities` (declared on each client) tells `BrowserSession` (`browser/session.py`)
-what it may do: user-agent rotation (`run.ua_rotation_strategy`), proxy rotation, periodic
+what it may do: user-agent rotation (`run.ua_rotation_strategy`, which re-applies the running
+Chrome's own user agent and so gives Playwright a fresh context), proxy rotation, periodic
 cookie clearing. Bridges on a real profile report all three as off.
 
 ## Extractors

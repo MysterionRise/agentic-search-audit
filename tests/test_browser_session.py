@@ -19,6 +19,7 @@ def _client(caps: BrowserCapabilities | None = None, **attrs: Any) -> MagicMock:
         client.capabilities = caps
     else:
         del client.capabilities  # a client without the attribute is treated as all-capable
+    client.evaluate = AsyncMock(return_value="UA-of-the-running-chrome")
     client.set_user_agent = AsyncMock()
     client.set_proxy = AsyncMock()
     client.clear_cookies = AsyncMock()
@@ -38,7 +39,8 @@ async def test_client_without_capabilities_is_all_capable() -> None:
     )
     assert session.capabilities == BrowserCapabilities()
     assert await session.rotate_for_query(1) is True
-    client.set_user_agent.assert_awaited_once()
+    # Re-applies the browser's own user agent rather than claiming another browser.
+    client.set_user_agent.assert_awaited_once_with("UA-of-the-running-chrome")
     assert session.needs_navigation is True
 
 

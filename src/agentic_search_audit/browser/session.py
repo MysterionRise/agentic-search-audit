@@ -18,7 +18,6 @@ from ..core.types import (
 )
 from .errors import BrowserErrorKind
 from .proxy import ProxyRotator
-from .stealth import UserAgentRotator
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,6 @@ class BrowserSession:
         self.client = client
         self.run = run_config
         self.capabilities: BrowserCapabilities = get_capabilities(client)
-        self._ua_rotator = UserAgentRotator()
         self._proxy_rotator = ProxyRotator(
             strategy=run_config.proxy_rotation_strategy,
             proxy_list=run_config.proxy_list,
@@ -62,8 +60,13 @@ class BrowserSession:
             self.capabilities.user_agent_override,
             "this backend cannot override the user agent",
         ):
-            await self.client.set_user_agent(self._ua_rotator.next())
-            changed = True
+            # A stock Chrome sends one user agent per version and OS, so rotation re-applies
+            # the current one rather than claiming another browser; Playwright rebuilds its
+            # context for it, which gives the query fresh cookies and storage.
+            user_agent = await self.client.evaluate("navigator.userAgent")
+            if isinstance(user_agent, str) and user_agent:
+                await self.client.set_user_agent(user_agent)
+                changed = True
 
         next_proxy = self._proxy_rotator.next_proxy()
         if (

@@ -586,8 +586,10 @@ class RunConfig(BaseModel):
     ua_rotation_strategy: ProxyRotationStrategy = Field(
         default=ProxyRotationStrategy.PER_SITE,
         description=(
-            "per-site: one user agent per run (chosen at launch); per-query: switch the user "
-            "agent before every query (Playwright rebuilds the context, losing consent state)"
+            "per-site: one browser context per run; per-query: re-apply the user agent before "
+            "every query, which gives Playwright a fresh context (and loses consent state). The "
+            "user agent is always the running Chrome's own: a stock Chrome has one per version "
+            "and OS"
         ),
     )
     max_retries: int = Field(

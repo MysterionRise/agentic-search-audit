@@ -24,10 +24,10 @@ from .errors import BrowserScriptError
 from .stealth import (
     apply_playwright_stealth,
     build_stealth_js,
-    get_client_hints_headers,
+    chrome_major,
+    chrome_user_agent,
     human_typing_delay,
     pre_action_delay,
-    random_user_agent,
     timezone_for_locale,
 )
 
@@ -92,6 +92,8 @@ class PlaywrightBrowserClient:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        #: ``sec-ch-ua`` value read from the page once per browser (see below).
+        self._client_hint_brands: str | None = None
 
     async def __aenter__(self) -> "PlaywrightBrowserClient":
         """Async context manager entry."""
@@ -130,7 +132,10 @@ class PlaywrightBrowserClient:
             logger.info("Using proxy: %s", self.proxy_url)
 
         self._browser = await self._playwright.chromium.launch(**launch_kwargs)
-        ua = random_user_agent()
+        # The stock user agent of the engine that actually runs: a different version or OS
+        # would contradict the client hints, platform and GPU the page can read.
+        major = chrome_major(self._browser.version)
+        ua = chrome_user_agent(major) if major else None
         tz = timezone_for_locale(self.locale)
         logger.debug("Selected user-agent: %s, timezone: %s", ua, tz)
         self._context = await self._browser.new_context(
@@ -140,20 +145,52 @@ class PlaywrightBrowserClient:
             timezone_id=tz,
         )
 
-        # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
-        await self._context.set_extra_http_headers(get_client_hints_headers(ua))
-
         # Stealth: playwright-stealth on the context (covers every page it creates),
         # built-in JS as the fallback.
-        if not await apply_playwright_stealth(self._context):
+        if not await apply_playwright_stealth(self._context, ua):
             await self._context.add_init_script(build_stealth_js(self.locale))
         self._page = await self._context.new_page()
+        await self._send_page_brands_as_client_hint()
 
         # Set higher default timeout for slow sites (60 seconds)
         self._page.set_default_timeout(60000)
         self._page.set_default_navigation_timeout(60000)
 
         logger.info("Playwright browser launched")
+
+    #: Never loaded from the network: the route below answers it. Localhost is a secure
+    #: context, the only kind where ``navigator.userAgentData`` exists.
+    _BRANDS_PROBE_URL = "http://127.0.0.1/__asa_client_hints"
+
+    async def _send_page_brands_as_client_hint(self) -> None:
+        """Send the brands the page reports in ``navigator.userAgentData`` as ``sec-ch-ua``.
+
+        Headless Chromium's own header names "HeadlessChrome" while playwright-stealth makes
+        the page report "Google Chrome"; taking the header from the page keeps them equal.
+        """
+        if self._context is None or self._page is None:
+            return
+        if self._client_hint_brands is None:
+            page = self._page
+
+            async def blank(route: Any) -> None:
+                await route.fulfill(status=200, content_type="text/html", body="<html></html>")
+
+            await page.route(self._BRANDS_PROBE_URL, blank)
+            try:
+                await page.goto(self._BRANDS_PROBE_URL)
+                brands = await page.evaluate(
+                    "navigator.userAgentData ? navigator.userAgentData.brands : null"
+                )
+            finally:
+                await page.unroute(self._BRANDS_PROBE_URL)
+            if not isinstance(brands, list) or not brands:
+                logger.debug("navigator.userAgentData unavailable; sec-ch-ua left as sent")
+                return
+            self._client_hint_brands = ", ".join(
+                f'"{b["brand"]}";v="{b["version"]}"' for b in brands
+            )
+        await self._context.set_extra_http_headers({"sec-ch-ua": self._client_hint_brands})
 
     async def disconnect(self) -> None:
         """Close browser and cleanup.
@@ -497,13 +534,11 @@ class PlaywrightBrowserClient:
             timezone_id=tz,
         )
 
-        # Set Client Hints HTTP headers (Sec-CH-UA, etc.)
-        await self._context.set_extra_http_headers(get_client_hints_headers(ua))
-
         # Re-apply stealth
-        if not await apply_playwright_stealth(self._context):
+        if not await apply_playwright_stealth(self._context, ua):
             await self._context.add_init_script(build_stealth_js(self.locale))
         self._page = await self._context.new_page()
+        await self._send_page_brands_as_client_hint()
 
         self._page.set_default_timeout(60000)
         self._page.set_default_navigation_timeout(60000)

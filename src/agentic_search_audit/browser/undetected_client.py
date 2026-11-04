@@ -15,9 +15,9 @@ from ..core.types import BrowserCapabilities, JsValue
 from ._js import decode_result, wrap_expression
 from .errors import BrowserScriptError
 from .stealth import (
+    chrome_user_agent,
     human_typing_delay,
     pre_action_delay,
-    random_user_agent,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,11 +165,15 @@ class UndetectedBrowserClient:
             if self.proxy_url:
                 options.add_argument(f"--proxy-server={self.proxy_url}")
                 logger.info("Using proxy: %s", self.proxy_url)
-            ua = random_user_agent()
-            options.add_argument(f"--user-agent={ua}")
-            logger.debug("Selected user-agent: %s", ua)
             # Detect installed Chrome major version to avoid chromedriver mismatch
             chrome_ver = detect_chrome_version()
+            if chrome_ver:
+                # The stock user agent of the Chrome being launched (headless Chrome's own
+                # says "HeadlessChrome"); another version or OS would contradict the page's
+                # client hints and navigator.platform.
+                ua = chrome_user_agent(chrome_ver)
+                options.add_argument(f"--user-agent={ua}")
+                logger.debug("User-agent: %s", ua)
             driver = uc.Chrome(options=options, version_main=chrome_ver)
             driver.set_page_load_timeout(60)
             # Inject navigator.language overrides

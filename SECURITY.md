@@ -99,7 +99,7 @@ When using this tool, follow these security guidelines:
 ### Compliance
 
 - **robots.txt**: Respected by default (`--ignore-robots` only for authorized testing). `compliance.user_agent` is the agent used for that robots.txt request only.
-- **User-Agent in the browser**: the launched backends rotate spoofed Chrome user agents and apply stealth patches (`browser/stealth.py`); the bridge backends use your real browser's identity unchanged. This is not transparent identification; check a site's terms before auditing it.
+- **User-Agent in the browser**: the launched backends send the stock user agent of the Chrome they run, with matching client hints, and apply stealth patches (`browser/stealth.py`); the bridge backends use your real browser's identity unchanged. This is not transparent identification; check a site's terms before auditing it.
 - **Crawl-delay**: parsed from robots.txt (`RobotsPolicy.get_crawl_delay`) but not applied; pacing comes from `run.throttle_rps`.
 - **Real profiles**: on a bridge backend the audit never rotates identity, clears cookies or touches tabs it did not open. Screenshots of a logged-in session can contain account details; review `runs/` before sharing.
 

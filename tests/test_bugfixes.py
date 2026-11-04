@@ -79,6 +79,7 @@ class TestPlaywrightStealthFallback:
 
         mock_browser = AsyncMock()
         mock_browser.new_context = AsyncMock(return_value=mock_context)
+        mock_browser.version = "156.0.8078.4"
 
         mock_pw = AsyncMock()
         mock_pw.chromium.launch = AsyncMock(return_value=mock_browser)
