@@ -102,6 +102,28 @@ async def test_long_body_with_keyword_is_ignored() -> None:
     assert result.detected is False
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We Are Currently Unable to Provide a Shopping Experience for This Country "
+        "Please try again later",
+        "We see you have tried to access Gap.com Gap.com currently does not support "
+        "shipping outside of the United States to your location.",
+        "English Francais Espanol Hello! Choose a country. Canada United States",
+    ],
+    ids=["jcpenney", "gap", "bestbuy"],
+)
+async def test_region_block_page(text: str) -> None:
+    result = await detect_challenge(_client(_probe(bodyLen=len(text), bodyText=text.lower())))
+    assert result.detected is True
+    assert result.challenge_type == "geo_block"
+
+
+async def test_country_selector_in_a_long_page_footer_is_ignored() -> None:
+    probe = _probe(bodyLen=20000, bodyText="shop now ... choose a country ... help")
+    assert (await detect_challenge(_client(probe))).detected is False
+
+
 async def test_short_body_without_keyword_is_clean() -> None:
     result = await detect_challenge(_client(_probe(bodyLen=100, bodyText="loading...")))
     assert result.detected is False
