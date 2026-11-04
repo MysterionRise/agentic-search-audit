@@ -112,8 +112,9 @@ Each run writes `runs/<host>/<timestamp>/`:
 
 - Requests are rate-limited (`run.throttle_rps`) and robots.txt is respected unless you
   pass `--ignore-robots`. Keep rates low on sites you do not own and check their terms.
-- The launched backends rotate spoofed Chrome user agents and apply stealth patches to
-  reduce bot-detection blocks. The bridge backends drive your real, logged-in Chrome and
+- The launched backends send the stock user agent of the Chrome they run (one version, the
+  host's OS, matching client hints) and apply stealth patches to reduce bot-detection
+  blocks. The bridge backends drive your real, logged-in Chrome and
   never rotate identity, clear cookies or close your tabs; review `runs/` before sharing
   screenshots of a logged-in session.
 - The Kimi WebBridge daemon reports usage to its vendor; see docs/BROWSER_BACKENDS.md.

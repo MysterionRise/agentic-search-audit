@@ -7,10 +7,11 @@ import pytest
 
 from agentic_search_audit.browser.stealth import (
     LOCALE_TIMEZONE_MAP,
-    USER_AGENTS,
     WEBGL_PROFILES,
     build_client_hints_js,
     build_stealth_js,
+    chrome_major,
+    chrome_user_agent,
     get_client_hints_headers,
     human_typing_delay,
     inject_human_behavior,
@@ -18,27 +19,37 @@ from agentic_search_audit.browser.stealth import (
     mouse_jitter_js,
     post_action_delay,
     pre_action_delay,
-    random_user_agent,
     random_webgl_profile,
     timezone_for_locale,
 )
 
 
 @pytest.mark.unit
-class TestUserAgents:
-    """User-agent pool and rotation."""
+class TestChromeUserAgent:
+    """The one user agent a stock Chrome sends for its version and OS."""
 
-    def test_pool_is_nonempty(self) -> None:
-        assert len(USER_AGENTS) > 0
+    @pytest.mark.parametrize(
+        ("system", "os_token"),
+        [
+            ("Darwin", "(Macintosh; Intel Mac OS X 10_15_7)"),
+            ("Windows", "(Windows NT 10.0; Win64; x64)"),
+            ("Linux", "(X11; Linux x86_64)"),
+        ],
+    )
+    def test_os_token_and_reduced_version(self, system: str, os_token: str) -> None:
+        assert chrome_user_agent(156, system) == (
+            f"Mozilla/5.0 {os_token} AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/156.0.0.0 Safari/537.36"
+        )
 
-    def test_random_user_agent_returns_string(self) -> None:
-        ua = random_user_agent()
-        assert isinstance(ua, str)
-        assert "Mozilla" in ua
+    def test_defaults_to_this_os(self) -> None:
+        import platform
 
-    def test_random_user_agent_from_pool(self) -> None:
-        for _ in range(20):
-            assert random_user_agent() in USER_AGENTS
+        assert chrome_user_agent(156) == chrome_user_agent(156, platform.system())
+
+    @pytest.mark.parametrize(("version", "major"), [("156.0.8078.4", 156), ("", None), ("x", None)])
+    def test_chrome_major(self, version: str, major: int | None) -> None:
+        assert chrome_major(version) == major
 
 
 @pytest.mark.unit
@@ -269,9 +280,13 @@ class TestGetClientHintsHeaders:
         headers = get_client_hints_headers()
         assert headers["Sec-CH-UA-Mobile"] == "?0"
 
-    def test_platform_is_macos(self) -> None:
-        headers = get_client_hints_headers()
-        assert headers["Sec-CH-UA-Platform"] == '"macOS"'
+    @pytest.mark.parametrize(
+        ("system", "platform_hint"),
+        [("Darwin", '"macOS"'), ("Windows", '"Windows"'), ("Linux", '"Linux"')],
+    )
+    def test_platform_follows_the_user_agent(self, system: str, platform_hint: str) -> None:
+        headers = get_client_hints_headers(chrome_user_agent(156, system))
+        assert headers["Sec-CH-UA-Platform"] == platform_hint
 
 
 @pytest.mark.unit

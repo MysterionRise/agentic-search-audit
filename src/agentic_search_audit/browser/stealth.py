@@ -7,66 +7,49 @@ to avoid triggering bot-detection systems (Akamai, PerimeterX, DataDome).
 import asyncio
 import json
 import logging
+import platform
 import random
 import re
-from collections import deque
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Realistic Chrome user-agent pool (macOS + Windows + Linux, recent versions)
+# User agent: the one a stock Chrome of the running version sends on this OS
 # ---------------------------------------------------------------------------
-USER_AGENTS: list[str] = [
-    # Chrome 133
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-    # Chrome 132
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-    # Chrome 131
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    # Chrome 130
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    # Chrome 129
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-]
+
+#: Since Chrome's user-agent reduction (Chrome 110+) the string carries only the major
+#: version and a frozen OS token, so a stock Chrome has exactly one per version and OS.
+#: Claiming another version or OS contradicts navigator.userAgentData, navigator.platform
+#: and the GPU, which anti-bot scripts compare.
+_UA_OS_TOKENS = {
+    "Darwin": "Macintosh; Intel Mac OS X 10_15_7",
+    "Windows": "Windows NT 10.0; Win64; x64",
+    "Linux": "X11; Linux x86_64",
+}
+_CLIENT_HINT_PLATFORMS = {"Macintosh": "macOS", "Windows": "Windows", "Linux": "Linux"}
 
 
-def random_user_agent() -> str:
-    """Return a randomly chosen realistic Chrome user-agent string."""
-    return random.choice(USER_AGENTS)
+def chrome_user_agent(major: int, system: str | None = None) -> str:
+    """The user agent a stock desktop Chrome ``major`` sends on ``system`` (default: this OS)."""
+    os_token = _UA_OS_TOKENS.get(system or platform.system(), _UA_OS_TOKENS["Linux"])
+    return (
+        f"Mozilla/5.0 ({os_token}) AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/{major}.0.0.0 Safari/537.36"
+    )
 
 
-class UserAgentRotator:
-    """Round-robin user-agent rotator.
+def chrome_major(version: str) -> int | None:
+    """Major version from a browser version string such as ``156.0.8078.4``."""
+    match = re.match(r"(\d+)\.", version)
+    return int(match.group(1)) if match else None
 
-    Shuffles the UA pool at init and cycles through without repeats
-    until the pool is exhausted, then reshuffles.
-    """
 
-    def __init__(self, agents: list[str] | None = None) -> None:
-        self._agents = list(agents or USER_AGENTS)
-        self._queue: deque[str] = deque()
-        self._refill()
-
-    def _refill(self) -> None:
-        shuffled = list(self._agents)
-        random.shuffle(shuffled)
-        self._queue = deque(shuffled)
-
-    def next(self) -> str:
-        """Return the next user-agent string (round-robin, no repeats until pool exhausted)."""
-        if not self._queue:
-            self._refill()
-        return self._queue.popleft()
+def _client_hint_platform(user_agent: str) -> str:
+    for token, name in _CLIENT_HINT_PLATFORMS.items():
+        if token in user_agent:
+            return name
+    return "Windows"
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +374,7 @@ def build_client_hints_js(user_agent: str = "") -> str:
     """
     chrome_match = re.search(r"Chrome/(\d+)", user_agent)
     chrome_ver = chrome_match.group(1) if chrome_match else "133"
+    ch_platform = _client_hint_platform(user_agent)
 
     return f"""
     // --- navigator.userAgentData (Client Hints) ---
@@ -403,7 +387,7 @@ def build_client_hints_js(user_agent: str = "") -> str:
                     {{ brand: "Not-A.Brand", version: "99" }}
                 ],
                 mobile: false,
-                platform: "macOS",
+                platform: "{ch_platform}",
                 getHighEntropyValues: function(hints) {{
                     return Promise.resolve({{
                         brands: this.brands,
@@ -442,7 +426,7 @@ def get_client_hints_headers(user_agent: str = "") -> dict[str, str]:
             f'"Not-A.Brand";v="99"'
         ),
         "Sec-CH-UA-Mobile": "?0",
-        "Sec-CH-UA-Platform": '"macOS"',
+        "Sec-CH-UA-Platform": f'"{_client_hint_platform(user_agent)}"',
     }
 
 
@@ -480,8 +464,12 @@ async def inject_human_behavior(client: Any) -> None:
         await asyncio.sleep(random.uniform(0.5, 2.0))
 
 
-async def apply_playwright_stealth(target: Any) -> bool:
+async def apply_playwright_stealth(target: Any, user_agent: str | None = None) -> bool:
     """Apply playwright-stealth (2.x API) to a Playwright ``Page`` or ``BrowserContext``.
+
+    ``user_agent`` is the one the context was created with; playwright-stealth derives
+    matching client hints from it. ``navigator.platform`` keeps its native value: the
+    library's default override ("Win32") contradicts the user agent on macOS and Linux.
 
     Returns ``False`` when the package is missing or raises, so callers can fall
     back to ``build_stealth_js``.
@@ -492,7 +480,11 @@ async def apply_playwright_stealth(target: Any) -> bool:
         logger.warning("playwright-stealth not installed, using built-in stealth JS only")
         return False
     try:
-        await Stealth().apply_stealth_async(target)
+        await Stealth(
+            navigator_platform=False,
+            navigator_platform_override=None,  # its default warns when the evasion is off
+            navigator_user_agent_override=user_agent,
+        ).apply_stealth_async(target)
         return True
     except Exception as err:
         logger.warning(f"playwright-stealth failed ({err}), using built-in stealth JS only")
