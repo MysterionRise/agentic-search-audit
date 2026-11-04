@@ -24,6 +24,13 @@ from .transport import (
 
 logger = logging.getLogger(__name__)
 
+#: The page navigated again (a redirect, a consent reload) while a script was running.
+_CONTEXT_LOST_MARKERS = (
+    "execution context was destroyed",
+    "cannot find context with specified id",
+    "inspected target navigated or closed",
+)
+
 
 class BridgeBrowserClient:
     """A ``BrowserClient`` implemented once for every bridge transport."""
@@ -113,6 +120,20 @@ class BridgeBrowserClient:
         """Run a JS function through the transport (no envelope)."""
         return await self._transport.evaluate(function_source, timeout_s or self.tool_timeout_s)
 
+    async def _wait(self, function_source: str, timeout_s: float | None = None) -> Any:
+        """Run a read-only in-page wait, again on the new document if the page navigates."""
+        attempts = 3
+        while True:
+            try:
+                return await self._run(function_source, timeout_s)
+            except BridgeToolError as exc:
+                attempts -= 1
+                lower = str(exc).lower()
+                if attempts == 0 or not any(marker in lower for marker in _CONTEXT_LOST_MARKERS):
+                    raise
+                logger.debug(f"{self._transport.name}: page navigated during a wait; retrying")
+            await asyncio.sleep(0.5)
+
     async def evaluate(self, expression: str) -> JsValue:
         """Evaluate a synchronous expression; see ``BrowserClient.evaluate``."""
         raw = await self._run(js.function_from_expression(wrap_expression(expression)))
@@ -123,10 +144,10 @@ class BridgeBrowserClient:
     async def navigate(self, url: str, wait_until: str = "networkidle") -> str:
         reported = await self._transport.navigate(url, self.navigation_timeout_ms)
         if wait_until in ("load", "networkidle"):
-            await self._run(js.wait_ready_state(15000), 20)
+            await self._wait(js.wait_ready_state(15000), 20)
         if wait_until == "networkidle":
             await self.wait_for_network_idle(self.network_idle_ms)
-        current = await self._run(js.current_url())
+        current = await self._wait(js.current_url())
         return current if isinstance(current, str) and current else reported
 
     async def query_selector(self, selector: str) -> dict[str, Any] | None:
@@ -168,7 +189,14 @@ class BridgeBrowserClient:
 
     async def screenshot(self, output_path: Path, full_page: bool = True) -> Path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        return await self._transport.screenshot(output_path.resolve(), full_page)
+        try:
+            return await self._transport.screenshot(output_path.resolve(), full_page)
+        except BridgeToolError as exc:
+            if not full_page:
+                raise
+            # Chrome refuses some full-page captures (very tall or still-changing pages).
+            logger.warning(f"{self._transport.name}: {exc}; capturing the viewport instead")
+            return await self._transport.screenshot(output_path.resolve(), False)
 
     async def get_html(self) -> str:
         html = await self._run(js.document_html())
@@ -177,13 +205,13 @@ class BridgeBrowserClient:
     async def wait_for_selector(
         self, selector: str, timeout: int = 5000, visible: bool = True
     ) -> bool:
-        found = await self._run(
+        found = await self._wait(
             js.wait_for_selector(selector, timeout, visible), timeout / 1000 + 5
         )
         return found is True
 
     async def wait_for_network_idle(self, timeout: int = 2000) -> None:
-        await self._run(js.wait_network_idle(timeout, 500), timeout / 1000 + 5)
+        await self._wait(js.wait_network_idle(timeout, 500), timeout / 1000 + 5)
 
     async def get_element_text(self, selector: str) -> str | None:
         text = await self._run(js.element_text(selector))
