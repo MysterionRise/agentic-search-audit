@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and docs/GAP_ANALYSIS.md. Unused dependencies `jinja2` and `pillow`.
 
 ### Fixed
+- Results scrolling failed every query on current Chrome: `window.scrollBy` and
+  `scrollTo` return a Promise since Chrome 155, which `evaluate()` rejects. The scroll
+  calls now discard it (`void`). Spike runs never scroll, so only a full audit showed it.
+- On macOS the undetected backend reads Chrome's version from its `Info.plist` instead of
+  launching Chrome with `--version`. When detection failed, undetected-chromedriver
+  fetched the newest stable driver (157), which refuses an older Chrome (156); that
+  failure is now logged as a warning.
 - Kimi WebBridge opens the run's tab with its first navigation. Opening it on `about:blank`
   timed out with extension 2.0.32, which waits for a load event that page never sends. A
   failed connect now closes its HTTP session.

@@ -291,3 +291,62 @@ class TestUndetectedDOMMethods:
         connected_client._driver.find_elements = MagicMock(return_value=[mock_el])
         result = await connected_client.get_element_attribute("a", "href")
         assert result == "https://example.com"
+
+
+class TestDetectChromeVersion:
+    """Without a version, undetected-chromedriver fetches the newest stable driver."""
+
+    def _bundle(self, tmp_path: Path, version: str) -> Path:
+        import plistlib
+
+        app = tmp_path / "Google Chrome.app"
+        (app / "Contents").mkdir(parents=True)
+        with (app / "Contents" / "Info.plist").open("wb") as fh:
+            plistlib.dump({"CFBundleShortVersionString": version}, fh)
+        return app
+
+    def test_macos_reads_info_plist_without_launching_chrome(self, tmp_path: Path) -> None:
+        from agentic_search_audit.browser import undetected_client as uc_mod
+
+        app = self._bundle(tmp_path, "156.0.8078.80")
+        with (
+            patch.object(uc_mod.platform, "system", return_value="Darwin"),
+            patch.object(uc_mod, "MAC_CHROME_APP", app),
+            patch.object(uc_mod.subprocess, "run") as run,
+        ):
+            assert uc_mod.detect_chrome_version() == 156
+        run.assert_not_called()
+
+    def test_macos_falls_back_to_version_flag(self, tmp_path: Path) -> None:
+        from agentic_search_audit.browser import undetected_client as uc_mod
+
+        result = MagicMock(returncode=0, stdout="Google Chrome 155.0.8059.79\n")
+        with (
+            patch.object(uc_mod.platform, "system", return_value="Darwin"),
+            patch.object(uc_mod, "MAC_CHROME_APP", tmp_path / "missing.app"),
+            patch.object(uc_mod.subprocess, "run", return_value=result),
+        ):
+            assert uc_mod.detect_chrome_version() == 155
+
+    def test_failure_is_logged_as_a_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from agentic_search_audit.browser import undetected_client as uc_mod
+
+        with (
+            patch.object(uc_mod.platform, "system", return_value="Darwin"),
+            patch.object(uc_mod, "MAC_CHROME_APP", tmp_path / "missing.app"),
+            patch.object(uc_mod.subprocess, "run", side_effect=FileNotFoundError),
+            caplog.at_level("WARNING"),
+        ):
+            assert uc_mod.detect_chrome_version() is None
+        assert "Could not detect the installed Chrome version" in caplog.text
+
+    def test_unparseable_plist_is_ignored(self, tmp_path: Path) -> None:
+        from agentic_search_audit.browser.undetected_client import _bundle_major_version
+
+        app = self._bundle(tmp_path, "dev")
+        assert _bundle_major_version(app / "Contents" / "Info.plist") is None
+        bad = tmp_path / "bad.plist"
+        bad.write_bytes(b"not a plist")
+        assert _bundle_major_version(bad) is None

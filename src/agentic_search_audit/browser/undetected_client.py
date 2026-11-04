@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import platform
+import plistlib
 import re
 import subprocess
 import time
@@ -22,6 +23,20 @@ from .stealth import (
 logger = logging.getLogger(__name__)
 
 
+MAC_CHROME_APP = Path("/Applications/Google Chrome.app")
+
+
+def _bundle_major_version(info_plist: Path) -> int | None:
+    """Major version from a macOS app bundle's Info.plist, without launching the app."""
+    try:
+        with info_plist.open("rb") as fh:
+            short_version = plistlib.load(fh).get("CFBundleShortVersionString", "")
+    except (OSError, plistlib.InvalidFileException):
+        return None
+    match = re.match(r"(\d+)\.", str(short_version))
+    return int(match.group(1)) if match else None
+
+
 def detect_chrome_version() -> int | None:
     """Detect installed Chrome major version across platforms.
 
@@ -32,12 +47,12 @@ def detect_chrome_version() -> int | None:
     commands: list[list[str]] = []
 
     if system == "Darwin":
-        commands.append(
-            [
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "--version",
-            ]
-        )
+        # Reading the bundle starts no process, so unlike `--version` it cannot time out.
+        version = _bundle_major_version(MAC_CHROME_APP / "Contents" / "Info.plist")
+        if version is not None:
+            logger.debug("Detected Chrome version: %d (via Info.plist)", version)
+            return version
+        commands.append([str(MAC_CHROME_APP / "Contents" / "MacOS" / "Google Chrome"), "--version"])
     elif system == "Linux":
         commands.extend(
             [
@@ -66,7 +81,9 @@ def detect_chrome_version() -> int | None:
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
 
-    logger.debug("Could not detect Chrome version on %s", system)
+    # Without a version, undetected-chromedriver downloads the driver for the newest stable
+    # Chrome, which refuses to start an older installed Chrome.
+    logger.warning("Could not detect the installed Chrome version on %s", system)
     return None
 
 
