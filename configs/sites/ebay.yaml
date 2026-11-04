@@ -63,9 +63,9 @@ run:
   headless: true
   throttle_rps: 0.5
   seed: 42
-  # eBay serves its edge block page to launched browsers, undetected-chromedriver included
-  # (2026-11-03). Run it in your own Chrome instead: --browser kimi_webbridge or
-  # --browser chrome_devtools_mcp (both pass, docs/BROWSER_BACKENDS.md run 2).
+  # undetected passes eBay with a consistent browser identity; Playwright's headless
+  # Chromium gets the edge block page (docs/BROWSER_BACKENDS.md, 2026-11-04). Fallback:
+  # your own Chrome with --browser kimi_webbridge or --browser chrome_devtools_mcp.
   browser_backend: undetected
   # browser_backend: chrome_devtools_mcp
   # bridge:

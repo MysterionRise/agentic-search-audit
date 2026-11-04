@@ -67,7 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   send the stock user agent of the running Chrome for the host OS, keep the native
   platform, and Playwright sends the page's own brands as `sec-ch-ua` (headless Chromium's
   header otherwise says "HeadlessChrome"). Per-query user-agent rotation re-applies that user
-  agent; `UserAgentRotator` and the `USER_AGENTS` pool are gone.
+  agent; `UserAgentRotator` and the `USER_AGENTS` pool are gone. With this, undetected passes
+  eBay and Boots, which blocked it before (measured back to back).
 - Results scrolling failed every query on current Chrome: `window.scrollBy` and
   `scrollTo` return a Promise since Chrome 155, which `evaluate()` rejects. The scroll
   calls now discard it (`void`). Spike runs never scroll, so only a full audit showed it.

@@ -179,16 +179,32 @@ What the numbers say:
   Until then the daemon refuses page commands for the session ("has no tab"), so a run
   cannot act on another tab.
 
+### Identity fix: 2026-11-04, launched browsers on eBay and Boots
+
+Until then the launched backends sent a user agent from a pool of Chrome 129 to 133 strings
+on random operating systems, while the engine was Chrome 156 on macOS: undetected sent a
+Windows Chrome 129 user agent next to `navigator.platform` "MacIntel", and Playwright a
+Chrome 130 one with client hints for 156 and `navigator.platform` "Win32". Both now send the
+stock user agent of the running Chrome for the host OS. Back to back, one query per site,
+same machine, IP and Chrome:
+
+| Backend | Code | eBay | Boots |
+|---|---|---|---|
+| undetected | before (pooled user agent) | edge block page | Imperva block |
+| undetected | after (consistent identity) | 60 results | 46 results |
+| playwright | after (consistent identity) | edge block page | Imperva block |
+
+The inconsistent fingerprint was what got undetected-chromedriver blocked. Playwright's
+headless Chromium is still blocked on both, so something else gives it away there.
+
 ## Decision
 
-From runs 1 and 2.
+From runs 1 and 2 and the identity fix.
 
-1. **Sites that block launched browsers run on a bridge.** eBay and Boots block Playwright,
-   undetected-chromedriver and chrome-devtools-mcp's own Chrome from this IP, and work on
-   the real profile through either bridge. Their configs keep `undetected` so unattended
-   runs need no setup; audit them with `--browser kimi_webbridge` or
-   `--browser chrome_devtools_mcp`. The other sites keep their defaults until a run shows
-   them blocked.
+1. **eBay and Boots stay on `undetected`**: with a consistent identity it passes both
+   unattended. The bridges are the fallback where a launched browser is blocked or a
+   logged-in session is needed; run 2 shows both bridges pass these sites on the real
+   profile. Do not move a site to `playwright` because it passed on `undetected`.
 2. **Prefer `kimi_webbridge` when it is installed**: it is faster, its input is trusted and
    Chrome shows no approval dialog for it. Use `chrome_devtools_mcp` when the Moonshot
    telemetry (below) is not acceptable or Kimi is not installed; both pass the same sites.
