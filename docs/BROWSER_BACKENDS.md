@@ -113,7 +113,7 @@ What the numbers say:
   characters). Repeated visits escalated the block to the homepage for a while. The
   detector did not know that page, so run 1 reported "no results" instead of a challenge;
   it now reports `edge_block`. eBay is a real anti-bot case for run 2, not a selector
-  problem. Its item selectors are unverified until a run gets past the block.
+  problem. (Run 2 got past the block and found the selectors were out of date as well.)
 - **Boots is blocked the same way** by Imperva (Incapsula): an empty page whose iframe
   points at `/_Incapsula_Resource`. The detector now reports it as `captcha_iframe`.
 - **Amazon consent was a false "partial"**. The overlay check counted any large element
@@ -137,22 +137,61 @@ What the numbers say:
   (Nike, Amazon), versus a few hundred on an error page. That is the per-step price of a
   fully agentic loop that reads snapshots; the current JavaScript extraction reads none.
 
-### Run 2: real profile (`autoconnect`, `kimi_webbridge`)
+### Run 2: 2026-11-04, the user's real profile (`autoconnect`, `kimi_webbridge`)
 
-_(pending: needs the one-time setup on the user's Chrome; run the command above with
-`--bridge-mode autoconnect --backends undetected,chrome_devtools_mcp,kimi_webbridge` on the
-sites that block launched browsers)_
+Same machine and UK IP as run 1, the user's everyday Chrome profile (Chrome 155 running),
+chrome-devtools-mcp 1.12.0 in `autoconnect` mode, Kimi WebBridge daemon 2.0.5 with
+extension 2.0.32. Two queries per site. The Nike and Amazon rows are from the first pass;
+the eBay and Boots rows are from a re-run after the fixes listed below (the first-pass
+summaries are kept in `docs/spike/20261104-autoconnect/` and `20261104-kimi/`, the re-run
+in `20261104-fixed/`).
+
+| Site | Backend | Challenge | Nav | Consent | Submit | Results | Shot | HTML | Top10 | p50 s/query | Snapshot tokens |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| nike | chrome_devtools_mcp | none | W | W | W | W | W | W | W | 38.0 | 32,172 |
+| nike | kimi_webbridge | none | W | W | W | W | W | W | W | 12.0 | 15,150 |
+| amazon | chrome_devtools_mcp | none | W | W | W | W | W | W | W | 15.2 | 52,265 |
+| amazon | kimi_webbridge | none | W | W | W | W | W | W | W | 12.6 | 14,168 |
+| ebay | chrome_devtools_mcp | none | W | W | W | W | W | W | W | 23.1 | 49,281 |
+| ebay | kimi_webbridge | none | W | W | W | W | W | W | W | 24.3 | 13,890 |
+| boots | chrome_devtools_mcp | none | W | W | W | W | W | W | W | 20.5 | 12,874 |
+| boots | kimi_webbridge | none | W | W | W | W | W | W | W | 19.6 | 14,020 |
+
+Snapshot tokens are not comparable across backends: each server formats its accessibility
+snapshot differently, and Kimi's is the more compact.
+
+What the numbers say:
+
+- **The real profile gets past both blocks.** eBay and Boots served normal pages, with no
+  challenge, to both bridges. The day before, the same machine and IP got block pages from
+  every launched browser. About a dozen eBay searches on the real profile caused no block.
+- **The first-pass failures were ours, not the sites' anti-bot.** eBay has moved from
+  `.s-item` to `.s-card` markup and puts two hidden "Shop on eBay" placeholder listings in
+  front of the results. Boots uses `oct-teaser` tiles and redirects category words
+  (`shampoo`) to a category page; that redirect destroyed the page context while
+  chrome-devtools-mcp waited for the load. The selectors were checked by running the
+  extraction script on the live pages, and the bridge waits now re-run on the new document.
+- **Kimi WebBridge is the faster bridge**: 12 to 13 s per query on Nike and Amazon against
+  15 to 38 s for chrome-devtools-mcp, whose server waits for the page to settle after every
+  call. On eBay and Boots both take 20 to 24 s.
+- **Kimi needed one fix**: extension 2.0.32 never reports a new `about:blank` tab as loaded,
+  so opening the run's tab there timed out. The tab now opens with the first navigation.
+  Until then the daemon refuses page commands for the session ("has no tab"), so a run
+  cannot act on another tab.
 
 ## Decision
 
-Provisional, from run 1; revisit after run 2.
+From runs 1 and 2.
 
-1. **Keep the per-site defaults as they are** (`undetected` for the 30 sites configured
-   that way, `playwright` elsewhere). Run 1 shows no backend failing where another works,
-   so there is no evidence yet for switching any site.
-2. **Wire in `chrome_devtools_mcp` as the first bridge** (done) and use `kimi_webbridge` as
-   the second attach path. Both are opt-in per site. Use them where a launched browser is
-   blocked or a logged-in session is needed; run 2 decides which sites move.
+1. **Sites that block launched browsers run on a bridge.** eBay and Boots block Playwright,
+   undetected-chromedriver and chrome-devtools-mcp's own Chrome from this IP, and work on
+   the real profile through either bridge. Their configs keep `undetected` so unattended
+   runs need no setup; audit them with `--browser kimi_webbridge` or
+   `--browser chrome_devtools_mcp`. The other sites keep their defaults until a run shows
+   them blocked.
+2. **Prefer `kimi_webbridge` when it is installed**: it is faster, its input is trusted and
+   Chrome shows no approval dialog for it. Use `chrome_devtools_mcp` when the Moonshot
+   telemetry (below) is not acceptable or Kimi is not installed; both pass the same sites.
 3. **The agentic path should keep JavaScript evaluation for extraction**, and use
    accessibility snapshots only for navigation decisions where selectors fail. A results
    page snapshot costs 24k to 45k tokens per read; the JavaScript extraction returns the

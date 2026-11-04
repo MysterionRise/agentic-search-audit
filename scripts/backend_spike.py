@@ -400,11 +400,17 @@ def environment() -> dict[str, Any]:
         ).stdout.strip()
     except Exception:
         info["node"] = None
-    pkgs = sorted(
-        (Path.home() / ".npm" / "_npx").glob("*/node_modules/chrome-devtools-mcp/package.json")
-    )
-    info["chrome-devtools-mcp (npx cache)"] = (
-        json.loads(pkgs[-1].read_text()).get("version") if pkgs else None
+    # npx caches each resolved version under a hashed directory; @latest is the newest.
+    versions = [
+        str(json.loads(pkg.read_text()).get("version"))
+        for pkg in (Path.home() / ".npm" / "_npx").glob(
+            "*/node_modules/chrome-devtools-mcp/package.json"
+        )
+    ]
+    info["chrome-devtools-mcp (npx cache)"] = max(
+        versions,
+        key=lambda v: tuple(int(part) for part in v.split(".") if part.isdigit()),
+        default=None,
     )
     return info
 
@@ -444,7 +450,7 @@ def main() -> int:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     env = environment()
-    (out_dir / "environment.json").write_text(json.dumps(env, indent=2))
+    (out_dir / "environment.json").write_text(json.dumps(env, indent=2) + "\n")
     runs: list[QueryRun] = []
     for site in args.sites.split(","):
         for backend in args.backends.split(","):
