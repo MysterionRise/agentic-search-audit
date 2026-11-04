@@ -74,6 +74,16 @@ BLOCK_KEYWORDS: list[str] = [
     "incapsula",
 ]
 
+# Short pages that turn visitors from another country away. Seen from a UK IP on
+# 2026-11-04: jcpenney.com, gap.com's franchise redirect, bestbuy.com's country splash.
+GEO_BLOCK_KEYWORDS: list[str] = [
+    "unable to provide a shopping experience for this country",
+    "not available in your country",
+    "not available in your region",
+    "does not support shipping outside",
+    "choose a country",
+]
+
 # Akamai edge error pages carry a reference ID instead of a vendor name: eBay's
 # "SORRY / Something went wrong on our end" shows "0.afe41602.1793671333.12568738",
 # Akamai's "Access Denied" shows "Reference #18.2f7d1402.1793671333.1a2b3c4".
@@ -102,14 +112,25 @@ def _probe_js() -> str:
     return f"""(function() {{
   var selectors = {json.dumps(CHALLENGE_SELECTORS)};
   var patterns = {json.dumps(CAPTCHA_IFRAME_PATTERNS)};
+  // Only what is rendered counts: Akamai keeps a hidden #sec-overlay on ordinary pages
+  // (gap, kohls, lowes, adidas) and invisible reCAPTCHA leaves 0x0 iframes (sephora).
+  function shown(el) {{
+    var r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    return r.width >= 20 && r.height >= 20 && s.visibility !== 'hidden' &&
+      parseFloat(s.opacity || '1') > 0.05;
+  }}
   var selectorHit = null;
-  for (var i = 0; i < selectors.length; i++) {{
-    try {{ if (document.querySelector(selectors[i])) {{ selectorHit = selectors[i]; break; }} }}
-    catch (e) {{}}
+  for (var i = 0; i < selectors.length && !selectorHit; i++) {{
+    var found;
+    try {{ found = document.querySelectorAll(selectors[i]); }} catch (e) {{ continue; }}
+    for (var m = 0; m < found.length; m++) {{
+      if (shown(found[m])) {{ selectorHit = selectors[i]; break; }}
+    }}
   }}
   var iframeHit = null;
   var iframes = document.querySelectorAll('iframe');
   for (var k = 0; k < iframes.length && !iframeHit; k++) {{
+    if (!shown(iframes[k])) continue;
     // The raw attribute too: a relative src may not resolve (Imperva serves "/_Incapsula_Resource")
     var src = ((iframes[k].getAttribute('src') || '') + ' ' + (iframes[k].src || '')).toLowerCase();
     for (var j = 0; j < patterns.length; j++) {{
@@ -130,6 +151,10 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
     2. Known challenge-page CSS selectors exist
     3. CAPTCHA iframes present
     4. Short body with block keywords or an edge (Akamai) reference ID
+    5. Short body that turns visitors from another country away (``geo_block``)
+
+    Selectors and iframes count only when rendered, since several vendors keep hidden
+    challenge elements on ordinary pages.
 
     Args:
         client: Active browser client with a loaded page.
@@ -184,6 +209,16 @@ async def detect_challenge(client: BrowserClient) -> ChallengeDetection:
             msg = f"Edge block page: body length {body_len} chars, reference {reference.group(0)}"
             logger.warning(msg)
             return ChallengeDetection(detected=True, challenge_type="edge_block", message=msg)
+
+    if body_len < 1500:
+        for keyword in GEO_BLOCK_KEYWORDS:
+            if keyword in body_text:
+                msg = (
+                    f"Region block: body length {body_len} chars with '{keyword}' "
+                    "(the site turns this country away; use a proxy in the site's country)"
+                )
+                logger.warning(msg)
+                return ChallengeDetection(detected=True, challenge_type="geo_block", message=msg)
 
     return ChallengeDetection(
         detected=False, challenge_type="none", message="No challenge detected"

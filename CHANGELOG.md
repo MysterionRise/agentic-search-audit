@@ -101,6 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aiosqlite` declared); the dead `getattr(config, "timeout")` in the judge, experts and
   vision providers; `run.seed` now seeds `random` and reaches the judge; SECURITY.md no longer
   claims crawl-delay is honoured or that the user agent is transparent.
+- The challenge detector counts challenge selectors and CAPTCHA iframes only when they are
+  rendered. Akamai keeps a hidden `#sec-overlay` on ordinary pages (Gap, Old Navy, Kohl's,
+  Lowe's, adidas) and Sephora loads an invisible reCAPTCHA, so audits of those sites
+  stopped at a false challenge. Short pages that turn a country away (JCPenney, Gap's
+  franchise redirect, Best Buy's country selector) are reported as `geo_block`.
+- Result selectors for Costco, Currys, Target, Old Navy, John Lewis and Best Buy match their
+  current markup (checked on the live pages); Best Buy skips its country selector with
+  `intl=nosplash`. A one-query sweep over all 29 site configs with query files is in
+  `docs/BROWSER_BACKENDS.md` (Site coverage).
 
 ## [0.1.0] - 2024-11-14
 

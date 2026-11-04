@@ -20,26 +20,21 @@ site:
     intelligent_detection_model: "gpt-4o-mini"
 
   results:
+    # John Lewis product cards (checked 2026-11-04). The title element runs the brand into
+    # the name without a space, so the title is the name and the snippet the brand.
     item_selectors:
+      - 'article[class*="card-container"]'
       - '[data-testid="product-card"]'
-      - 'article'
-      - 'div[class*="product-card"]'
-      - 'a[href*="/p/"]'
     title_selectors:
-      - 'h2'
-      - 'h3'
-      - '[data-testid="product-card-title"]'
-      - 'span[class*="title"]'
+      - '[data-testid="product-title"] [class*="title__desc"]'
+      - '[data-testid="product-title"]'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p'
-      - 'span'
+      - '[data-testid="product-title"] [class*="brand"]'
     price_selectors:
-      - '[data-testid="product-card-price"]'
-      - 'span[class*="price"]'
-      - 'div[class*="price"]'
+      - '[data-testid="product-card-price-now"]'
     image_selectors:
+      - 'img[data-testid="product-image"]'
       - 'img'
 
   modals:
