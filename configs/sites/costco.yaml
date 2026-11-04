@@ -17,28 +17,19 @@ site:
     use_intelligent_fallback: true
 
   results:
+    # Costco's MUI product tiles (checked 2026-11-04); searches land on /s?keyword=.
     item_selectors:
+      - '[data-testid^="ProductTile_"]'
       - '.product-tile'
-      - 'div[class*="product-tile"]'
-      - '.product-tile-set .product'
-      - 'div[automation-id="productList"] .product'
     title_selectors:
-      - '.description a'
-      - '.description span'
-      - 'a[automation-id="productDescriptionLink"]'
-      - 'h2 a'
-    url_attr: 'href'
-    snippet_selectors:
+      - 'h3[data-testid$="_title"]'
       - '.description'
-      - 'p[class*="description"]'
-      - 'p'
+    url_attr: 'href'
+    snippet_selectors: []
     price_selectors:
+      - '[data-testid^="Text_Price_"]'
       - '.price'
-      - 'div[class*="price"]'
-      - 'span[class*="price"]'
     image_selectors:
-      - '.product-tile img'
-      - 'img[automation-id="productImageLink"]'
       - 'img'
 
   modals:

@@ -200,6 +200,37 @@ From runs 1 and 2.
 4. **Every new consumer must batch**: one `evaluate` per decision, never a loop of
    `query_selector` calls, because bridge tool calls cost about 0.7 s each.
 
+## Site coverage
+
+A one-query sweep over the 29 site configs that have a query file, through `kimi_webbridge`
+on the user's real profile from a UK IP (`docs/spike/20261104-sweep/`), then a re-run of the
+sites that failed, after the fixes below (`docs/spike/20261104-sweep-fixed/`). "Partial"
+means some of the ten extracted items have no title or price.
+
+| Result | Sites |
+|---|---|
+| Works | amazon, argos, boots, bq, burberry, costco, currys, ebay, etsy, homedepot, johnlewis, macys, mixbook, nike, nordstrom, target, walmart, wickes, zalando |
+| Partial | bestbuy, kohls, oldnavy, sephora |
+| Region block (needs a proxy in the site's country) | gap, jcpenney |
+| Blocked on search | lowes ("Access Denied" from Akamai; the homepage loads) |
+| Not working | adidas, shutterfly, wayfair |
+
+What the sweep found and fixed:
+
+- **False challenges.** Akamai keeps a hidden `#sec-overlay` on ordinary pages (gap, oldnavy,
+  kohls, lowes, adidas) and Sephora loads an invisible reCAPTCHA; the detector counted both,
+  so the audit refused those sites. Only rendered elements count now.
+- **Stale selectors** on costco, currys, target, oldnavy, johnlewis and bestbuy, replaced
+  with selectors checked by running the extraction script on the live pages. Best Buy also
+  needs `intl=nosplash` to skip the country selector it shows outside the US.
+- **Region blocks** are reported as `geo_block` instead of an empty result list.
+
+Still open: adidas.com redirects UK visitors to adidas.co.uk's homepage and drops the query;
+Wayfair's cards carry the product name only as image alt text, which the extractor does not
+read; Shutterfly searches through its search box, and its results need new selectors; Kohl's
+result selectors are stale. The vision fallback covers sites whose selectors fail, at the
+cost of an LLM call per query.
+
 ## Privacy and telemetry
 
 - chrome-devtools-mcp is started with `--usageStatistics=false`, `--performanceCrux=false`

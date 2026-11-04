@@ -16,27 +16,20 @@ site:
     use_intelligent_fallback: true
 
   results:
+    # Currys product tiles (checked 2026-11-04); category words redirect to a category page
+    # with the same tiles.
     item_selectors:
-      - '[data-testid="product-card"]'
-      - 'article[class*="product"]'
-      - 'div[class*="product-card"]'
-      - 'article'
-      - 'li[class*="product"]'
+      - 'div.product[data-pid]'
+      - '.product-item-element'
     title_selectors:
-      - '[data-testid="product-title"]'
-      - 'h2'
-      - 'h3'
-      - 'a[class*="title"]'
+      - 'h2.pdp-grid-product-name'
     url_attr: 'href'
     snippet_selectors:
-      - 'span[class*="brand"]'
-      - 'p'
-      - 'span'
+      - '.curry-sansreg-font'
     price_selectors:
-      - '[data-testid="product-price"]'
-      - 'span[class*="price"]'
-      - 'div[class*="price"]'
+      - '.price-link .value'
     image_selectors:
+      - 'img.tile-image'
       - 'img'
 
   modals:

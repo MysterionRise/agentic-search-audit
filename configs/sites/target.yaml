@@ -17,27 +17,19 @@ site:
     use_intelligent_fallback: true
 
   results:
+    # Target's listing cards (checked 2026-11-04). Its CSS class names are hashed, so the
+    # price relies on the stable part of one (headlineSm).
     item_selectors:
+      - '[data-test="ListingPageProductListing"]'
       - '[data-test="@web/site-top-of-funnel/ProductCardWrapper"]'
-      - 'div[data-test*="product-card"]'
-      - 'section[class*="ProductCard"]'
-      - 'li[class*="Col"]'
     title_selectors:
-      - '[data-test="product-title"] a'
-      - 'a[class*="Link"]'
-      - 'h3'
+      - 'h3[data-test="text-quill"]'
     url_attr: 'href'
-    snippet_selectors:
-      - 'span[class*="TruncateDescription"]'
-      - 'span[class*="subtitle"]'
-      - 'p'
+    snippet_selectors: []
     price_selectors:
-      - '[data-test="current-price"] span'
-      - 'span[data-test="current-price"]'
-      - 'span[class*="Price"]'
+      - 'span[class*="headlineSm"]'
+      - '[data-test="current-price"]'
     image_selectors:
-      - '[data-test="product-image"] img'
-      - 'img[class*="ProductCard"]'
       - 'img'
 
   modals:

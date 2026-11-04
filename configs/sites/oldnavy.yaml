@@ -16,28 +16,18 @@ site:
     use_intelligent_fallback: true
 
   results:
+    # Old Navy's product cards (checked 2026-11-04).
     item_selectors:
+      - '.plp_product-card'
       - '.product-card'
-      - 'div[class*="product-card"]'
-      - '.category-page-product'
-      - 'div[class*="product"]'
     title_selectors:
-      - '.product-card__name a'
-      - '.product-card__name'
-      - 'a[class*="product-card__name"]'
-      - 'h2 a'
+      - '[data-testid="plp_product-name"]'
     url_attr: 'href'
-    snippet_selectors:
-      - '.product-card__description'
-      - '.product-card__brand'
-      - 'p'
+    snippet_selectors: []
     price_selectors:
-      - '.product-card-price'
-      - 'div[class*="product-card-price"]'
-      - 'span[class*="price"]'
+      - 'span[aria-label^="Current price"]'
+      - '[class*="core-web-price-small"]'
     image_selectors:
-      - '.product-card img'
-      - 'img[class*="product-card"]'
       - 'img'
 
   modals:

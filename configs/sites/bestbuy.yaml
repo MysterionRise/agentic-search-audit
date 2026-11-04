@@ -1,7 +1,8 @@
 # BestBuy.com specific configuration
 
 site:
-  url: "https://www.bestbuy.com"
+  # intl=nosplash skips the country selector shown to visitors from outside the US.
+  url: "https://www.bestbuy.com/?intl=nosplash"
   locale: "en-US"
 
   search:
@@ -13,30 +14,26 @@ site:
       - 'input[placeholder*="Search" i]'
     submit_strategy: "enter"
     submit_selector: null
-    search_url_template: "https://www.bestbuy.com/site/searchpage.jsp?st={query}"
+    search_url_template: "https://www.bestbuy.com/site/searchpage.jsp?st={query}&intl=nosplash"
     use_intelligent_fallback: true
 
   results:
+    # Best Buy's list items (checked 2026-11-04). The price selectors are unverified: that
+    # search returned only pre-orders, which show no price.
     item_selectors:
+      - 'li[class*="product-list-item"]'
       - 'li[class*="sku-item"]'
-      - 'div[class*="list-item"]'
-      - 'ol[class*="sku-item-list"] li'
     title_selectors:
-      - 'h4[class*="sku-title"] a'
-      - 'h4[class*="sku-header"] a'
-      - 'a[class*="sku-title"]'
-      - 'h4'
+      - 'h3.product-title'
+      - '.sku-title'
     url_attr: 'href'
-    snippet_selectors:
-      - 'div[class*="sku-model"]'
-      - 'span[class*="sku-value"]'
-      - 'p'
+    snippet_selectors: []
     price_selectors:
-      - 'div[class*="priceView-hero-price"] span'
-      - 'span[class*="pricing-price"]'
-      - 'div[class*="price-block"] span'
+      - '[data-testid="customer-price"] span'
+      - '.priceView-customer-price span'
+      - '[class*="customer-price"]'
     image_selectors:
-      - 'img[class*="product-image"]'
+      - 'img[data-testid="product-image"]'
       - 'img'
 
   modals:
