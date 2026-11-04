@@ -219,3 +219,73 @@ async def test_screenshot_resolves_path_and_creates_parent(tmp_path: Path) -> No
     result = await BridgeBrowserClient(fake).screenshot(target, full_page=True)
     assert result == target and target.exists()
     assert fake.calls[-1] == ("screenshot", (target.resolve(), True))
+
+
+async def test_waits_run_again_when_the_page_navigates_underneath() -> None:
+    destroyed = BridgeToolError(
+        "evaluate_script",
+        "Error: Execution context was destroyed, most likely because of a navigation.",
+    )
+    ready_answers: list[Any] = [destroyed, "complete"]
+
+    def handler(source: str) -> Any:
+        if "readyState" in source:
+            answer = ready_answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        return _by_marker(**{"location.href": "https://x/after"})(source)
+
+    fake = FakeTransport(evaluate_handler=handler)
+    client = BridgeBrowserClient(fake)
+    assert await client.navigate("https://x/", wait_until="load") == "https://x/after"
+    assert sum("readyState" in s for s in fake.scripts) == 2
+
+
+async def test_other_wait_errors_are_not_retried() -> None:
+    def handler(source: str) -> Any:
+        raise BridgeToolError("evaluate_script", "Error: something else")
+
+    fake = FakeTransport(evaluate_handler=handler)
+    with pytest.raises(BridgeToolError, match="something else"):
+        await BridgeBrowserClient(fake).wait_for_selector("#x")
+    assert len(fake.scripts) == 1
+
+
+async def test_a_wait_gives_up_after_three_navigations() -> None:
+    def handler(source: str) -> Any:
+        raise BridgeToolError("evaluate_script", "Execution context was destroyed")
+
+    fake = FakeTransport(evaluate_handler=handler)
+    with pytest.raises(BridgeToolError):
+        await BridgeBrowserClient(fake).wait_for_network_idle(500)
+    assert len(fake.scripts) == 3
+
+
+async def test_full_page_screenshot_falls_back_to_the_viewport(tmp_path: Path) -> None:
+    fake = FakeTransport()
+    original = fake.screenshot
+
+    async def screenshot(output_path: Path, full_page: bool) -> Path:
+        if full_page:
+            fake._record("screenshot", output_path, full_page)
+            raise BridgeToolError("take_screenshot", "Unable to capture screenshot")
+        return await original(output_path, full_page)
+
+    fake.screenshot = screenshot  # type: ignore[method-assign]
+    target = tmp_path / "shot.png"
+    assert await BridgeBrowserClient(fake).screenshot(target, full_page=True) == target
+    assert [args[1] for name, args in fake.calls if name == "screenshot"] == [True, False]
+
+
+async def test_viewport_screenshot_errors_propagate(tmp_path: Path) -> None:
+    fake = FakeTransport()
+
+    async def screenshot(output_path: Path, full_page: bool) -> Path:
+        fake._record("screenshot", output_path, full_page)
+        raise BridgeToolError("take_screenshot", "Unable to capture screenshot")
+
+    fake.screenshot = screenshot  # type: ignore[method-assign]
+    with pytest.raises(BridgeToolError):
+        await BridgeBrowserClient(fake).screenshot(tmp_path / "shot.png", full_page=False)
+    assert fake.names() == ["screenshot"]

@@ -76,6 +76,7 @@ async def test_daemon_down_names_the_start_command() -> None:
         await t.open()
     assert "kimi-webbridge start" in str(info.value)
     assert DAEMON_DOWN_HELP.split("{")[0] in str(info.value)
+    assert t._http is None  # a failed open does not leak its HTTP session
     await t.close()
 
 
@@ -86,22 +87,59 @@ async def test_extension_missing_names_the_store(daemon: tuple[FakeDaemon, str])
     with pytest.raises(BridgeNotReadyError, match="fldmhceldgbpfpkbgopacenieobmligc"):
         await t.open()
     assert str(EXTENSION_HELP) in str(EXTENSION_HELP)
+    assert t._http is None and fake.commands == []
     await t.close()
 
 
-async def test_open_creates_a_grouped_tab(daemon: tuple[FakeDaemon, str]) -> None:
+async def test_first_navigation_opens_the_grouped_tab(daemon: tuple[FakeDaemon, str]) -> None:
     fake, url = daemon
     fake.handlers["navigate"] = lambda args: {"success": True, "url": args["url"], "tabId": 77}
     t = make_transport(url, tab_group_title="Audit run")
     await t.open()
-    assert fake.commands[0] == {
-        "action": "navigate",
-        "args": {"url": "about:blank", "newTab": True, "group_title": "Audit run"},
-        "session": "asa-test",
-    }
-    assert t._tab_id == 77 and t.page_alive() and t.connection_alive()
+    # No about:blank tab: the extension never reports it as loaded and the call times out.
+    assert fake.commands == [] and t.page_alive() and t.connection_alive()
+    assert await t.navigate("https://shop.example/", 5000) == "https://shop.example/"
+    await t.navigate("https://shop.example/search?q=a", 5000)
+    assert [c["args"] for c in fake.commands] == [
+        {"url": "https://shop.example/", "newTab": True, "group_title": "Audit run"},
+        {"url": "https://shop.example/search?q=a"},
+    ]
+    assert fake.commands[0]["session"] == "asa-test"
+    assert t._tab_id == 77 and t.page_alive()
     await t.close()
     assert fake.actions()[-2:] == ["close_tab", "close_session"]
+
+
+async def test_viewport_waits_for_the_tab(daemon: tuple[FakeDaemon, str]) -> None:
+    fake, url = daemon
+    fake.handlers["navigate"] = {"tabId": 5}
+    t = make_transport(url)
+    await t.open()
+    await t.set_viewport(1366, 900)
+    assert fake.commands == []
+    await t.navigate("https://shop.example/", 5000)
+    assert fake.actions() == ["navigate", "cdp"]
+    assert fake.commands[1]["args"]["params"]["width"] == 1366
+    await t.close()
+
+
+async def test_recovered_page_opens_a_new_tab_on_the_next_navigation(
+    daemon: tuple[FakeDaemon, str],
+) -> None:
+    fake, url = daemon
+    fake.handlers["navigate"] = {"tabId": 1}
+    fake.handlers["evaluate"] = {"__error__": {"code": "E_TAB", "message": "tab 1 was closed"}}
+    t = make_transport(url)
+    await t.open()
+    await t.navigate("https://shop.example/", 5000)
+    with pytest.raises(BridgePageGoneError):
+        await t.evaluate("() => 1", 5)
+    assert t.page_alive() is False
+    await t.new_tab("about:blank")
+    assert t.page_alive() and fake.actions() == ["navigate", "evaluate"]
+    await t.navigate("https://shop.example/", 5000)
+    assert fake.commands[-1]["args"]["newTab"] is True
+    await t.close()
 
 
 async def test_evaluate_wraps_as_iife_and_maps_undefined(daemon: tuple[FakeDaemon, str]) -> None:

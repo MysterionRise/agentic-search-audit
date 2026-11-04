@@ -1,5 +1,6 @@
 """Tests for anti-bot stealth utilities."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -321,8 +322,16 @@ class TestChromeVersionDetection:
         mock_result.returncode = 0
         mock_result.stdout = "Google Chrome 131.0.6778.85"
 
-        with patch(
-            "agentic_search_audit.browser.undetected_client.platform.system", return_value="Darwin"
+        with (
+            patch(
+                "agentic_search_audit.browser.undetected_client.platform.system",
+                return_value="Darwin",
+            ),
+            # No app bundle to read, so detection falls back to `--version`.
+            patch(
+                "agentic_search_audit.browser.undetected_client.MAC_CHROME_APP",
+                Path("/nonexistent/Google Chrome.app"),
+            ),
         ):
             with patch(
                 "agentic_search_audit.browser.undetected_client.subprocess.run",
@@ -357,8 +366,15 @@ class TestChromeVersionDetection:
 
         from agentic_search_audit.browser.undetected_client import detect_chrome_version
 
-        with patch(
-            "agentic_search_audit.browser.undetected_client.platform.system", return_value="Darwin"
+        with (
+            patch(
+                "agentic_search_audit.browser.undetected_client.platform.system",
+                return_value="Darwin",
+            ),
+            patch(
+                "agentic_search_audit.browser.undetected_client.MAC_CHROME_APP",
+                Path("/nonexistent/Google Chrome.app"),
+            ),
         ):
             with patch(
                 "agentic_search_audit.browser.undetected_client.subprocess.run",

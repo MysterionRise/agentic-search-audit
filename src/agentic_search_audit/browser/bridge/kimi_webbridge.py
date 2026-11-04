@@ -70,6 +70,8 @@ class KimiWebBridgeTransport:
         self._http_session_factory = http_session_factory or aiohttp.ClientSession
         self._http: aiohttp.ClientSession | None = None
         self._tab_id: Any = None
+        self._needs_tab = True
+        self._pending_viewport: tuple[int, int] | None = None
         self._tab_gone = False
         self._daemon_ok = False
 
@@ -135,19 +137,24 @@ class KimiWebBridgeTransport:
 
     async def open(self) -> None:
         self._http = self._http_session_factory()
-        status = await self.status()
-        if status.get("running") is False:
-            raise BridgeNotReadyError(DAEMON_DOWN_HELP.format(daemon_url=self.daemon_url))
-        if not status.get("extension_connected"):
-            raise BridgeNotReadyError(EXTENSION_HELP)
+        try:
+            status = await self.status()
+            if status.get("running") is False:
+                raise BridgeNotReadyError(DAEMON_DOWN_HELP.format(daemon_url=self.daemon_url))
+            if not status.get("extension_connected"):
+                raise BridgeNotReadyError(EXTENSION_HELP)
+        except BaseException:
+            await self._http.close()
+            self._http = None
+            raise
         self._daemon_ok = True
-        data = await self._command(
-            "navigate",
-            {"url": "about:blank", "newTab": True, "group_title": self.tab_group_title},
-        )
-        self._tab_id = data.get("tabId")
+        # The run's tab opens with the first navigation: a new tab on about:blank never
+        # reports "loaded" to the extension, so navigating there times out. Until then the
+        # daemon refuses page commands for this session rather than using another tab.
+        self._tab_id = None
+        self._needs_tab = True
         self._tab_gone = False
-        logger.info(f"{self.name}: session {self.session_name!r} opened tab {self._tab_id}")
+        logger.info(f"{self.name}: session {self.session_name!r} ready")
 
     async def close(self) -> None:
         try:
@@ -162,9 +169,11 @@ class KimiWebBridgeTransport:
                 await self._http.close()
             self._http = None
             self._tab_id = None
+            self._needs_tab = True
+            self._pending_viewport = None
 
     def page_alive(self) -> bool:
-        return self._tab_id is not None and not self._tab_gone
+        return self._http is not None and not self._tab_gone
 
     def connection_alive(self) -> bool:
         return self._http is not None and self._daemon_ok
@@ -172,7 +181,18 @@ class KimiWebBridgeTransport:
     # -- primitives ----------------------------------------------------
 
     async def navigate(self, url: str, timeout_ms: int) -> str:
-        data = await self._command("navigate", {"url": url}, timeout_ms / 1000 + 10)
+        args: dict[str, Any] = {"url": url}
+        opening = self._needs_tab
+        if opening:
+            args.update(newTab=True, group_title=self.tab_group_title)
+        data = await self._command("navigate", args, timeout_ms / 1000 + 10)
+        if opening:
+            self._tab_id = data.get("tabId")
+            self._needs_tab = False
+            self._tab_gone = False
+            logger.info(f"{self.name}: session {self.session_name!r} opened tab {self._tab_id}")
+            if self._pending_viewport is not None:
+                await self.set_viewport(*self._pending_viewport)
         return str(data.get("url") or url)
 
     async def evaluate(self, function_source: str, timeout_s: float) -> Any:
@@ -212,15 +232,19 @@ class KimiWebBridgeTransport:
         return output_path
 
     async def set_viewport(self, width: int, height: int) -> None:
+        if self._needs_tab:
+            self._pending_viewport = (width, height)
+            return
         await self._cdp(
             "Emulation.setDeviceMetricsOverride",
             {"width": width, "height": height, "deviceScaleFactor": 0, "mobile": False},
         )
 
     async def new_tab(self, url: str) -> None:
-        data = await self._command("navigate", {"url": url, "newTab": True})
-        self._tab_id = data.get("tabId")
+        self._needs_tab = True
         self._tab_gone = False
+        if url != "about:blank":
+            await self.navigate(url, int(self.request_timeout_s * 1000))
 
     async def snapshot(self) -> str:
         data = await self._command("snapshot", {})

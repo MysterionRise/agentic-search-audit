@@ -675,8 +675,9 @@ class SearchAuditOrchestrator:
         step_px = cfg.scroll_step_px
         pause_s = cfg.scroll_pause_ms / 1000
 
-        # Initial quick scroll to trigger any lazy-loading above the fold
-        await self.client.evaluate(f"window.scrollBy(0, {step_px})")
+        # Initial quick scroll to trigger any lazy-loading above the fold. Scroll methods
+        # return a Promise since Chrome 155, which evaluate() rejects, so discard it.
+        await self.client.evaluate(f"void window.scrollBy(0, {step_px})")
         await asyncio.sleep(pause_s)
 
         visible = await extractor.count_visible_results()
@@ -700,7 +701,7 @@ class SearchAuditOrchestrator:
                     continue  # got new results, try again
 
             # Scroll down to trigger infinite-scroll / lazy loading
-            await self.client.evaluate(f"window.scrollBy(0, {step_px})")
+            await self.client.evaluate(f"void window.scrollBy(0, {step_px})")
             await asyncio.sleep(pause_s)
             await self.client.wait_for_network_idle(timeout=self.config.run.network_idle_ms)
 
@@ -714,7 +715,7 @@ class SearchAuditOrchestrator:
             prev_visible = visible
 
         # Scroll back to top so screenshot / extraction start from the beginning
-        await self.client.evaluate("window.scrollTo(0, 0)")
+        await self.client.evaluate("void window.scrollTo(0, 0)")
         await asyncio.sleep(0.5)
 
     async def _click_load_more(self) -> bool:

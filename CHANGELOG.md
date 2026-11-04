@@ -60,6 +60,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and docs/GAP_ANALYSIS.md. Unused dependencies `jinja2` and `pillow`.
 
 ### Fixed
+- Results scrolling failed every query on current Chrome: `window.scrollBy` and
+  `scrollTo` return a Promise since Chrome 155, which `evaluate()` rejects. The scroll
+  calls now discard it (`void`). Spike runs never scroll, so only a full audit showed it.
+- On macOS the undetected backend reads Chrome's version from its `Info.plist` instead of
+  launching Chrome with `--version`. When detection failed, undetected-chromedriver
+  fetched the newest stable driver (157), which refuses an older Chrome (156); that
+  failure is now logged as a warning.
+- Kimi WebBridge opens the run's tab with its first navigation. Opening it on `about:blank`
+  timed out with extension 2.0.32, which waits for a load event that page never sends. A
+  failed connect now closes its HTTP session.
+- Bridge waits (page load, network idle, selector) run again when the page navigates
+  underneath them; Boots redirects category searches mid-load. A full-page screenshot that
+  Chrome refuses falls back to the viewport.
+- eBay and Boots result selectors match their current markup: eBay's `.s-card` listings
+  (without the two hidden "Shop on eBay" placeholders) and Boots' `oct-teaser` tiles,
+  checked by running the extraction script on the live pages.
+- The backend spike reports the chrome-devtools-mcp version `@latest` resolved to, not
+  whichever npx cache directory sorted last.
 - A bridge tool call that gets no answer now counts as a broken connection, so recovery
   restarts the MCP server. chrome-devtools-mcp runs one call at a time, and reusing the
   server left every later call of the run waiting behind the stuck one.
