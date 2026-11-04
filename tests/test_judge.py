@@ -1,6 +1,5 @@
 """Tests for LLM judge implementation."""
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -665,7 +664,7 @@ class TestSearchQualityJudgeCallLLM:
         """Test LLM API call timeout handling."""
         # Patch asyncio.wait_for to raise TimeoutError
         with patch("agentic_search_audit.judge.judge.asyncio.wait_for") as mock_wait_for:
-            mock_wait_for.side_effect = asyncio.TimeoutError()
+            mock_wait_for.side_effect = TimeoutError()
 
             with pytest.raises(TimeoutError, match="timed out"):
                 await mock_judge._call_llm("Test prompt")
@@ -756,7 +755,7 @@ class TestSearchQualityJudgeCallLLM:
             judge = SearchQualityJudge(config)
 
         with patch("agentic_search_audit.judge.judge.asyncio.wait_for") as mock_wait_for:
-            mock_wait_for.side_effect = asyncio.TimeoutError()
+            mock_wait_for.side_effect = TimeoutError()
 
             with pytest.raises(TimeoutError, match="timed out"):
                 await judge._call_llm("Test prompt")

@@ -1,7 +1,7 @@
 # Agentic Search Audit
 
 [![CI](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/MysterionRise/agentic-search-audit/actions/workflows/ci.yml)
-[![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
+[![Python 3.11-3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Runs a set of queries against an e-commerce site's search in a real browser, captures each
@@ -30,7 +30,7 @@ screenshots and HTML that back them.
 
 ## Quick start
 
-Requirements: Python 3.10 or newer and [uv](https://docs.astral.sh/uv/). `pip install -e
+Requirements: Python 3.11 or newer and [uv](https://docs.astral.sh/uv/). `pip install -e
 ".[dev]"` works too, without the lock file.
 
 ```bash

@@ -1,6 +1,5 @@
 """Tests for judge LLM retry logic."""
 
-import asyncio
 import json
 
 import pytest
@@ -13,7 +12,7 @@ from agentic_search_audit.judge.judge import SearchQualityJudge, _is_retryable_l
 def test_is_retryable_timeout():
     """TimeoutError should be retryable."""
     assert _is_retryable_llm_error(TimeoutError("timeout")) is True
-    assert _is_retryable_llm_error(asyncio.TimeoutError()) is True
+    assert _is_retryable_llm_error(TimeoutError()) is True
 
 
 @pytest.mark.unit

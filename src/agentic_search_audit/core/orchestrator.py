@@ -314,7 +314,7 @@ class SearchAuditOrchestrator:
                 captured = await asyncio.wait_for(
                     self._capture_query(query), timeout=self._query_timeout_s
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 kind, retryable, message = (
                     FAILURE_QUERY_TIMEOUT,
                     True,

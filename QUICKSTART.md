@@ -2,7 +2,7 @@
 
 ## 1. Install
 
-Python 3.10 or newer. With [uv](https://docs.astral.sh/uv/) (recommended):
+Python 3.11 or newer. With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 git clone https://github.com/MysterionRise/agentic-search-audit.git

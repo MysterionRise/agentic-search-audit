@@ -7,7 +7,6 @@ raw ``cdp`` action so clicks and keys are trusted (the daemon's own ``click``/``
 dispatch synthetic events). The daemon sends usage telemetry to Moonshot; see docs.
 """
 
-import asyncio
 import base64
 import logging
 from datetime import datetime
@@ -95,7 +94,7 @@ class KimiWebBridgeTransport:
             ) as response:
                 status = response.status
                 payload = await response.json(content_type=None)
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise BridgeTimeoutError(f"{action} timed out after {timeout.total}s") from exc
         except aiohttp.ClientConnectionError as exc:
             self._daemon_ok = False
@@ -129,7 +128,7 @@ class KimiWebBridgeTransport:
                 f"{self.daemon_url}/status", timeout=aiohttp.ClientTimeout(total=3)
             ) as response:
                 payload = await response.json(content_type=None)
-        except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+        except (TimeoutError, aiohttp.ClientConnectionError) as exc:
             raise BridgeNotReadyError(DAEMON_DOWN_HELP.format(daemon_url=self.daemon_url)) from exc
         return payload if isinstance(payload, dict) else {}
 

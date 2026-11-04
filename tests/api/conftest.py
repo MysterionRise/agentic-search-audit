@@ -10,6 +10,8 @@ import pytest
 
 pytest.importorskip("fastapi", reason="SaaS tests need the 'saas' extra (uv sync --extra saas)")
 
+from datetime import UTC
+
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
@@ -91,7 +93,7 @@ def mock_redis():
 @pytest.fixture
 def mock_user():
     """Mock user object."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     class MockUser:
         id = uuid4()
@@ -103,8 +105,8 @@ def mock_user():
         is_active = True
         is_admin = False
         organization_id = None
-        created_at = datetime.now(timezone.utc)
-        updated_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
+        updated_at = datetime.now(UTC)
 
     return MockUser()
 

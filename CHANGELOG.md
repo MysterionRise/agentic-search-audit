@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   7d2e4f1a9c3b (single head).
 
 ### Changed
+- Python 3.11 is the minimum version. Python 3.10 reached end of life in October 2026, and
+  the lock kept Pillow 12.3 and filelock 4.1 for it because the fixed releases (Pillow 13.0,
+  filelock 4.2.1) need 3.11; those copies carried all 58 open Dependabot alerts. CI tests
+  3.11 to 3.13.
 - `BrowserClient.evaluate` returns the JSON-decoded JavaScript value on every backend
   (`JsValue`) and raises `BrowserScriptError` for script failures. The extractors compared
   stringified results before, which silently disabled the consent fallbacks, the close-button

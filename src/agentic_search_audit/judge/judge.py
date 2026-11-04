@@ -321,7 +321,7 @@ class SearchQualityJudge:
                     ),
                     timeout=timeout_seconds,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise TimeoutError(
                     f"LLM evaluation timed out after {timeout_seconds} seconds. "
                     "The API may be overloaded or experiencing issues."
@@ -344,7 +344,7 @@ class SearchQualityJudge:
                     ),
                     timeout=timeout_seconds,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise TimeoutError(
                     f"LLM evaluation timed out after {timeout_seconds} seconds. "
                     "The API may be overloaded or experiencing issues."

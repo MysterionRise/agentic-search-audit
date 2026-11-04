@@ -139,7 +139,7 @@ class PdpAnalyzer:
                 self._visit_pdp_inner(item, search_page_url),
                 timeout=self.timeout_ms / 1000,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("PDP visit timed out for item rank=%d url=%s", item.rank, item.url)
             item.attributes["pdp_error"] = "timeout"
             item.attributes["pdp_analyzed"] = "false"
