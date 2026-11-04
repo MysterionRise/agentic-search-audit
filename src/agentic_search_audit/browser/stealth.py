@@ -467,9 +467,10 @@ async def inject_human_behavior(client: Any) -> None:
     if action == "scroll":
         offset = random.randint(50, 200)
         direction = random.choice([1, -1])
-        await client.evaluate(f"window.scrollBy(0, {offset * direction})")
+        # void: scroll methods return a Promise since Chrome 155, which evaluate() rejects.
+        await client.evaluate(f"void window.scrollBy(0, {offset * direction})")
         await asyncio.sleep(random.uniform(0.3, 0.8))
-        await client.evaluate(f"window.scrollBy(0, {-offset * direction})")  # scroll back
+        await client.evaluate(f"void window.scrollBy(0, {-offset * direction})")  # scroll back
     elif action == "mouse":
         x = random.randint(100, 800)
         y = random.randint(100, 500)

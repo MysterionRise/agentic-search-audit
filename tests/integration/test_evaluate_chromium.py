@@ -98,3 +98,9 @@ async def test_errors(page: object, expression: str, kind: str) -> None:
     with pytest.raises(BrowserScriptError) as info:
         await _ev(page, expression)
     assert info.value.kind == kind
+
+
+async def test_void_discards_the_promise_scroll_methods_return(page: object) -> None:
+    # Chrome 155+ returns a Promise from window.scrollBy/scrollTo, which evaluate() rejects.
+    assert await _ev(page, "void window.scrollBy(0, 10)") is None
+    assert await _ev(page, "void window.scrollTo(0, 0)") is None
