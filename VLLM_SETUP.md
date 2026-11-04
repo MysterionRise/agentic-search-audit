@@ -22,7 +22,7 @@ The intelligent search box detection feature supports multiple vision model prov
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - CUDA-capable GPU (recommended: 16GB+ VRAM for LLaVA-v1.6-7B)
 - vLLM installed
 

@@ -128,7 +128,7 @@ class TestNodeCheck:
 
         async def expire(coro: Any, timeout: float) -> Any:
             coro.close()  # never awaited on purpose; close it so no warning is raised
-            raise asyncio.TimeoutError
+            raise TimeoutError
 
         with (
             patch(

@@ -41,7 +41,7 @@ async def check_node_version(
             f"'{command}' not found on PATH. Install Node >= {want} "
             "(for example: nvm install 24 && nvm use 24)."
         ) from exc
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise BridgeEnvironmentError(f"'{command} --version' did not answer in 5s") from exc
 
     try:

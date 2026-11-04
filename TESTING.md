@@ -52,7 +52,7 @@ Python 3.12 only.
 | Job | Does |
 |---|---|
 | Lint and Format Check | black, ruff, mypy on Python 3.12 |
-| Test Python 3.10 / 3.11 / 3.12 / 3.13 | `pytest tests/ -m "not browser and not integration"` with coverage; the `saas` extra only on 3.12 |
+| Test Python 3.11 / 3.12 / 3.13 | `pytest tests/ -m "not browser and not integration"` with coverage; the `saas` extra only on 3.12 |
 | Test Package Installation | builds the wheel, installs it into a clean venv, runs `search-audit --help`, checks `search-audit-api` fails without the extra |
 | Security Checks | `pip-audit` against the exported lock, bandit on `src/` |
 

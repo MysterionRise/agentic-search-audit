@@ -71,7 +71,7 @@ class FakeMcpSession:
         if asyncio.iscoroutine(value):
             try:
                 value = await asyncio.wait_for(value, read_timeout_seconds)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # What the real SDK raises when read_timeout_seconds expires
                 raise MCPError(
                     code=types.REQUEST_TIMEOUT, message="Request 'tools/call' timed out"

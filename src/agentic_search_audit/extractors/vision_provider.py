@@ -195,7 +195,7 @@ class OpenAIVisionProvider(VisionProvider):
             result: dict[str, Any] = json.loads(content)
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"OpenAI vision API call timed out after {timeout_seconds}s")
             return None
         except Exception as e:
@@ -282,7 +282,7 @@ class VLLMVisionProvider(VisionProvider):
                 logger.error(str(e))
                 return None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"vLLM vision API call timed out after {timeout_seconds}s")
             return None
         except Exception as e:
@@ -371,7 +371,7 @@ class OpenRouterVisionProvider(VisionProvider):
                 logger.error(f"Full raw content: {content}")
                 return None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"OpenRouter vision API call timed out after {timeout_seconds}s")
             return None
         except Exception as e:
@@ -470,7 +470,7 @@ class AnthropicVisionProvider(VisionProvider):
                 logger.error(str(e))
                 return None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Anthropic vision API call timed out after {timeout_seconds}s")
             return None
         except Exception as e:

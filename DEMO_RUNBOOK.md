@@ -4,7 +4,7 @@ Quick guide for presenting a live demo of the search quality audit tool.
 
 ## Prerequisites
 
-- **Python 3.10+** installed
+- **Python 3.11+** installed
 - **Google Chrome** installed (latest stable)
 - **`make bootstrap`** completed (installs the `undetected` extra the demo sites use)
 - **OPENROUTER_API_KEY** exported in your shell

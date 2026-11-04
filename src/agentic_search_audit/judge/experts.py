@@ -325,7 +325,7 @@ class ExpertPanel:
                 ),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(f"Expert '{expert_name}' timed out after {timeout}s")
 
         raw = response.choices[0].message.content or "{}"

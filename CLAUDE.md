@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 Agentic Search Audit runs search queries against e-commerce sites in a real browser,
 extracts the results, and scores them with an LLM judge (the Findability Quality Index).
-Python 3.10+, `src/agentic_search_audit`, managed with uv.
+Python 3.11+, `src/agentic_search_audit`, managed with uv.
 
 ## Commands
 
@@ -69,7 +69,7 @@ Failures become `QueryFailure` rows in `failures.jsonl`.
 `asyncio_mode = "auto"`, `filterwarnings = error`. Markers: `unit`, `browser` (launches
 Playwright Chromium, auto-skips without it), `integration` (opt-in,
 `ASA_BRIDGE_INTEGRATION=1`). SaaS tests skip unless the `saas` extra is installed. CI runs
-the matrix on 3.10 to 3.13 with `-m "not browser and not integration"`.
+the matrix on 3.11 to 3.13 with `-m "not browser and not integration"`.
 
 ## Style
 

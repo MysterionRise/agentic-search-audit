@@ -306,7 +306,7 @@ async def run_backend(
                     run = await asyncio.wait_for(
                         ladder.run(query, index), timeout=args.query_timeout
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     run = QueryRun(
                         site=config.site.url.host or "", backend=backend, query=query.text
                     )

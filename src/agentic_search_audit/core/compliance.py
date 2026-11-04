@@ -122,7 +122,7 @@ class RobotsPolicy:
                         logger.warning(f"Unexpected status {response.status} fetching {robots_url}")
                         return None
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Timeout fetching robots.txt from {robots_url}")
             return None
         except aiohttp.ClientError as e:
