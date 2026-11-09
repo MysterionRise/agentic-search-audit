@@ -45,7 +45,7 @@ dev = [
     # Formatter, linter and type checker are pinned exactly. pre-commit, the Makefile
     # and CI all run them through `uv run`, so this is the single place to bump them.
     "black==26.10.1",
-    "ruff==0.17.3",
+    "ruff==0.17.4",
     "mypy==2.4.1",
     "types-pyyaml>=6.0",
     "pre-commit>=4.2",
